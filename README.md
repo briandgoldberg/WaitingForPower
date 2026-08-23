@@ -59,6 +59,7 @@ per-source table, open questions, and how each is scheduled:
 | Arizona ACC Line Siting Committee dockets | `src/lib/ingest/azAccLineSiting.ts` | **Not scheduled yet — run manually.** Sixth state — a real JSON API, but with the same "status field lies" problem as South Carolina, independently rediscovered: `docketStatus` can read "Open" on a docket that's actually been decided. The real signal is a separate `decisions` array. | Real JSON API, no auth |
 | Washington EFSEC facility site-certifications | `src/lib/ingest/waEfsecFacilities.ts` | **Not scheduled yet — run manually.** Seventh state — Washington's own utility commission (WUTC) turned out to have no siting-certificate authority at all; the real authority is a separate body, EFSEC, whose small (19-facility) all-time list is ingested directly. The one state so far where the *structured* status field is the reliable one and a free-text description was the one caught lying. | Server-rendered HTML, no auth |
 | New Mexico PRC CCN dockets | `src/lib/ingest/nmPrcDockets.ts` | **Not scheduled yet — run manually.** Eighth state — a real JSON API behind an Angular SPA front-end, found by capturing the app's own network requests. Its CCN category also catches water-utility certificates and intake-rejected duplicate filings, both filtered out locally; its status field held up under testing, unlike several other states here. | Real JSON API, no auth |
+| Illinois ICC CPCN dockets | `src/lib/ingest/ilIccDockets.ts` | **Not scheduled yet — run manually.** Ninth state — its CPCN case-type bucket also catches declaratory-ruling and eminent-domain petitions, filtered locally; capacity is published as voltage (kV), not MW, a first for this series. Its Grain Belt Express docket is the same physical line as an existing Permitting Dashboard entry — the case that surfaced and fixed a real cross-source merge bug, see open question #1. | Server-rendered HTML, no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -188,15 +189,16 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: eight states down, 42 to go, each with its own
+10. **State PUC/PSC dockets: nine states down, 41 to go, each with its own
     hard problem.** Confirmed 2026-08-23: no national aggregator exists for
     state utility-commission dockets — each state runs its own system, and
     FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
-    `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`, and
-    `nmPrcDockets.ts` are all plain-HTTP-fetch sources, not scraping
-    projects — no headless browser needed for any of them, same shape as
-    this site's other sources — but none was "just add a module":
+    `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`,
+    `nmPrcDockets.ts`, and `ilIccDockets.ts` are all plain-HTTP-fetch
+    sources, not scraping projects — no headless browser needed for any of
+    them, same shape as this site's other sources — but none was "just add
+    a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -271,7 +273,21 @@ per-data-source version of this list.
       utility certificates (excluded by caption keyword) and, separately,
       an e-filing *intake* rejection that never got a real docket number
       assigned but still appeared in search results as if it were a case.
-    Widening any of the eight states' scope, or evaluating the other
+    - **Illinois** turned out to be this series' first real cross-source
+      duplicate: its CPCN docket for Grain Belt Express is the same
+      physical interstate transmission line already tracked via the
+      federal Permitting Dashboard. Confirming and fixing that surfaced a
+      genuine bug in `manualOverrides.csv`'s merge mechanism itself (see
+      open question #1) — worth more than the state module in its own
+      right. Illinois's own scoping problem: its CPCN case-type bucket
+      also catches a declaratory-ruling petition and a pure eminent-domain
+      petition, both naturally excluded by requiring the actual CPCN
+      phrase; capacity is published as voltage (kV) rather than MW, a
+      first for this series (Illinois's 1997 generation deregulation means
+      its CPCN docket is now almost entirely a transmission-siting
+      instrument — 58 of 59 real candidates since 2000 are transmission
+      lines, not generation).
+    Widening any of the nine states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

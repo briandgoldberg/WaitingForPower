@@ -24,6 +24,7 @@ sources that can be re-run and stay current on their own).
 | `waEfsecFacilities.ts` | Washington Energy Facility Site Evaluation Council (EFSEC) facility site-certifications | Yes — server-rendered HTML, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/waEfsecFacilities.ts`. |
 | `nmPrcDockets.ts` | New Mexico Public Regulation Commission (PRC) CCN dockets | Yes — real JSON API, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/nmPrcDockets.ts`. |
 | `ilIccDockets.ts` | Illinois Commerce Commission (ICC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/ilIccDockets.ts`. |
+| `flPscDockets.ts` | Florida PSC determination-of-need dockets + DEP siting applications | Yes — real JSON API (PSC) + server-rendered HTML (DEP), no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/flPscDockets.ts`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

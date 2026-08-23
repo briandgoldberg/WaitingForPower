@@ -60,6 +60,7 @@ per-source table, open questions, and how each is scheduled:
 | Washington EFSEC facility site-certifications | `src/lib/ingest/waEfsecFacilities.ts` | **Not scheduled yet — run manually.** Seventh state — Washington's own utility commission (WUTC) turned out to have no siting-certificate authority at all; the real authority is a separate body, EFSEC, whose small (19-facility) all-time list is ingested directly. The one state so far where the *structured* status field is the reliable one and a free-text description was the one caught lying. | Server-rendered HTML, no auth |
 | New Mexico PRC CCN dockets | `src/lib/ingest/nmPrcDockets.ts` | **Not scheduled yet — run manually.** Eighth state — a real JSON API behind an Angular SPA front-end, found by capturing the app's own network requests. Its CCN category also catches water-utility certificates and intake-rejected duplicate filings, both filtered out locally; its status field held up under testing, unlike several other states here. | Real JSON API, no auth |
 | Illinois ICC CPCN dockets | `src/lib/ingest/ilIccDockets.ts` | **Not scheduled yet — run manually.** Ninth state — its CPCN case-type bucket also catches declaratory-ruling and eminent-domain petitions, filtered locally; capacity is published as voltage (kV), not MW, a first for this series. Its Grain Belt Express docket is the same physical line as an existing Permitting Dashboard entry — the case that surfaced and fixed a real cross-source merge bug, see open question #1. | Server-rendered HTML, no auth |
+| Florida PSC + DEP siting certification | `src/lib/ingest/flPscDockets.ts` | **Not scheduled yet — run manually.** Tenth state — Florida has no CPCN at the PSC at all; siting runs through a separate DEP process the PSC only opens with a small "determination of need" sub-docket. Two agencies' pages are cross-checked against each other, and — unusually for this series — it's the *state-docket agency's own* status field that lies, while a second agency's page is the reliable one. | Real JSON API (PSC) + server-rendered HTML (DEP), no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -189,16 +190,16 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: nine states down, 41 to go, each with its own
+10. **State PUC/PSC dockets: ten states down, 40 to go, each with its own
     hard problem.** Confirmed 2026-08-23: no national aggregator exists for
     state utility-commission dockets — each state runs its own system, and
     FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
     `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`,
-    `nmPrcDockets.ts`, and `ilIccDockets.ts` are all plain-HTTP-fetch
-    sources, not scraping projects — no headless browser needed for any of
-    them, same shape as this site's other sources — but none was "just add
-    a module":
+    `nmPrcDockets.ts`, `ilIccDockets.ts`, and `flPscDockets.ts` are all
+    plain-HTTP-fetch sources, not scraping projects — no headless browser
+    needed for any of them, same shape as this site's other sources — but
+    none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -287,7 +288,20 @@ per-data-source version of this list.
       its CPCN docket is now almost entirely a transmission-siting
       instrument — 58 of 59 real candidates since 2000 are transmission
       lines, not generation).
-    Widening any of the nine states' scope, or evaluating the other
+    - **Florida** has no CPCN process at the PSC at all — siting runs
+      through a separate DEP process, and the PSC's "determination of
+      need" is only a small opening sub-docket, confirmed by hand to cover
+      exactly two dockets in the PSC's entire 30,555-docket history (solar
+      is statutorily exempt from mandatory siting certification in
+      Florida unless the developer opts in, so most of Florida's actual
+      solar/storage build-out never touches this process at all). Also the
+      one state where the *agency-of-record's own* status field is the
+      one caught lying, not a second source: the PSC's own docket for an
+      FPL transmission line shows a 2026-06-01 close date, but DEP's live
+      Applications-in-Process page — the real multi-agency process the PSC
+      docket only opens — still shows filings from 8/18/2026, ten weeks
+      later.
+    Widening any of the ten states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

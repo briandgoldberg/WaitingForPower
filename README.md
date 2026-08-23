@@ -57,6 +57,7 @@ per-source table, open questions, and how each is scheduled:
 | Ohio Power Siting Board cases | `src/lib/ingest/ohOpsbCases.ts` | **Not scheduled yet — run manually.** Fourth state — the simplest fetch yet (one unauthenticated JSON request returns the entire case history), and the first source in the series where both status and fuel/project type are real structured fields, not inferred. | Single JSON endpoint, no auth |
 | South Carolina PSC siting-certificate dockets | `src/lib/ingest/scPscDockets.ts` | **Not scheduled yet — run manually.** Fifth state — like Texas, has no reliable status field, but its captions are unusually descriptive (facility type, capacity, county spelled out in the text), and "still waiting" is inferred from an embedded Orders sub-table rather than a full filing-history scan. | Server-rendered HTML, no auth |
 | Arizona ACC Line Siting Committee dockets | `src/lib/ingest/azAccLineSiting.ts` | **Not scheduled yet — run manually.** Sixth state — a real JSON API, but with the same "status field lies" problem as South Carolina, independently rediscovered: `docketStatus` can read "Open" on a docket that's actually been decided. The real signal is a separate `decisions` array. | Real JSON API, no auth |
+| Washington EFSEC facility site-certifications | `src/lib/ingest/waEfsecFacilities.ts` | **Not scheduled yet — run manually.** Seventh state — Washington's own utility commission (WUTC) turned out to have no siting-certificate authority at all; the real authority is a separate body, EFSEC, whose small (19-facility) all-time list is ingested directly. The one state so far where the *structured* status field is the reliable one and a free-text description was the one caught lying. | Server-rendered HTML, no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -167,15 +168,15 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: six states down, 44 to go, each with its own
+10. **State PUC/PSC dockets: seven states down, 43 to go, each with its own
     hard problem.** Confirmed 2026-08-23: no national aggregator exists for
     state utility-commission dockets — each state runs its own system, and
     FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
-    `scPscDockets.ts`, and `azAccLineSiting.ts` are all plain-HTTP-fetch
-    sources, not scraping projects — no headless browser needed for any of
-    them, same shape as this site's other sources — but none was "just add
-    a module":
+    `scPscDockets.ts`, `azAccLineSiting.ts`, and `waEfsecFacilities.ts` are
+    all plain-HTTP-fetch sources, not scraping projects — no headless
+    browser needed for any of them, same shape as this site's other
+    sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -227,15 +228,34 @@ per-data-source version of this list.
       silently returns zero rows if `rowsPerPage` is omitted or zero,
       despite a correct nonzero total count and no error — caught before
       it could look like "no candidates found."
-    Widening any of the six states' scope, or evaluating the other research
-    leads already confirmed viable in parallel (North Carolina works too
-    but needs a stateful session/postback-counter dance and
-    Cloudflare-aware headers, real extra engineering weight; Pennsylvania
-    and Georgia stay deferred — PA has no caption field in search results,
-    GA's has one but it's server-side broken and always returns the full
-    unfiltered set), are real next options — each needs the same "confirm
-    before guessing" treatment this project holds itself to, one state (and
-    one scope/status decision) at a time, not assumed to generalize.
+    - **Washington** has no CPCN/siting authority in its own utility
+      commission at all — WUTC's ~36,500 dockets are tariffs, rate cases,
+      and affiliated-interest filings, confirmed by hand to contain
+      essentially nothing siting-related. That authority instead sits with
+      a separate body, the Energy Facility Site Evaluation Council (EFSEC),
+      whose entire all-time facility history is only 19 records (RCW 80.50
+      only reaches *major* energy facilities), cheap enough to ingest
+      without any date-based lookback at all. Washington is also the one
+      state so far where this series' now-familiar "don't trust the status
+      field" lesson ran backwards: EFSEC's structured status field turned
+      out to be the *reliable* one, and it was a free-text description
+      paragraph that was caught lying — a facility whose narrative still
+      described it as active and awaiting construction had actually had its
+      site certification terminated four months earlier, correctly
+      reflected only in the structured field.
+    Widening any of the seven states' scope, or evaluating the other
+    research leads already confirmed viable in parallel (North Carolina
+    works too but needs a stateful session/postback-counter dance and
+    Cloudflare-aware headers, real extra engineering weight; Pennsylvania,
+    Georgia, and Minnesota stay deferred — PA has no caption field in
+    search results, GA's has one but it's server-side broken and always
+    returns the full unfiltered set, and Minnesota's entire eDockets/
+    eFiling platform sits behind a live Cloudflare Turnstile CAPTCHA or an
+    account login with no unauthenticated path at all, confirmed by hand
+    against every plausible search/API route), are real next options — each
+    needs the same "confirm before guessing" treatment this project holds
+    itself to, one state (and one scope/status decision) at a time, not
+    assumed to generalize.
 
 ## Architecture
 

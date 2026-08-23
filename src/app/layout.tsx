@@ -62,8 +62,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-1.5 text-xs text-center">
             🚧 This site is under active construction — currently expanding into state-level
-            permitting dockets (Virginia, Texas, Colorado, Ohio, South Carolina, and Arizona live,
-            more states coming).
+            permitting dockets (Virginia, Texas, Colorado, Ohio, South Carolina, Arizona, and
+            Washington live, more states coming).
           </div>
         </div>
         <main className="flex-1 flex flex-col">{children}</main>

@@ -16,6 +16,7 @@ sources that can be re-run and stay current on their own).
 | `eiaPipelineProjects.ts` | EIA "Natural Gas Pipeline Projects" tracker | Yes — quarterly Excel workbook, scraped off the landing page (naming convention itself isn't consistent — see file header) | None (no auth) | Cron weekly (17:00 UTC Sundays), `/api/cron/ingest-eia-pipelines` |
 | `eia.ts` | EIA API v2 `operating-generator-capacity` | Yes | Free API key | **Superseded, do not run** — see file header. This route only covers already-operating plants; `eia860mPlanned.ts` replaced it. |
 | `vaSccDockets.ts` | Virginia State Corporation Commission (SCC) CPCN dockets | Yes — public Breeze/OData JSON API, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/vaSccDockets.ts`. |
+| `txPuctDockets.ts` | Texas Public Utility Commission (PUCT) CCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/txPuctDockets.ts`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

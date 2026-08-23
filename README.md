@@ -52,6 +52,7 @@ per-source table, open questions, and how each is scheduled:
 | ORNL HydroSource hydropower relicensing | `src/lib/ingest/ornlHydropowerRelicensing.ts` | Cron weekly (16:00 UTC Sundays), `/api/cron/ingest-ornl-hydro` | ~Annual |
 | EIA Natural Gas Pipeline Projects tracker | `src/lib/ingest/eiaPipelineProjects.ts` | Cron weekly (17:00 UTC Sundays), `/api/cron/ingest-eia-pipelines` | ~Quarterly |
 | Virginia SCC CPCN dockets | `src/lib/ingest/vaSccDockets.ts` | **Not scheduled yet — run manually.** First of a planned per-state series covering state PUC/PSC dockets, the structural bottleneck this site's other sources can't see (see open question #10). | Live API, but only one state so far |
+| Texas PUCT CCN dockets | `src/lib/ingest/txPuctDockets.ts` | **Not scheduled yet — run manually.** Second state in the series — higher-volume than Virginia but with no structured status field, so "still waiting" is inferred from filing history (see file header for how that was calibrated). | Server-rendered HTML, no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -162,22 +163,32 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: one state down, 49 to go, and even Virginia's
-    scope is narrower than it could be.** Confirmed 2026-08-23: no national
-    aggregator exists for state utility-commission dockets — each state
-    runs its own system, and FERC eLibrary covers the federal side alone.
-    `vaSccDockets.ts` is the first entry, built after confirming Virginia's
-    docket-search tool is backed by a real, free, unauthenticated JSON API
-    (see its file header) — not a scraping project, a plain-HTTP-fetch one,
-    same shape as this site's other sources. Its search scope (caption
-    contains the exact phrase "Certificate of Public Convenience and
-    Necessity") is deliberately precise but narrow: only 46 cases in
-    Virginia's *entire history* match it, and only 1 is currently active.
-    The API measured fast enough (13.8s for a 46-candidate run) that
-    widening this net — more case types, a broader keyword set — is a real
-    option, not a performance risk; it just needs the same "confirm before
-    guessing" treatment the rest of this project holds itself to, one state
-    (and one scope decision) at a time, not assumed to generalize.
+10. **State PUC/PSC dockets: two states down, 48 to go, each with its own
+    hard problem.** Confirmed 2026-08-23: no national aggregator exists for
+    state utility-commission dockets — each state runs its own system, and
+    FERC eLibrary covers the federal side alone. `vaSccDockets.ts` (first
+    entry) and `txPuctDockets.ts` (second) are both plain-HTTP-fetch
+    sources, not scraping projects — no headless browser needed for either,
+    same shape as this site's other sources — but neither state was "just
+    add a module":
+    - **Virginia** has a real, structured `Status` field, but its search
+      scope (caption contains the exact phrase "Certificate of Public
+      Convenience and Necessity") is precise and narrow: only 46 cases in
+      Virginia's *entire history* match it, and only 1 is currently active.
+    - **Texas** has no status field at all — "still waiting" is inferred
+      from scanning each docket's full filing history for a closing signal
+      (a final order, order on rehearing, or similar), calibrated by hand
+      against real dockets rather than guessed at (see `txPuctDockets.ts`'s
+      header for the specific false-negative this caught and fixed before
+      shipping). In exchange, its yield is far higher — over 100 recent
+      candidates vs. Virginia's single-digit count.
+    Both APIs measured fast enough (Texas: 150 candidates well within a
+    couple minutes) that widening either state's scope, or evaluating
+    Pennsylvania (technically scrapable but has no caption field in search
+    results at all, deferred 2026-08-23 pending a per-docket detail-page
+    strategy), are real next options — each needs the same "confirm before
+    guessing" treatment this project holds itself to, one state (and one
+    scope/status decision) at a time, not assumed to generalize.
 
 ## Architecture
 

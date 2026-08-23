@@ -109,7 +109,20 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
     attribEl?.classList.remove("maplibregl-compact-show");
     attribEl?.removeAttribute("open");
 
+    // MapLibre reads the container's size once, at creation, and never
+    // re-measures it on its own — if the container's final size settles
+    // after that (a filter-panel/stats-header layout shift, a font
+    // finishing load, a later Tailwind height class resolving), the map's
+    // internal canvas goes stale relative to the actual box, and it renders
+    // as if the container were a different size than it visually is —
+    // cropped/misaligned rather than an honest "wrong zoom level." A
+    // ResizeObserver keeps the canvas synced to the real container size for
+    // the map's whole lifetime, not just once on mount.
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(containerRef.current);
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
     };

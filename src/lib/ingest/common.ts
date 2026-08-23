@@ -95,87 +95,104 @@ function slugify(name: string, matchKey: string): string {
 }
 
 /**
- * Upserts a normalized project keyed by `matchKey`. Since Prisma's schema
- * doesn't have a unique column for `matchKey` (it's an ingestion-time-only
- * concept, not part of the public schema), we look up by slug derived from
- * it. Verified/ingested projects always get verificationStatus="verified" —
- * this path is never used for user submissions (see src/app/api/submissions).
+ * Upserts a normalized project keyed by `matchKey` — the real cross-source
+ * identity (see the Project.matchKey schema comment): `${source}:${sourceId}`
+ * by default, or a shared value manualOverrides.csv assigns when two
+ * different sources track the same physical project, in which case both
+ * sources' calls land on the same row. Verified/ingested projects always
+ * get verificationStatus="verified" — this path is never used for user
+ * submissions (see src/app/api/submissions).
+ *
+ * LEGACY-ROW FALLBACK: every project ingested before the matchKey column
+ * existed has matchKey=NULL in the database — a plain matchKey lookup can
+ * never find them, and naively falling through to `create` would collide
+ * with that row's already-existing `slug` (a real bug hit and fixed
+ * 2026-08-23: re-running permittingDashboard.ts against the live DB right
+ * after adding this column threw a unique-constraint error on `slug` for
+ * every one of its ~33 previously-tracked projects). There's no reliable
+ * way to reconstruct a legacy row's original matchKey from what's stored
+ * (externalIds was never persisted to the Project table), so instead: fall
+ * back to a slug lookup, and if that finds the row, adopt it by writing its
+ * real matchKey for the first time. This makes every previously-tracked
+ * project self-heal exactly once, the next time its own source naturally
+ * re-ingests it, without a separate backfill migration script.
  *
  * RESOLVED_STAGES ENFORCEMENT: if `p.currentStage` is one of
  * RESOLVED_STAGES (approved/under construction/cancelled/completed — see
  * taxonomies.ts), this site doesn't track it. Rather than silently
  * declining to create it (which would leave a stale row behind for a
  * project a *previous* ingestion run had tracked as still-waiting, now
- * that it's cleared/cancelled/finished), this deletes any existing row for
- * that slug and returns null without creating a new one — so a project
- * that transitions out of "waiting" between ingestion runs disappears from
- * the site rather than freezing in its last-known waiting state.
+ * that it's cleared/cancelled/finished), this deletes any existing row
+ * (matched the same matchKey-then-slug-fallback way as above) and returns
+ * null without creating a new one — so a project that transitions out of
+ * "waiting" between ingestion runs disappears from the site rather than
+ * freezing in its last-known waiting state.
  */
 export async function upsertNormalizedProject(p: NormalizedProject) {
+  // Slug is only computed once, at creation, from whichever source's
+  // normalizeX() call happens to create the row first; it deliberately
+  // never changes after that so a project's URL stays stable even as later
+  // updates (from the same source, or a different source sharing its
+  // matchKey) change its display name.
   const slug = slugify(p.name, p.matchKey);
 
+  const existing =
+    (await prisma.project.findUnique({ where: { matchKey: p.matchKey } })) ??
+    (await prisma.project.findUnique({ where: { slug } }));
+
   if (RESOLVED_STAGES.includes(p.currentStage)) {
-    await prisma.project.deleteMany({ where: { slug } });
+    if (existing) await prisma.project.delete({ where: { id: existing.id } });
     return null;
   }
 
-  const project = await prisma.project.upsert({
-    where: { slug },
-    create: {
-      slug,
-      name: p.name,
-      projectType: p.projectType,
-      fuelType: p.fuelType,
-      lat: p.lat ?? null,
-      lon: p.lon ?? null,
-      state: p.state ?? null,
-      county: p.county ?? null,
-      capacityValue: p.capacityValue ?? null,
-      capacityUnit: p.capacityUnit ?? null,
-      applicationFiledDate: p.applicationFiledDate ?? null,
-      dateConfidence: p.dateConfidence ?? "exact",
-      currentStatus: p.currentStatus,
-      currentStage: p.currentStage,
-      causeDetail: p.causeDetail,
-      interconnectionQueueStage: p.interconnectionQueueStage ?? null,
-      networkUpgradeCostUsd: p.networkUpgradeCostUsd ?? null,
-      isAggregateExample: p.isAggregateExample ?? false,
-      estimatedMwDelayed: p.estimatedMwDelayed ?? null,
-      verificationStatus: "verified",
-      dataQualityNote: p.dataQualityNote ?? null,
-    },
-    update: {
-      name: p.name,
-      projectType: p.projectType,
-      fuelType: p.fuelType,
-      lat: p.lat ?? null,
-      lon: p.lon ?? null,
-      state: p.state ?? null,
-      county: p.county ?? null,
-      capacityValue: p.capacityValue ?? null,
-      capacityUnit: p.capacityUnit ?? null,
-      applicationFiledDate: p.applicationFiledDate ?? null,
-      dateConfidence: p.dateConfidence ?? "exact",
-      currentStatus: p.currentStatus,
-      currentStage: p.currentStage,
-      causeDetail: p.causeDetail,
-      interconnectionQueueStage: p.interconnectionQueueStage ?? null,
-      networkUpgradeCostUsd: p.networkUpgradeCostUsd ?? null,
-      isAggregateExample: p.isAggregateExample ?? false,
-      estimatedMwDelayed: p.estimatedMwDelayed ?? null,
-      dataQualityNote: p.dataQualityNote ?? null,
-    },
-  });
+  const fields = {
+    name: p.name,
+    projectType: p.projectType,
+    fuelType: p.fuelType,
+    lat: p.lat ?? null,
+    lon: p.lon ?? null,
+    state: p.state ?? null,
+    county: p.county ?? null,
+    capacityValue: p.capacityValue ?? null,
+    capacityUnit: p.capacityUnit ?? null,
+    applicationFiledDate: p.applicationFiledDate ?? null,
+    dateConfidence: p.dateConfidence ?? "exact",
+    currentStatus: p.currentStatus,
+    currentStage: p.currentStage,
+    causeDetail: p.causeDetail,
+    interconnectionQueueStage: p.interconnectionQueueStage ?? null,
+    networkUpgradeCostUsd: p.networkUpgradeCostUsd ?? null,
+    isAggregateExample: p.isAggregateExample ?? false,
+    estimatedMwDelayed: p.estimatedMwDelayed ?? null,
+    dataQualityNote: p.dataQualityNote ?? null,
+  };
+
+  const project = existing
+    ? await prisma.project.update({
+        where: { id: existing.id },
+        data: { ...fields, matchKey: p.matchKey },
+      })
+    : await prisma.project.create({
+        data: { ...fields, slug, matchKey: p.matchKey, verificationStatus: "verified" },
+      });
 
   await prisma.projectCause.deleteMany({ where: { projectId: project.id } });
   await prisma.projectCause.createMany({
     data: p.causeSlugs.map((causeSlug) => ({ projectId: project.id, causeSlug })),
   });
 
-  await prisma.projectSource.deleteMany({ where: { projectId: project.id } });
-  if (p.sources.length > 0) {
-    await prisma.projectSource.createMany({
-      data: p.sources.map((s) => ({ projectId: project.id, label: s.label, url: s.url })),
+  // Upsert-by-(projectId, label) rather than delete-all-then-recreate: when
+  // two different ingestion sources share a matchKey (manualOverrides.csv —
+  // the same physical project tracked by two agencies), each source's own
+  // update run must only touch its OWN source link, not wipe the other
+  // source's link that a prior run already wrote. A single source's own
+  // repeated runs still correctly update (not duplicate) its one link,
+  // since its own label is stable across runs.
+  for (const s of p.sources) {
+    await prisma.projectSource.upsert({
+      where: { projectId_label: { projectId: project.id, label: s.label } },
+      create: { projectId: project.id, label: s.label, url: s.url },
+      update: { url: s.url },
     });
   }
 

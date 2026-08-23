@@ -99,16 +99,35 @@ Flagged deliberately rather than guessed at — see also
 per-data-source version of this list.
 
 1. **Cross-source project identity matching is a real, ongoing problem,
-   not fully solved.** EIA and the Permitting Dashboard use their own
-   name/ID for what might be the same physical project. Three confirmed
-   duplicates (Grain Belt Express, SouthCoast Wind, Ocean Wind 1) were
-   caught and fixed by hand after the Permitting Dashboard's first live
-   run — see `KNOWN_DUPLICATE_PROJECT_IDS` in `permittingDashboard.ts`.
-   `src/lib/ingest/manualOverrides.ts` + `.csv` exists for a human to
-   declare two source records the same project via a shared `matchKey`,
-   but there's no automated fuzzy-matching. Building real matching (name
-   similarity + geographic proximity + capacity similarity) is the
-   highest-value follow-up engineering task.
+   not fully solved.** EIA, the Permitting Dashboard, and now the growing
+   state-docket series each use their own name/ID for what might be the
+   same physical project. `src/lib/ingest/manualOverrides.ts` + `.csv`
+   lets a human declare two source records the same project via a shared
+   `matchKey` — there's no automated fuzzy-matching, deliberately (name
+   similarity + geographic proximity + capacity similarity is flagged as
+   the highest-value follow-up engineering task, not attempted here).
+   **A real merge bug in this mechanism was found and fixed 2026-08-23**:
+   `upsertNormalizedProject` (`common.ts`) used to look up existing
+   projects by `slug`, but `slug` is derived from a project's *name*, which
+   differs between sources — so two records sharing a manually-declared
+   `matchKey` still produced two separate rows instead of merging into one,
+   silently defeating the override file's entire purpose (caught by hand
+   when Illinois's new CPCN docket for Grain Belt Express turned out to
+   duplicate an existing Permitting Dashboard entry for the same line).
+   Fixed by adding a real `matchKey` column to `Project` (`prisma/schema.
+   prisma`) and keying the upsert on that instead, with a slug-based
+   fallback lookup so every project ingested before this column existed
+   self-heals (gets its real matchKey backfilled) the next time its own
+   source naturally re-ingests it — no separate backfill migration needed.
+   `ProjectSource` rows are now upserted by `(projectId, label)` rather
+   than deleted-and-recreated on every run too, so a merged project keeps
+   both sources' links instead of the more-recently-run source's write
+   wiping out the other's. `manualOverrides.csv` currently has one real
+   entry (Grain Belt Express: Permitting Dashboard project_id 109441 +
+   Illinois ICC docket 22-0499) — the two other originally-flagged
+   duplicates, SouthCoast Wind and Ocean Wind 1, have no current overlap to
+   merge (see the "NOTE on cross-source identity matching" comment in
+   `permittingDashboard.ts`), so nothing is declared for them yet.
 2. **Permitting Dashboard's Socrata dataset is a denormalized join, not
    one row per project** — a single query can return dozens of
    byte-for-byte duplicate rows per project. The ingestion module dedupes

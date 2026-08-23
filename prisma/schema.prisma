@@ -27,6 +27,19 @@ model Project {
   name   String
   slug   String @unique
 
+  // Stable cross-source identity key from the ingestion pipeline (see
+  // src/lib/ingest/common.ts and manualOverrides.ts) — `${source}:${sourceId}`
+  // by default, or a shared value a human has explicitly declared via
+  // manualOverrides.csv when two different sources track the same physical
+  // project. This is the real identity used to decide whether an ingestion
+  // run is updating an existing project or creating a new one; `slug` is
+  // derived from it once at creation and then never changes, so bookmarked
+  // URLs stay stable even as a project's own display name changes across
+  // updates. Null for the handful of legacy rows written before this column
+  // existed (isAggregateExample seed rows, pre-dating this project's
+  // updatable-sources-only rebuild).
+  matchKey String? @unique
+
   // generation | transmission | storage | lng | pipeline
   projectType String
 
@@ -121,6 +134,14 @@ model ProjectSource {
   url       String
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Lets upsertNormalizedProject (common.ts) update-or-insert its own
+  // source link by (projectId, label) instead of wiping every source on the
+  // project each run — the mechanism that lets two different ingestion
+  // sources sharing one matchKey both keep their own source link on the
+  // same merged Project row, rather than the second run's write silently
+  // deleting the first's.
+  @@unique([projectId, label])
 }
 
 model Milestone {

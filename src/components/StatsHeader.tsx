@@ -108,15 +108,15 @@ export function StatsHeader({
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
       {items.map((item) => (
-        <div key={item.label} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
-          <div className="text-2xl font-bold">{item.value}</div>
+        <div key={item.label} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-2">
+          <div className="text-lg font-bold">{item.value}</div>
           <div className="text-xs text-[var(--muted)] mt-0.5 flex items-center gap-1">
             {item.label}
             <HelpTooltip label={item.label}>{item.help}</HelpTooltip>
           </div>
-          {item.note && <div className="text-[10px] text-[var(--muted)] mt-1">{item.note}</div>}
+          {item.note && <div className="text-[10px] text-[var(--muted)] mt-0.5">{item.note}</div>}
         </div>
       ))}
       <div className="col-span-2 sm:col-span-4 text-[11px] text-[var(--muted)]">

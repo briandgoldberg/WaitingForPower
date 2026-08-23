@@ -40,12 +40,12 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
   }, [filtered]);
 
   return (
-    <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-5 flex flex-col gap-4 flex-1">
+    <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-2 flex flex-col gap-2 flex-1">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
           America needs power. It&rsquo;s stuck waiting.
         </h1>
-        <p className="text-sm text-[var(--muted)] mt-1 max-w-3xl">
+        <p className="text-sm text-[var(--muted)] mt-0.5 max-w-3xl">
           Cheaper bills, cleaner air, power for businesses and consumers, all just waiting on a yes.
         </p>
       </div>
@@ -56,13 +56,13 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">
           <button
             onClick={() => setView("map")}
-            className={`px-3 py-1.5 text-sm rounded-md ${view === "map" ? "bg-[var(--accent)] text-white" : ""}`}
+            className={`px-3 py-1 text-sm rounded-md ${view === "map" ? "bg-[var(--accent)] text-white" : ""}`}
           >
             Map
           </button>
           <button
             onClick={() => setView("list")}
-            className={`px-3 py-1.5 text-sm rounded-md ${view === "list" ? "bg-[var(--accent)] text-white" : ""}`}
+            className={`px-3 py-1 text-sm rounded-md ${view === "list" ? "bg-[var(--accent)] text-white" : ""}`}
           >
             List
           </button>
@@ -97,13 +97,13 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 flex-1 min-h-[560px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-2 flex-1 min-h-[440px]">
         {panelOpen && (
-          <div className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+          <div className="h-[440px] lg:h-[calc(100vh-375px)] lg:sticky lg:top-4 lg:self-start lg:overflow-y-auto">
             <FilterPanel filters={filters} onChange={setFilters} projects={projects} />
           </div>
         )}
-        <div className="h-[560px] lg:h-[calc(100vh-260px)] lg:min-h-[560px]">
+        <div className="h-[440px] lg:h-[calc(100vh-375px)]">
           {view === "map" ? (
             <Map projects={filtered} />
           ) : (

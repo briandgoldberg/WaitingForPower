@@ -14,8 +14,8 @@ function toggle<T>(arr: T[], value: T): T[] {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-b border-[var(--border)] py-3 last:border-b-0">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-2">
+    <div className="border-b border-[var(--border)] py-2 last:border-b-0">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-1.5">
         {title}
       </h3>
       {children}
@@ -38,7 +38,7 @@ function Pill({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors ${
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border transition-colors ${
         active
           ? "bg-[var(--accent)] border-[var(--accent)] text-white"
           : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
@@ -86,12 +86,12 @@ export function FilterPanel({
   }, [projects]);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
       <Section title="State">
         <select
           value={filters.state ?? ""}
           onChange={(e) => onChange({ ...filters, state: e.target.value || null })}
-          className="w-full rounded-md border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-sm"
+          className="w-full rounded-md border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-sm"
         >
           <option value="">All states</option>
           {stateOptions.map((s) => (
@@ -103,7 +103,7 @@ export function FilterPanel({
       </Section>
 
       <Section title="Length of delay">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {[1, 3, 5].map((n) => (
             <Pill
               key={n}
@@ -122,7 +122,7 @@ export function FilterPanel({
       </Section>
 
       <Section title="Project type">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {PROJECT_TYPES.map((t) => (
             <Pill
               key={t.value}
@@ -138,7 +138,7 @@ export function FilterPanel({
       </Section>
 
       <Section title="Fuel / technology">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {FUEL_TYPES.map((f) => (
             <Pill
               key={f.value}
@@ -153,7 +153,7 @@ export function FilterPanel({
       </Section>
 
       <Section title="Capacity">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {[500, 1000, 2000].map((n) => (
             <Pill
               key={n}
@@ -172,7 +172,7 @@ export function FilterPanel({
       </Section>
 
       <Section title="Stage">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {TRACKED_PROJECT_STAGES.map((s) => (
             <Pill
               key={s.value}
@@ -187,7 +187,7 @@ export function FilterPanel({
 
       {queueStageOptions.length > 0 && (
         <Section title="Interconnection queue stage">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {queueStageOptions.map((qs) => (
               <Pill
                 key={qs}
@@ -202,7 +202,7 @@ export function FilterPanel({
       )}
 
       <Section title="Data source">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {SOURCE_OPTIONS.map((s) => (
             <Pill
               key={s.value}

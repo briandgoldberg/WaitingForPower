@@ -97,51 +97,48 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 gap-3 ${p.interconnectionQueueStage ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
-        <Stat
-          label="Verification"
-          value={p.verificationStatus.replace(/_/g, " ")}
-        />
-        {p.interconnectionQueueStage && (
-          <Stat label="Queue stage" value={p.interconnectionQueueStage} />
-        )}
+        <Stat label="Verification" value={p.verificationStatus.replace(/_/g, " ")} />
+        {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
       </div>
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-lg font-semibold mb-3">Estimated investment waiting</h2>
-        {p.investmentWaiting.applicable ? (
-          <>
-            <div className="text-3xl font-bold tabular-nums">{formatUsd(p.investmentWaiting.estimatedUsd!)}</div>
-            <p className="text-xs text-[var(--muted)] mt-2">
-              ≈ {Math.round((p.capacityValue ?? 0) * 1000).toLocaleString("en-US")} kW × $
-              {p.investmentWaiting.costPerKw?.toLocaleString("en-US")}/kW typical overnight
-              construction cost (EIA) — the dollar value of the power plant itself sitting in
-              permitting limbo, not a bill estimate.{" "}
-              <Link href="/methodology" className="underline">
-                Full methodology
-              </Link>
-              .
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-[var(--muted)]">Not estimated: {p.investmentWaiting.reason}</p>
-        )}
-      </section>
-
-      {p.networkUpgradeCostUsd != null && (
+      <div className={`grid grid-cols-1 gap-4 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-          <h2 className="text-lg font-semibold mb-2">Estimated network upgrade cost</h2>
-          <div className="text-3xl font-bold tabular-nums">{formatUsd(p.networkUpgradeCostUsd)}</div>
-          <p className="text-xs text-[var(--muted)] mt-2">
-            The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
-            interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
-            preliminary — see the data quality note below.
-          </p>
+          <h2 className="text-lg font-semibold mb-2">Estimated investment waiting</h2>
+          {p.investmentWaiting.applicable ? (
+            <>
+              <div className="text-3xl font-bold tabular-nums">{formatUsd(p.investmentWaiting.estimatedUsd!)}</div>
+              <p className="text-xs text-[var(--muted)] mt-2">
+                ≈ {Math.round((p.capacityValue ?? 0) * 1000).toLocaleString("en-US")} kW × $
+                {p.investmentWaiting.costPerKw?.toLocaleString("en-US")}/kW typical overnight
+                construction cost (EIA) — the dollar value of the power plant itself sitting in
+                permitting limbo, not a bill estimate.{" "}
+                <Link href="/methodology" className="underline">
+                  Full methodology
+                </Link>
+                .
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">Not estimated: {p.investmentWaiting.reason}</p>
+          )}
         </section>
-      )}
+
+        {p.networkUpgradeCostUsd != null && (
+          <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+            <h2 className="text-lg font-semibold mb-2">Estimated network upgrade cost</h2>
+            <div className="text-3xl font-bold tabular-nums">{formatUsd(p.networkUpgradeCostUsd)}</div>
+            <p className="text-xs text-[var(--muted)] mt-2">
+              The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
+              interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
+              preliminary — see the data quality note below.
+            </p>
+          </section>
+        )}
+      </div>
 
       {(p.lat != null && p.lon != null) && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
@@ -157,7 +154,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-lg font-semibold mb-3">Sources</h2>
+        <h2 className="text-lg font-semibold mb-2">Sources</h2>
         <ul className="flex flex-col gap-1.5 text-sm">
           {p.sources.map((s) => (
             <li key={s.url}>

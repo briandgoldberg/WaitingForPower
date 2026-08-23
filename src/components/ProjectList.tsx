@@ -113,23 +113,23 @@ export function ProjectList({ projects }: { projects: ProjectDTO[] }) {
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)]">
-        <span className="text-sm text-[var(--muted)]">{projects.length} projects</span>
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border)]">
+        <span className="text-xs text-[var(--muted)]">{projects.length} projects</span>
         <button
           onClick={() => exportCsv(sorted)}
-          className="text-xs px-2.5 py-1 rounded border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+          className="text-xs px-2 py-0.5 rounded border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
         >
           Export CSV
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="text-left text-xs text-[var(--muted)] uppercase tracking-wide border-b border-[var(--border)]">
+            <tr className="text-left text-[10px] text-[var(--muted)] uppercase tracking-wide border-b border-[var(--border)]">
               {columns.map((c) => (
                 <th
                   key={c.key}
-                  className="px-3 py-2 cursor-pointer select-none whitespace-nowrap"
+                  className="px-2.5 py-1.5 cursor-pointer select-none whitespace-nowrap"
                   onClick={() => sortBy(c.key)}
                 >
                   {c.label} {sortKey === c.key && (sortDir === "asc" ? "↑" : "↓")}
@@ -140,7 +140,7 @@ export function ProjectList({ projects }: { projects: ProjectDTO[] }) {
           <tbody>
             {sorted.map((p) => (
               <tr key={p.id} className="border-b border-[var(--border)] last:border-b-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
-                <td className="px-3 py-2">
+                <td className="px-2.5 py-1">
                   <Link href={`/project/${p.slug}`} className="font-medium hover:underline">
                     {p.name}
                   </Link>
@@ -148,7 +148,7 @@ export function ProjectList({ projects }: { projects: ProjectDTO[] }) {
                     <span className="ml-2 text-[10px] text-[var(--muted)]">(aggregate)</span>
                   )}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className="px-2.5 py-1 whitespace-nowrap">
                   <span className="inline-flex items-center gap-1.5">
                     <span
                       className="inline-block h-2 w-2 rounded-full"
@@ -157,17 +157,17 @@ export function ProjectList({ projects }: { projects: ProjectDTO[] }) {
                     {FUEL_TYPE_BY_VALUE[p.fuelType]?.label ?? p.fuelType}
                   </span>
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">{p.state ?? "—"}</td>
-                <td className="px-3 py-2 whitespace-nowrap tabular-nums">
+                <td className="px-2.5 py-1 whitespace-nowrap">{p.state ?? "—"}</td>
+                <td className="px-2.5 py-1 whitespace-nowrap tabular-nums">
                   {p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap tabular-nums">
+                <td className="px-2.5 py-1 whitespace-nowrap tabular-nums">
                   {formatCapacity(p.capacityValue, p.capacityUnit)}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className="px-2.5 py-1 whitespace-nowrap">
                   {PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">{p.interconnectionQueueStage ?? "—"}</td>
+                <td className="px-2.5 py-1 whitespace-nowrap">{p.interconnectionQueueStage ?? "—"}</td>
               </tr>
             ))}
           </tbody>

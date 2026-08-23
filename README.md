@@ -61,6 +61,7 @@ per-source table, open questions, and how each is scheduled:
 | New Mexico PRC CCN dockets | `src/lib/ingest/nmPrcDockets.ts` | Cron weekly (21:30 UTC Sundays), `/api/cron/ingest-nm-prc`. Eighth state — a real JSON API behind an Angular SPA front-end, found by capturing the app's own network requests. Its CCN category also catches water-utility certificates and intake-rejected duplicate filings, both filtered out locally; its status field held up under testing, unlike several other states here. | Real JSON API, no auth |
 | Illinois ICC CPCN dockets | `src/lib/ingest/ilIccDockets.ts` | Cron weekly (22:00 UTC Sundays), `/api/cron/ingest-il-icc`. Ninth state — its CPCN case-type bucket also catches declaratory-ruling and eminent-domain petitions, filtered locally; capacity is published as voltage (kV), not MW, a first for this series. Its Grain Belt Express docket is the same physical line as an existing Permitting Dashboard entry — the case that surfaced and fixed a real cross-source merge bug, see open question #1. | Server-rendered HTML, no auth |
 | Florida PSC + DEP siting certification | `src/lib/ingest/flPscDockets.ts` | Cron weekly (22:30 UTC Sundays), `/api/cron/ingest-fl-psc`. Tenth state — Florida has no CPCN at the PSC at all; siting runs through a separate DEP process the PSC only opens with a small "determination of need" sub-docket. Two agencies' pages are cross-checked against each other, and — unusually for this series — it's the *state-docket agency's own* status field that lies, while a second agency's page is the reliable one. | Real JSON API (PSC) + server-rendered HTML (DEP), no auth |
+| New York DPS Article VII/VIII dockets | `src/lib/ingest/nyDpsDockets.ts` | Cron weekly (23:00 UTC Sundays), `/api/cron/ingest-ny-dps`. Eleventh state — two live siting-certificate tracks (transmission under Article VII, renewable generation under Article VIII/its predecessor § 94-c) in one system, covered by one module. Publishes no status field at all, and the renewable track's grant order isn't even filed as an Order/Decision — it's a plain correspondence filing, found only by scanning every document title regardless of type. | Real JSON API, no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all ten state
 docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -192,16 +193,16 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: ten states down, 40 to go, each with its own
-    hard problem.** Confirmed 2026-08-23: no national aggregator exists for
-    state utility-commission dockets — each state runs its own system, and
-    FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
+10. **State PUC/PSC dockets: eleven states down, 39 to go, each with its
+    own hard problem.** Confirmed 2026-08-23: no national aggregator exists
+    for state utility-commission dockets — each state runs its own system,
+    and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
     `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`,
-    `nmPrcDockets.ts`, `ilIccDockets.ts`, and `flPscDockets.ts` are all
-    plain-HTTP-fetch sources, not scraping projects — no headless browser
-    needed for any of them, same shape as this site's other sources — but
-    none was "just add a module":
+    `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`, and
+    `nyDpsDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    projects — no headless browser needed for any of them, same shape as
+    this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -303,7 +304,22 @@ per-data-source version of this list.
       Applications-in-Process page — the real multi-agency process the PSC
       docket only opens — still shows filings from 8/18/2026, ten weeks
       later.
-    Widening any of the ten states' scope, or evaluating the other
+    - **New York** covers two live siting-certificate tracks in one module
+      since both live in the same underlying system: Article VII
+      (transmission) and Article VIII of the Public Service Law (renewable
+      generation, formerly Executive Law § 94-c until a 2024 state law
+      repealed and replaced it — DPS's own records straddle both names
+      inconsistently, confirmed by hand, so this module queries both). NY
+      publishes no status field at all, and — a real gotcha found only by
+      checking a specific granted case, Alfred Oaks Solar — the renewable
+      track's actual grant order isn't even filed as an Order or Decision
+      document type; it's plain correspondence titled
+      "...Final_Siting_Permit_-_Signed," found only by scanning every
+      filed document's title regardless of type. Real request volume also
+      forced a scheduling tradeoff: a full run took 236s against a 300s
+      cron budget, so its candidate cap was tightened for safety margin,
+      a documented, accepted limitation (see the module header).
+    Widening any of the eleven states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

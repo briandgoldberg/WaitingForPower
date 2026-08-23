@@ -23,7 +23,8 @@
     "ingest:wa-efsec": "tsx src/lib/ingest/waEfsecFacilities.ts",
     "ingest:nm-prc": "tsx src/lib/ingest/nmPrcDockets.ts",
     "ingest:il-icc": "tsx src/lib/ingest/ilIccDockets.ts",
-    "ingest:fl-psc": "tsx src/lib/ingest/flPscDockets.ts"
+    "ingest:fl-psc": "tsx src/lib/ingest/flPscDockets.ts",
+    "ingest:ny-dps": "tsx src/lib/ingest/nyDpsDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

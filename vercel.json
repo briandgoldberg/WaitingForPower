@@ -60,6 +60,10 @@
     {
       "path": "/api/cron/ingest-fl-psc",
       "schedule": "30 22 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-ny-dps",
+      "schedule": "0 23 * * 0"
     }
   ]
 }

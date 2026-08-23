@@ -144,3 +144,15 @@ export function multiStateCentroid(state: string | null): [number, number] | nul
   const lat = points.reduce((sum, [, la]) => sum + la, 0) / points.length;
   return [lon, lat];
 }
+
+// Single-state centroid fallback for a project with a known state but no
+// real lat/lon and no county-level fallback available (e.g. a state PUC
+// docket source with no structured location field — see vaSccDockets.ts).
+// A coarse, deliberately-obvious approximation, not a substitute for real
+// geocoding — Map.tsx renders it with the same dashed-marker treatment as
+// multiStateCentroid above.
+export function stateCentroid(state: string | null): [number, number] | null {
+  const codes = splitStateCodes(state);
+  if (codes.length !== 1) return null;
+  return STATE_CENTROIDS[codes[0]] ?? null;
+}

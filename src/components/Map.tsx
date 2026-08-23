@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import type { ProjectDTO } from "@/lib/types";
 import { formatCapacity, FUEL_TYPE_BY_VALUE } from "@/lib/data/taxonomies";
-import { multiStateCentroid } from "@/lib/data/usStates";
+import { multiStateCentroid, stateCentroid } from "@/lib/data/usStates";
 
 // Free, no-API-key vector basemap (CARTO's Positron style — light and
 // minimal, so the colored fuel-type markers read clearly against it instead
@@ -42,7 +42,14 @@ function capacityRadius(p: ProjectDTO): number {
   return 4;
 }
 
-function popupHtml(p: ProjectDTO, approx: boolean): string {
+type ApproxReason = "multi-state" | "state-only" | null;
+
+const APPROX_MESSAGE: Record<Exclude<ApproxReason, null>, string> = {
+  "multi-state": "Approximate location — this project spans multiple states; pin is centered between them.",
+  "state-only": "Approximate location — no site-level location is published for this project; pin is centered on the state.",
+};
+
+function popupHtml(p: ProjectDTO, approx: ApproxReason): string {
   const capacityLabel = formatCapacity(p.capacityValue, p.capacityUnit);
   return `
     <div style="min-width:220px;font-family:inherit;">
@@ -51,7 +58,7 @@ function popupHtml(p: ProjectDTO, approx: boolean): string {
         <div style="font-size:12px;color:var(--muted);margin-top:2px;">
           ${p.state ?? ""} · ${capacityLabel}${p.isAggregateExample ? " · aggregate" : ""}
         </div>
-        ${approx ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">Approximate location — this project spans multiple states; pin is centered between them.</div>` : ""}
+        ${approx ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${APPROX_MESSAGE[approx]}</div>` : ""}
       </div>
       <div style="padding:10px 14px;font-size:12px;">
         <div><strong>Waiting:</strong> ${p.yearsWaiting != null ? p.yearsWaiting.toFixed(1) + " yrs" : "—"}</div>
@@ -144,13 +151,14 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
       for (const p of projectsRef.current) {
         let lon = p.lon;
         let lat = p.lat;
-        let approx = false;
+        let approx: ApproxReason = null;
 
         if (lon == null || lat == null) {
-          const centroid = multiStateCentroid(p.state);
+          const multiState = multiStateCentroid(p.state);
+          const centroid = multiState ?? stateCentroid(p.state);
           if (!centroid) continue;
           [lon, lat] = centroid;
-          approx = true;
+          approx = multiState ? "multi-state" : "state-only";
         }
 
         const size = capacityRadius(p) * 2;

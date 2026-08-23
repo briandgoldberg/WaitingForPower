@@ -153,6 +153,29 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
       )}
 
+      {p.milestones.length > 0 && (
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+          <h2 className="text-lg font-semibold mb-3">Timeline</h2>
+          <ul className="flex flex-col gap-3">
+            {p.milestones.map((m, i) => (
+              <li key={i} className="flex gap-3 text-sm">
+                <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
+                  {new Date(m.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                  {m.dateConfidence === "approximate" && <span className="text-xs">*</span>}
+                </div>
+                <div>
+                  <span className="font-medium">{m.description}</span>
+                  <span className="text-[var(--muted)]"> — {m.stage}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {p.milestones.some((m) => m.dateConfidence === "approximate") && (
+            <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
+          )}
+        </section>
+      )}
+
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-lg font-semibold mb-2">Sources</h2>
         <ul className="flex flex-col gap-1.5 text-sm">

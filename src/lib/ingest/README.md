@@ -28,6 +28,7 @@ sources that can be re-run and stay current on their own).
 | `nyDpsDockets.ts` | New York DPS Article VII (transmission) + Article VIII/94-c (renewable siting) dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (23:00 UTC Sundays), `/api/cron/ingest-ny-dps`. |
 | `nvPucnDockets.ts` | Nevada PUCN Utility Environmental Protection Act (UEPA) permit dockets | Yes — legacy ASP.NET WebForms + real JSON API (OnBase), no auth | None (no auth) | Cron weekly (23:30 UTC Sundays), `/api/cron/ingest-nv-pucn`. |
 | `orEfscFacilities.ts` | Oregon Energy Facility Siting Council (EFSC) facility site-certifications | Yes — real JSON API (SharePoint REST), no auth | None (no auth) | Cron weekly (00:00 UTC Mondays), `/api/cron/ingest-or-efsc`. |
+| `maEfsbDockets.ts` | Massachusetts Energy Facilities Siting Board (EFSB) dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (00:30 UTC Mondays), `/api/cron/ingest-ma-efsb`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

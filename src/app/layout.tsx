@@ -63,7 +63,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-1.5 text-xs text-center">
             🚧 This site is under active construction — currently expanding into state-level
             permitting dockets (Virginia, Texas, Colorado, Ohio, South Carolina, Arizona,
-            Washington, New Mexico, Illinois, Florida, and New York live, more states coming).
+            Washington, New Mexico, Illinois, Florida, New York, and Nevada live, more states
+            coming).
           </div>
         </div>
         <main className="flex-1 flex flex-col">{children}</main>

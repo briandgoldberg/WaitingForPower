@@ -62,6 +62,7 @@ per-source table, open questions, and how each is scheduled:
 | Illinois ICC CPCN dockets | `src/lib/ingest/ilIccDockets.ts` | Cron weekly (22:00 UTC Sundays), `/api/cron/ingest-il-icc`. Ninth state — its CPCN case-type bucket also catches declaratory-ruling and eminent-domain petitions, filtered locally; capacity is published as voltage (kV), not MW, a first for this series. Its Grain Belt Express docket is the same physical line as an existing Permitting Dashboard entry — the case that surfaced and fixed a real cross-source merge bug, see open question #1. | Server-rendered HTML, no auth |
 | Florida PSC + DEP siting certification | `src/lib/ingest/flPscDockets.ts` | Cron weekly (22:30 UTC Sundays), `/api/cron/ingest-fl-psc`. Tenth state — Florida has no CPCN at the PSC at all; siting runs through a separate DEP process the PSC only opens with a small "determination of need" sub-docket. Two agencies' pages are cross-checked against each other, and — unusually for this series — it's the *state-docket agency's own* status field that lies, while a second agency's page is the reliable one. | Real JSON API (PSC) + server-rendered HTML (DEP), no auth |
 | New York DPS Article VII/VIII dockets | `src/lib/ingest/nyDpsDockets.ts` | Cron weekly (23:00 UTC Sundays), `/api/cron/ingest-ny-dps`. Eleventh state — two live siting-certificate tracks (transmission under Article VII, renewable generation under Article VIII/its predecessor § 94-c) in one system, covered by one module. Publishes no status field at all, and the renewable track's grant order isn't even filed as an Order/Decision — it's a plain correspondence filing, found only by scanning every document title regardless of type. | Real JSON API, no auth |
+| Nevada PUCN UEPA permit dockets | `src/lib/ingest/nvPucnDockets.ts` | Cron weekly (23:30 UTC Sundays), `/api/cron/ingest-nv-pucn`. Twelfth state — no CPCN; Nevada's equivalent is a Utility Environmental Protection Act permit spanning two separate PUCN systems (a legacy WebForms docket list plus a modern OnBase JSON API). Its multi-phase transmission reviews (an already-"GRANTED" phase followed by a new phase filing months later) required a real "no later substantive filing" check, not just "does any order say GRANTED." | Legacy ASP.NET WebForms + real JSON API (OnBase), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all ten state
 docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -193,16 +194,17 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: eleven states down, 39 to go, each with its
+10. **State PUC/PSC dockets: twelve states down, 38 to go, each with its
     own hard problem.** Confirmed 2026-08-23: no national aggregator exists
     for state utility-commission dockets — each state runs its own system,
     and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
     `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`,
-    `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`, and
-    `nyDpsDockets.ts` are all plain-HTTP-fetch sources, not scraping
-    projects — no headless browser needed for any of them, same shape as
-    this site's other sources — but none was "just add a module":
+    `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`,
+    `nyDpsDockets.ts`, and `nvPucnDockets.ts` are all plain-HTTP-fetch
+    sources, not scraping projects — no headless browser needed for any of
+    them, same shape as this site's other sources — but none was "just add
+    a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -319,7 +321,19 @@ per-data-source version of this list.
       forced a scheduling tradeoff: a full run took 236s against a 300s
       cron budget, so its candidate cap was tightened for safety margin,
       a documented, accepted limitation (see the module header).
-    Widening any of the eleven states' scope, or evaluating the other
+    - **Nevada** has no CPCN either — its equivalent, a Utility
+      Environmental Protection Act (UEPA) permit, spans two entirely
+      separate PUCN systems (a legacy WebForms docket list good only
+      through ~October 2023, plus a modern OnBase JSON API for real status).
+      Its hardest problem was multi-phase transmission reviews: a docket
+      can have a bare "GRANTED" order and still be genuinely active months
+      later because a new phase was filed after it — confirmed against
+      five real GridLiance West dockets that would have been wrongly
+      deleted as resolved under a naive "does any order say GRANTED"
+      check. Fixed by requiring no later *substantive* filing (excluding
+      routine same-day companion documents like service lists) after the
+      most recent disposition.
+    Widening any of the twelve states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

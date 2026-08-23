@@ -64,6 +64,10 @@
     {
       "path": "/api/cron/ingest-ny-dps",
       "schedule": "0 23 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-nv-pucn",
+      "schedule": "30 23 * * 0"
     }
   ]
 }

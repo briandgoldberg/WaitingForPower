@@ -17,6 +17,7 @@ sources that can be re-run and stay current on their own).
 | `eia.ts` | EIA API v2 `operating-generator-capacity` | Yes | Free API key | **Superseded, do not run** — see file header. This route only covers already-operating plants; `eia860mPlanned.ts` replaced it. |
 | `vaSccDockets.ts` | Virginia State Corporation Commission (SCC) CPCN dockets | Yes — public Breeze/OData JSON API, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/vaSccDockets.ts`. |
 | `txPuctDockets.ts` | Texas Public Utility Commission (PUCT) CCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/txPuctDockets.ts`. |
+| `coPucDockets.ts` | Colorado Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (Oracle PL/SQL web gateway), no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/coPucDockets.ts`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

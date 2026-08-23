@@ -28,7 +28,8 @@
     "ingest:nv-pucn": "tsx src/lib/ingest/nvPucnDockets.ts",
     "ingest:or-efsc": "tsx src/lib/ingest/orEfscFacilities.ts",
     "ingest:ma-efsb": "tsx src/lib/ingest/maEfsbDockets.ts",
-    "ingest:ok-occ": "tsx src/lib/ingest/okOccDockets.ts"
+    "ingest:ok-occ": "tsx src/lib/ingest/okOccDockets.ts",
+    "ingest:ut-psc": "tsx src/lib/ingest/utPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

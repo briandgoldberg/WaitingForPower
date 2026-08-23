@@ -30,6 +30,7 @@ sources that can be re-run and stay current on their own).
 | `orEfscFacilities.ts` | Oregon Energy Facility Siting Council (EFSC) facility site-certifications | Yes — real JSON API (SharePoint REST), no auth | None (no auth) | Cron weekly (00:00 UTC Mondays), `/api/cron/ingest-or-efsc`. |
 | `maEfsbDockets.ts` | Massachusetts Energy Facilities Siting Board (EFSB) dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (00:30 UTC Mondays), `/api/cron/ingest-ma-efsb`. |
 | `okOccDockets.ts` | Oklahoma Corporation Commission (OCC) High Voltage Transmission Certificate of Authority dockets | Yes — real JSON API (Laserfiche WebLink), no auth | None (no auth) | Cron weekly (01:00 UTC Mondays), `/api/cron/ingest-ok-occ`. |
+| `utPscDockets.ts` | Utah Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (01:30 UTC Mondays), `/api/cron/ingest-ut-psc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

@@ -56,6 +56,7 @@ per-source table, open questions, and how each is scheduled:
 | Colorado PUC CPCN dockets | `src/lib/ingest/coPucDockets.ts` | **Not scheduled yet — run manually.** Third state — the cleanest yet: status is a real structured field already present in search results, no filing-history inference needed at all. | Server-rendered HTML, no auth |
 | Ohio Power Siting Board cases | `src/lib/ingest/ohOpsbCases.ts` | **Not scheduled yet — run manually.** Fourth state — the simplest fetch yet (one unauthenticated JSON request returns the entire case history), and the first source in the series where both status and fuel/project type are real structured fields, not inferred. | Single JSON endpoint, no auth |
 | South Carolina PSC siting-certificate dockets | `src/lib/ingest/scPscDockets.ts` | **Not scheduled yet — run manually.** Fifth state — like Texas, has no reliable status field, but its captions are unusually descriptive (facility type, capacity, county spelled out in the text), and "still waiting" is inferred from an embedded Orders sub-table rather than a full filing-history scan. | Server-rendered HTML, no auth |
+| Arizona ACC Line Siting Committee dockets | `src/lib/ingest/azAccLineSiting.ts` | **Not scheduled yet — run manually.** Sixth state — a real JSON API, but with the same "status field lies" problem as South Carolina, independently rediscovered: `docketStatus` can read "Open" on a docket that's actually been decided. The real signal is a separate `decisions` array. | Real JSON API, no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -166,14 +167,15 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: five states down, 45 to go, each with its own
+10. **State PUC/PSC dockets: six states down, 44 to go, each with its own
     hard problem.** Confirmed 2026-08-23: no national aggregator exists for
     state utility-commission dockets — each state runs its own system, and
     FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
-    `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`, and
-    `scPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
-    projects — no headless browser needed for any of them, same shape as
-    this site's other sources — but none was "just add a module":
+    `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
+    `scPscDockets.ts`, and `azAccLineSiting.ts` are all plain-HTTP-fetch
+    sources, not scraping projects — no headless browser needed for any of
+    them, same shape as this site's other sources — but none was "just add
+    a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -211,10 +213,23 @@ per-data-source version of this list.
       that merely argued *about* a certificate rather than applying for
       one, caught in a real post-run data-quality check and fixed by
       requiring captions start with "Application of."
-    Widening any of the five states' scope, or evaluating the other
-    research leads already confirmed viable in parallel (Arizona — its own
-    real gotcha, see its eventual ingestion module; North Carolina works
-    too but needs a stateful session/postback-counter dance and
+    - **Arizona** has a real JSON API (unlike VA/TX/SC's HTML), but its
+      docket-level `docketStatus` field turned out to have the exact same
+      unreliability as South Carolina's Status field — independently
+      rediscovered rather than assumed to carry over: a docket filed in
+      December 2022 still reads `docketStatus: "Open"` today despite a
+      certificate having been granted five months after filing. The real
+      signal is a separate `decisions` array (empty = still pending, any
+      entry = a Commission ruling occurred) — confirmed against a real
+      64-docket batch, where the deceptive "Compliance Due" status (81% of
+      that batch) reliably meant "already granted, now in post-approval
+      compliance monitoring," not "still waiting." Its search endpoint also
+      silently returns zero rows if `rowsPerPage` is omitted or zero,
+      despite a correct nonzero total count and no error — caught before
+      it could look like "no candidates found."
+    Widening any of the six states' scope, or evaluating the other research
+    leads already confirmed viable in parallel (North Carolina works too
+    but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania
     and Georgia stay deferred — PA has no caption field in search results,
     GA's has one but it's server-side broken and always returns the full

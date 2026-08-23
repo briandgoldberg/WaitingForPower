@@ -55,6 +55,7 @@ per-source table, open questions, and how each is scheduled:
 | Texas PUCT CCN dockets | `src/lib/ingest/txPuctDockets.ts` | **Not scheduled yet — run manually.** Second state in the series — higher-volume than Virginia but with no structured status field, so "still waiting" is inferred from filing history (see file header for how that was calibrated). | Server-rendered HTML, no auth |
 | Colorado PUC CPCN dockets | `src/lib/ingest/coPucDockets.ts` | **Not scheduled yet — run manually.** Third state — the cleanest yet: status is a real structured field already present in search results, no filing-history inference needed at all. | Server-rendered HTML, no auth |
 | Ohio Power Siting Board cases | `src/lib/ingest/ohOpsbCases.ts` | **Not scheduled yet — run manually.** Fourth state — the simplest fetch yet (one unauthenticated JSON request returns the entire case history), and the first source in the series where both status and fuel/project type are real structured fields, not inferred. | Single JSON endpoint, no auth |
+| South Carolina PSC siting-certificate dockets | `src/lib/ingest/scPscDockets.ts` | **Not scheduled yet — run manually.** Fifth state — like Texas, has no reliable status field, but its captions are unusually descriptive (facility type, capacity, county spelled out in the text), and "still waiting" is inferred from an embedded Orders sub-table rather than a full filing-history scan. | Server-rendered HTML, no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -165,14 +166,14 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: four states down, 46 to go, each with its own
+10. **State PUC/PSC dockets: five states down, 45 to go, each with its own
     hard problem.** Confirmed 2026-08-23: no national aggregator exists for
     state utility-commission dockets — each state runs its own system, and
     FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
-    `txPuctDockets.ts`, `coPucDockets.ts`, and `ohOpsbCases.ts` are all
-    plain-HTTP-fetch sources, not scraping projects — no headless browser
-    needed for any of them, same shape as this site's other sources — but
-    none was "just add a module":
+    `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`, and
+    `scPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    projects — no headless browser needed for any of them, same shape as
+    this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -197,17 +198,29 @@ per-data-source version of this list.
       finding it: Ohio's regular PUCO docketing system sits behind a
       bot-defense WAF that blocks every search regardless of headers, a
       real dead end confirmed by hand before pivoting to OPSB.
-    Widening any of the four states' scope, or evaluating the other
-    research leads already confirmed viable in parallel (Arizona, South
-    Carolina — each with its own real gotcha, see their eventual ingestion
-    modules; North Carolina works too but needs a stateful
-    session/postback-counter dance and Cloudflare-aware headers, real extra
-    engineering weight; Pennsylvania and Georgia stay deferred — PA has no
-    caption field in search results, GA's has one but it's server-side
-    broken and always returns the full unfiltered set), are real next
-    options — each needs the same "confirm before guessing" treatment this
-    project holds itself to, one state (and one scope/status decision) at a
-    time, not assumed to generalize.
+    - **South Carolina** has no reliable status field either (its "Status"
+      column reads "Open" even on a docket granted years earlier), so
+      "still waiting" is inferred from an embedded Orders sub-table already
+      present on the same detail-page fetch — cheaper than Texas's full
+      filing-history scan since it's one small table, not every filing.
+      Its bigger gotcha was scoping: a server-side exact-phrase search for
+      the CPCN phrase Virginia and Texas both use almost entirely missed
+      SC's real captions, which use a longer statutory name ("Certificate
+      of *Environmental Compatibility and* Public Convenience and
+      Necessity"); and a broader keyword search let through two petitions
+      that merely argued *about* a certificate rather than applying for
+      one, caught in a real post-run data-quality check and fixed by
+      requiring captions start with "Application of."
+    Widening any of the five states' scope, or evaluating the other
+    research leads already confirmed viable in parallel (Arizona — its own
+    real gotcha, see its eventual ingestion module; North Carolina works
+    too but needs a stateful session/postback-counter dance and
+    Cloudflare-aware headers, real extra engineering weight; Pennsylvania
+    and Georgia stay deferred — PA has no caption field in search results,
+    GA's has one but it's server-side broken and always returns the full
+    unfiltered set), are real next options — each needs the same "confirm
+    before guessing" treatment this project holds itself to, one state (and
+    one scope/status decision) at a time, not assumed to generalize.
 
 ## Architecture
 

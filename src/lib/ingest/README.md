@@ -19,6 +19,7 @@ sources that can be re-run and stay current on their own).
 | `txPuctDockets.ts` | Texas Public Utility Commission (PUCT) CCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/txPuctDockets.ts`. |
 | `coPucDockets.ts` | Colorado Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (Oracle PL/SQL web gateway), no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/coPucDockets.ts`. |
 | `ohOpsbCases.ts` | Ohio Power Siting Board (OPSB) cases | Yes — single JSON endpoint, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/ohOpsbCases.ts`. |
+| `scPscDockets.ts` | South Carolina Public Service Commission (PSC) siting-certificate dockets | Yes — server-rendered HTML, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/scPscDockets.ts`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

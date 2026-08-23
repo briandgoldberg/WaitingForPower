@@ -104,7 +104,9 @@
 // mapping isn't exercised by any real candidate right now); flagged in
 // dataQualityNote whenever it's actually used.
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules. Also
+// Wired to Vercel Cron weekly, 21:00 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-wa-efsec/route.ts) — a real run's timing was
+// measured (19 total facilities, 5 candidates) before scheduling this. Also
 // politeness-delayed between per-candidate detail requests.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";

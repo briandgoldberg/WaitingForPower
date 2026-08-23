@@ -20,6 +20,46 @@
     {
       "path": "/api/cron/ingest-eia-pipelines",
       "schedule": "0 17 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-va-scc",
+      "schedule": "0 18 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-tx-puct",
+      "schedule": "30 18 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-co-puc",
+      "schedule": "0 19 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-oh-opsb",
+      "schedule": "30 19 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-sc-psc",
+      "schedule": "0 20 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-az-acc",
+      "schedule": "30 20 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-wa-efsec",
+      "schedule": "0 21 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-nm-prc",
+      "schedule": "30 21 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-il-icc",
+      "schedule": "0 22 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-fl-psc",
+      "schedule": "30 22 * * 0"
     }
   ]
 }

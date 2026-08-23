@@ -138,8 +138,10 @@
 // "grain-belt-express-phase-1") rather than excluded here, so the site
 // shows one merged row carrying both sources' links.
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules. Also
-// politeness-delayed between per-candidate detail requests.
+// Wired to Vercel Cron weekly, 22:00 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-il-icc/route.ts) — a real run's timing was
+// measured (64 candidates, 59 real applications) before scheduling this.
+// Also politeness-delayed between per-candidate detail requests.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";

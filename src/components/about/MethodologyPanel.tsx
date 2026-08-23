@@ -158,7 +158,7 @@ export function MethodologyPanel() {
             populated by any ingestion module — see &ldquo;Data &amp; sourcing&rdquo; below.
           </li>
           <li>
-            <strong>Source</strong> — which of the four data pipelines below ingested this project.
+            <strong>Source</strong> — which of the data pipelines below ingested this project.
             Derived from the project&rsquo;s citation link, not a stored field — see &ldquo;Data
             &amp; sourcing&rdquo; below.
           </li>
@@ -331,11 +331,94 @@ export function MethodologyPanel() {
           won&rsquo;t show a &ldquo;time waiting&rdquo; figure unless LBNL Queued Up or ORNL&rsquo;s
           hydropower relicensing dataset also has a matching entry.
         </p>
+
+        <h3 className="text-sm font-semibold mt-5 mb-2">State PUC/PSC and siting-authority dockets</h3>
+        <p className="text-sm mb-3">
+          No national aggregator exists for state utility-commission dockets — each state runs its
+          own system, and FERC eLibrary only covers the federal side. This site is building
+          per-state coverage one confirmed source at a time, each a real, publicly reachable search
+          (a JSON API or server-rendered HTML page) rather than a headless-browser scrape or a paid
+          API. Every state below tracks a real siting-certificate application (each state&rsquo;s
+          own name for the &ldquo;Certificate of Public Convenience and Necessity&rdquo; concept) for
+          electric generation, storage, or transmission projects; none publishes a cause for the
+          delay, so — like the sources above — these are all tagged with a single, honest cause
+          category (&ldquo;local/state review&rdquo;) rather than a guessed reason. See the
+          repo&rsquo;s <code>src/lib/ingest/README.md</code> for the specific hard problem each one
+          solved (an unreliable status field, a scoping trap, a session/CAPTCHA hurdle, etc.).
+        </p>
+        <ul className="text-sm grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <li>
+            <a href="https://www.scc.virginia.gov/" target="_blank" rel="noreferrer" className="underline">
+              Virginia
+            </a>{" "}
+            — State Corporation Commission
+          </li>
+          <li>
+            <a href="https://interchange.puc.texas.gov/" target="_blank" rel="noreferrer" className="underline">
+              Texas
+            </a>{" "}
+            — Public Utility Commission
+          </li>
+          <li>
+            <a href="https://www.dora.state.co.us/pls/efi/" target="_blank" rel="noreferrer" className="underline">
+              Colorado
+            </a>{" "}
+            — Public Utilities Commission
+          </li>
+          <li>
+            <a href="https://opsb.ohio.gov/" target="_blank" rel="noreferrer" className="underline">
+              Ohio
+            </a>{" "}
+            — Power Siting Board
+          </li>
+          <li>
+            <a href="https://dms.psc.sc.gov/" target="_blank" rel="noreferrer" className="underline">
+              South Carolina
+            </a>{" "}
+            — Public Service Commission
+          </li>
+          <li>
+            <a href="https://edocket.azcc.gov/" target="_blank" rel="noreferrer" className="underline">
+              Arizona
+            </a>{" "}
+            — Corporation Commission, Line Siting Committee
+          </li>
+          <li>
+            <a href="https://www.efsec.wa.gov/" target="_blank" rel="noreferrer" className="underline">
+              Washington
+            </a>{" "}
+            — Energy Facility Site Evaluation Council
+          </li>
+          <li>
+            <a href="https://e360.prc.nm.gov/" target="_blank" rel="noreferrer" className="underline">
+              New Mexico
+            </a>{" "}
+            — Public Regulation Commission
+          </li>
+          <li>
+            <a href="https://icc.illinois.gov/" target="_blank" rel="noreferrer" className="underline">
+              Illinois
+            </a>{" "}
+            — Commerce Commission
+          </li>
+          <li>
+            <a href="https://www.floridapsc.com/" target="_blank" rel="noreferrer" className="underline">
+              Florida
+            </a>{" "}
+            — Public Service Commission + DEP Siting Coordination Office
+          </li>
+        </ul>
+        <p className="text-xs text-[var(--muted)] mt-2">
+          Not geocoded yet: state-docket sources publish a county, not exact coordinates, so these
+          projects won&rsquo;t appear on the map until a separate geocoding pass is built — see each
+          project&rsquo;s data quality note.
+        </p>
+
         <p className="text-sm mt-4 pt-4 border-t border-[var(--border)]">
-          More sources are coming soon — our data and coverage are always growing, check back
-          soon. See the repo&rsquo;s README for the full list of open questions, including
-          cross-source project identity matching and data source terms of use, flagged rather
-          than silently guessed at.
+          More states are coming — this is an active, ongoing expansion, not a finished list. See
+          the repo&rsquo;s README for the full list of open questions, including cross-source
+          project identity matching and data source terms of use, flagged rather than silently
+          guessed at.
         </p>
       </section>
 
@@ -378,10 +461,44 @@ export function MethodologyPanel() {
             17:00 UTC. EIA republishes this one roughly quarterly; same rationale as the two
             annual sources above.
           </li>
+          <li>
+            <strong>Virginia SCC</strong> — checked weekly at 18:00 UTC.
+          </li>
+          <li>
+            <strong>Texas PUCT</strong> — checked weekly at 18:30 UTC.
+          </li>
+          <li>
+            <strong>Colorado PUC</strong> — checked weekly at 19:00 UTC.
+          </li>
+          <li>
+            <strong>Ohio Power Siting Board</strong> — checked weekly at 19:30 UTC.
+          </li>
+          <li>
+            <strong>South Carolina PSC</strong> — checked weekly at 20:00 UTC.
+          </li>
+          <li>
+            <strong>Arizona Corporation Commission</strong> — checked weekly at 20:30 UTC.
+          </li>
+          <li>
+            <strong>Washington EFSEC</strong> — checked weekly at 21:00 UTC.
+          </li>
+          <li>
+            <strong>New Mexico PRC</strong> — checked weekly at 21:30 UTC.
+          </li>
+          <li>
+            <strong>Illinois Commerce Commission</strong> — checked weekly at 22:00 UTC.
+          </li>
+          <li>
+            <strong>Florida PSC + DEP</strong> — checked weekly at 22:30 UTC.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          Every ingestion run upserts by a stable per-source ID, so re-running a source (on
-          schedule or by hand) updates existing projects in place rather than duplicating them.
+          All fifteen sources run staggered by the hour (13:00 through 22:30 UTC, every Sunday) so
+          no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
+          identity, so re-running a source (on schedule or by hand) updates existing projects in
+          place rather than duplicating them — including across two different sources that track
+          the same physical project once a human has confirmed it and declared a shared identity
+          (see the repo README&rsquo;s open question on cross-source identity matching).
           &ldquo;Days / years waiting&rdquo; figures are computed live on every page load from the
           stored filing date, not cached, so they&rsquo;re accurate to the minute even between
           ingestion runs.

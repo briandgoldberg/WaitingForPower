@@ -56,7 +56,10 @@
 // per-case enrichment a cheap, low-priority follow-up rather than a
 // requirement.
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules.
+// Wired to Vercel Cron weekly, 19:30 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-oh-opsb/route.ts) — a real run's timing was
+// measured (227 cases, 7.6s, the fastest source in this series) before
+// scheduling this.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";

@@ -53,9 +53,9 @@
 // own major utilities (Xcel/Public Service Co, Black Hills, Tri-State) are
 // simply fewer than Texas's, not a sign of a scoping problem.
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules — run
-// manually until a real run's timing is measured and a schedule is a
-// deliberate decision.
+// Wired to Vercel Cron weekly, 19:00 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-co-puc/route.ts) — a real run's timing was
+// measured (22 candidates, ~41s) before scheduling this.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";

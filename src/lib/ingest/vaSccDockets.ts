@@ -85,14 +85,14 @@
 // redistributing bulk data via this site's own API at scale, same as the
 // other five sources.
 //
-// NOT wired to a cron schedule yet, unlike the other five sources — this
-// module makes one search request plus up to 3 detail requests *per
-// candidate case* (detail, activities, participants), with a deliberate
-// delay between candidates (see REQUEST_DELAY_MS) so a run doesn't hammer
-// a small state server the way LBNL/EIA's single-workbook-download sources
-// never risk. Run manually (`npx tsx src/lib/ingest/vaSccDockets.ts`) until
-// a real run's request count/duration is measured and a schedule is a
-// deliberate decision, not a guess.
+// Wired to Vercel Cron weekly, 18:00 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-va-scc/route.ts) — a real run's request
+// count/duration was measured (46 candidates, 13.8s) before scheduling this,
+// not guessed at. This module makes one search request plus up to 3 detail
+// requests *per candidate case* (detail, activities, participants), with a
+// deliberate delay between candidates (see REQUEST_DELAY_MS) so a run
+// doesn't hammer a small state server the way LBNL/EIA's
+// single-workbook-download sources never risk.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";

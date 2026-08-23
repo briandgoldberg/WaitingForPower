@@ -13,7 +13,17 @@
     "ingest:permitting-dashboard": "tsx src/lib/ingest/permittingDashboard.ts",
     "ingest:lbnl": "tsx src/lib/ingest/lbnlQueuedUp.ts",
     "ingest:ornl-hydro": "tsx src/lib/ingest/ornlHydropowerRelicensing.ts",
-    "ingest:eia-pipelines": "tsx src/lib/ingest/eiaPipelineProjects.ts"
+    "ingest:eia-pipelines": "tsx src/lib/ingest/eiaPipelineProjects.ts",
+    "ingest:va-scc": "tsx src/lib/ingest/vaSccDockets.ts",
+    "ingest:tx-puct": "tsx src/lib/ingest/txPuctDockets.ts",
+    "ingest:co-puc": "tsx src/lib/ingest/coPucDockets.ts",
+    "ingest:oh-opsb": "tsx src/lib/ingest/ohOpsbCases.ts",
+    "ingest:sc-psc": "tsx src/lib/ingest/scPscDockets.ts",
+    "ingest:az-acc": "tsx src/lib/ingest/azAccLineSiting.ts",
+    "ingest:wa-efsec": "tsx src/lib/ingest/waEfsecFacilities.ts",
+    "ingest:nm-prc": "tsx src/lib/ingest/nmPrcDockets.ts",
+    "ingest:il-icc": "tsx src/lib/ingest/ilIccDockets.ts",
+    "ingest:fl-psc": "tsx src/lib/ingest/flPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

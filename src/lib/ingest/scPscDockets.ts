@@ -65,7 +65,9 @@
 // from the caption text is fairly reliable, same approach and same caveats
 // as Texas.
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules. Also
+// Wired to Vercel Cron weekly, 20:00 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-sc-psc/route.ts) — a real run's timing was
+// measured (34 candidates, ~35s) before scheduling this. Also
 // politeness-delayed between per-candidate detail requests.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";

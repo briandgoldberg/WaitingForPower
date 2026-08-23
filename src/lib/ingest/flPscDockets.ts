@@ -106,8 +106,11 @@
 // not MW, same convention as the other transmission-siting modules in this
 // series, which also leave capacityValue null for lines).
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules. Politeness-
-// delayed between per-candidate detail requests (DEP project pages).
+// Wired to Vercel Cron weekly, 22:30 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-fl-psc/route.ts) — a real run's timing was
+// measured (2 candidates, the entire current universe for this docket type)
+// before scheduling this. Politeness-delayed between per-candidate detail
+// requests (DEP project pages).
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";

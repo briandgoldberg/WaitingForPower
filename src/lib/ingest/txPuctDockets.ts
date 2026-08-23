@@ -86,9 +86,11 @@
 // curated rather than exhaustive, same spirit as Virginia's already-curated
 // activity log.
 //
-// NOT WIRED TO CRON YET, same as vaSccDockets.ts — run manually until a
-// real run's timing is measured. Also politeness-delayed the same way
-// (REQUEST_DELAY_MS between candidates) even though no auth suggests this
+// Wired to Vercel Cron weekly, 18:30 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-tx-puct/route.ts) — a real run's timing was
+// measured (141 candidates, ~58s) before scheduling this. Also
+// politeness-delayed the same way (REQUEST_DELAY_MS between candidates)
+// even though no auth suggests this
 // site might tolerate more load — it's still a small state agency server,
 // not a bulk API meant for this.
 

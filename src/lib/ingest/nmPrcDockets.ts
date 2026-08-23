@@ -102,8 +102,10 @@
 // docket. PORTFOLIO_RE flags these in the data-quality note rather than
 // silently presenting them as a single physical project.
 //
-// NOT WIRED TO CRON YET, same as the other per-state modules. Also
-// politeness-delayed between per-candidate detail requests.
+// Wired to Vercel Cron weekly, 21:30 UTC Sundays (see vercel.json and
+// src/app/api/cron/ingest-nm-prc/route.ts) — a real run's timing was
+// measured (5 candidates) before scheduling this. Also politeness-delayed
+// between per-candidate detail requests.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";

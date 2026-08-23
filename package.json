@@ -27,7 +27,8 @@
     "ingest:ny-dps": "tsx src/lib/ingest/nyDpsDockets.ts",
     "ingest:nv-pucn": "tsx src/lib/ingest/nvPucnDockets.ts",
     "ingest:or-efsc": "tsx src/lib/ingest/orEfscFacilities.ts",
-    "ingest:ma-efsb": "tsx src/lib/ingest/maEfsbDockets.ts"
+    "ingest:ma-efsb": "tsx src/lib/ingest/maEfsbDockets.ts",
+    "ingest:ok-occ": "tsx src/lib/ingest/okOccDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

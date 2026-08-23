@@ -65,6 +65,7 @@ per-source table, open questions, and how each is scheduled:
 | Nevada PUCN UEPA permit dockets | `src/lib/ingest/nvPucnDockets.ts` | Cron weekly (23:30 UTC Sundays), `/api/cron/ingest-nv-pucn`. Twelfth state — no CPCN; Nevada's equivalent is a Utility Environmental Protection Act permit spanning two separate PUCN systems (a legacy WebForms docket list plus a modern OnBase JSON API). Its multi-phase transmission reviews (an already-"GRANTED" phase followed by a new phase filing months later) required a real "no later substantive filing" check, not just "does any order say GRANTED." | Legacy ASP.NET WebForms + real JSON API (OnBase), no auth |
 | Oregon EFSC facility site-certifications | `src/lib/ingest/orEfscFacilities.ts` | Cron weekly (00:00 UTC Mondays), `/api/cron/ingest-or-efsc`. Thirteenth state — like Washington, Oregon's own utility commission has no siting authority; the real body is the Energy Facility Siting Council. Unusually, *both* of its structured status fields turned out unreliable (37 of 97 facilities disagreed between them) — the real signal is a free-text narrative field instead. One current candidate, Cascade Renewable Transmission, is the same physical HVDC line already tracked via Washington's EFSEC module — merged via `manualOverrides.csv`. | Real JSON API (SharePoint REST), no auth |
 | Massachusetts EFSB dockets | `src/lib/ingest/maEfsbDockets.ts` | Cron weekly (00:30 UTC Mondays), `/api/cron/ingest-ma-efsb`. Fourteenth state — like Washington/Oregon, the state's DPU itself isn't the real siting authority; a board (EFSB) that sits administratively inside DPU issues the actual certificate. Its own "Closed Date" field can stay null for years after a real grant, so resolution is instead inferred from scanning every filed document's own type for a "Final Decision." | Real JSON API, no auth |
+| Oklahoma OCC High Voltage Transmission COA dockets | `src/lib/ingest/okOccDockets.ts` | Cron weekly (01:00 UTC Mondays), `/api/cron/ingest-ok-occ`. Fifteenth state — no generic CPCN; Oklahoma's own "CCN" relief type is used almost exclusively by telecom carriers, and the real electric-siting equivalent is a narrower "High Voltage Transmission COA" certificate — only 4 cases have ever been filed under it since 2022, all already resolved as of shipping, a real (not buggy) zero-candidate result. | Real JSON API (Laserfiche WebLink), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all ten state
 docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -196,17 +197,18 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: fourteen states down, 36 to go, each with its
+10. **State PUC/PSC dockets: fifteen states down, 35 to go, each with its
     own hard problem.** Confirmed 2026-08-23: no national aggregator exists
     for state utility-commission dockets — each state runs its own system,
     and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
     `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`,
     `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`,
-    `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`, and
-    `maEfsbDockets.ts` are all plain-HTTP-fetch sources, not scraping
-    projects — no headless browser needed for any of them, same shape as
-    this site's other sources — but none was "just add a module":
+    `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`,
+    `maEfsbDockets.ts`, and `okOccDockets.ts` are all plain-HTTP-fetch
+    sources, not scraping projects — no headless browser needed for any of
+    them, same shape as this site's other sources — but none was "just add
+    a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -361,7 +363,20 @@ per-data-source version of this list.
       docket's most recent filing was "Notice of Withdrawal of Counsel,"
       an attorney leaving the case, not the project being withdrawn — a
       loose keyword match would have wrongly closed it.
-    Widening any of the fourteen states' scope, or evaluating the other
+    - **Oklahoma** has no generic CPCN process at all — its own "CCN"
+      relief type is used almost exclusively by telecom carriers (zero of
+      ~60 real filings sampled were electric). The real electric-siting
+      equivalent is a narrower certificate under the High-Voltage
+      Transmission Line Siting Act, and only 4 cases have ever been filed
+      under it since the state's imaged-document system began in 2022 —
+      all 4 already resolved as of shipping, so this module correctly
+      upserts zero projects today, a real result confirmed by hand, not a
+      bug. Real gotchas found anyway: case numbers aren't unique across
+      docket types (a bare case-number search silently merged two
+      unrelated dockets), and a real case's opening filing was clerked as
+      "Other Document" rather than "Application," missed entirely by the
+      obvious document-type filter.
+    Widening any of the fifteen states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

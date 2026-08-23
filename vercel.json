@@ -76,6 +76,10 @@
     {
       "path": "/api/cron/ingest-ma-efsb",
       "schedule": "30 0 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-ok-occ",
+      "schedule": "0 1 * * 1"
     }
   ]
 }

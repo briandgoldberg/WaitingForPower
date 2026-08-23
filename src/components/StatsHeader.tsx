@@ -125,7 +125,7 @@ export function StatsHeader({
         <Link href="/methodology" className="underline">
           see methodology
         </Link>
-        . Regional-aggregate entries (not individual projects) are excluded from these totals.
+        .
       </div>
     </div>
   );

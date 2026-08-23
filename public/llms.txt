@@ -2,8 +2,8 @@
 
 > Live, sourced dataset of U.S. energy projects — generation, transmission, storage,
 > LNG, and pipelines, every fuel type — currently stuck waiting on permitting approval,
-> merged from five public federal/state sources and refreshed automatically every
-> ~3 days. Structural and bipartisan: solar, gas, nuclear, and transmission projects
+> merged from five public federal/state sources and refreshed automatically weekly.
+> Structural and bipartisan: solar, gas, nuclear, and transmission projects
 > all get stuck in the same handful of bottlenecks.
 
 ## MCP server

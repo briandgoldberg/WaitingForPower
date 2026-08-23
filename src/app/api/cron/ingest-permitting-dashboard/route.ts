@@ -1,6 +1,6 @@
 // Scheduled Federal Permitting Dashboard refresh — see
 // src/app/api/cron/ingest-eia/route.ts for the pattern this follows
-// (CRON_SECRET auth, daily schedule via vercel.json "crons"). This source
+// (CRON_SECRET auth, weekly schedule via vercel.json "crons"). This source
 // is a live Socrata API query (no file download), so it's much cheaper
 // than the EIA route — typically a couple seconds, well within any
 // duration budget.

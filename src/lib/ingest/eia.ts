@@ -34,7 +34,7 @@
 //
 // Do not run this module — see the SUPERSEDED notice at the top of this
 // file. Use eia860mPlanned.ts instead, which is what's actually wired into
-// the daily cron (src/app/api/cron/ingest-eia).
+// the weekly cron (src/app/api/cron/ingest-eia).
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";

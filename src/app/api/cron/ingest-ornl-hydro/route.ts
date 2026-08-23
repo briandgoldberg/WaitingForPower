@@ -1,7 +1,7 @@
 // Scheduled ORNL hydropower relicensing refresh — see
 // src/app/api/cron/ingest-lbnl/route.ts for the pattern this follows
-// (CRON_SECRET auth, daily schedule via vercel.json "crons", annual source
-// checked daily because that's cheap and needs no manual step).
+// (CRON_SECRET auth, weekly schedule via vercel.json "crons", annual source
+// checked weekly because that's cheap and needs no manual step).
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAndIngestCurrentWorkbook } from "@/lib/ingest/ornlHydropowerRelicensing";

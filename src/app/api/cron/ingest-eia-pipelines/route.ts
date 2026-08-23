@@ -1,7 +1,7 @@
 // Scheduled EIA Natural Gas Pipeline Projects refresh — see
 // src/app/api/cron/ingest-lbnl/route.ts for the pattern this follows
-// (CRON_SECRET auth, daily schedule via vercel.json "crons", quarterly
-// source checked daily because that's cheap and needs no manual step).
+// (CRON_SECRET auth, weekly schedule via vercel.json "crons", quarterly
+// source checked weekly because that's cheap and needs no manual step).
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAndIngestCurrentWorkbook } from "@/lib/ingest/eiaPipelineProjects";

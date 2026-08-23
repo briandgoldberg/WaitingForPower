@@ -46,16 +46,18 @@ per-source table, open questions, and how each is scheduled:
 
 | Source | Module | Checked | Source's own publish cadence |
 |---|---|---|---|
-| EIA-860M "Planned" generator inventory | `src/lib/ingest/eia860mPlanned.ts` | Cron every 3 days (13:00 UTC), `/api/cron/ingest-eia` | Monthly, ~2-month lag on EIA's end |
-| Federal Permitting Dashboard (FAST-41) | `src/lib/ingest/permittingDashboard.ts` | Cron every 3 days (14:00 UTC), `/api/cron/ingest-permitting-dashboard` | Live API — no periodic file, effectively real-time |
-| LBNL Queued Up | `src/lib/ingest/lbnlQueuedUp.ts` | Cron every 3 days (15:00 UTC), `/api/cron/ingest-lbnl` | ~Annual |
-| ORNL HydroSource hydropower relicensing | `src/lib/ingest/ornlHydropowerRelicensing.ts` | Cron every 3 days (16:00 UTC), `/api/cron/ingest-ornl-hydro` | ~Annual |
-| EIA Natural Gas Pipeline Projects tracker | `src/lib/ingest/eiaPipelineProjects.ts` | Cron every 3 days (17:00 UTC), `/api/cron/ingest-eia-pipelines` | ~Quarterly |
+| EIA-860M "Planned" generator inventory | `src/lib/ingest/eia860mPlanned.ts` | Cron weekly (13:00 UTC Sundays), `/api/cron/ingest-eia` | Monthly, ~2-month lag on EIA's end |
+| Federal Permitting Dashboard (FAST-41) | `src/lib/ingest/permittingDashboard.ts` | Cron weekly (14:00 UTC Sundays), `/api/cron/ingest-permitting-dashboard` | Live API — no periodic file, effectively real-time |
+| LBNL Queued Up | `src/lib/ingest/lbnlQueuedUp.ts` | Cron weekly (15:00 UTC Sundays), `/api/cron/ingest-lbnl` | ~Annual |
+| ORNL HydroSource hydropower relicensing | `src/lib/ingest/ornlHydropowerRelicensing.ts` | Cron weekly (16:00 UTC Sundays), `/api/cron/ingest-ornl-hydro` | ~Annual |
+| EIA Natural Gas Pipeline Projects tracker | `src/lib/ingest/eiaPipelineProjects.ts` | Cron weekly (17:00 UTC Sundays), `/api/cron/ingest-eia-pipelines` | ~Quarterly |
 | Virginia SCC CPCN dockets | `src/lib/ingest/vaSccDockets.ts` | **Not scheduled yet — run manually.** First of a planned per-state series covering state PUC/PSC dockets, the structural bottleneck this site's other sources can't see (see open question #10). | Live API, but only one state so far |
 
-All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking every 3 days means
-this site never lags more than ~3 days behind whatever each source most recently published, not
-that each source itself updates that often. Every ingestion run upserts by a stable per-source
+All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
+this site never lags more than ~1 week behind whatever each source most recently published, not
+that each source itself updates that often. Weekly (not the every-3-days this site originally
+shipped with) is a deliberate tradeoff to cut invocation volume — see
+[`src/lib/ingest/README.md`](src/lib/ingest/README.md). Every ingestion run upserts by a stable per-source
 ID, so a re-run updates existing projects in place instead of duplicating them.
 
 Every ingested project links back to its public source (see each project's

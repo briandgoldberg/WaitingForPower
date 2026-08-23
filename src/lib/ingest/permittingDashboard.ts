@@ -46,7 +46,7 @@
 //      confirming this explicitly for data.permits.performance.gov —
 //      confirm before any large-scale redistribution of the raw dataset.
 //
-// Runs on a daily cron (src/app/api/cron/ingest-permitting-dashboard) in
+// Runs on a weekly cron (src/app/api/cron/ingest-permitting-dashboard) in
 // production. Run `npx tsx src/lib/ingest/permittingDashboard.ts` (or
 // `npm run ingest:permitting-dashboard`) yourself for a manual pull.
 

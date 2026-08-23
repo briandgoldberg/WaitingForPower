@@ -207,7 +207,7 @@ export function MethodologyPanel() {
         <h2 className="text-lg font-semibold mb-2">Data &amp; sourcing</h2>
         <p className="text-sm mb-4">
           Every project on this site comes from one of the public data sources below, refreshed on
-          a daily automated schedule — not a one-off, hand-picked list. Each source links out to
+          a weekly automated schedule — not a one-off, hand-picked list. Each source links out to
           the original public filing or reporting, not just this site&rsquo;s own summary. We
           intentionally stick to sources we can keep current automatically; see the repo&rsquo;s
           README if you&rsquo;re curious why.
@@ -342,36 +342,39 @@ export function MethodologyPanel() {
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-lg font-semibold mb-2">How current is this data?</h2>
         <p className="text-sm mb-3">
-          Every source above runs on an automated job (Vercel Cron), checked every 3 days — there
+          Every source above runs on an automated job (Vercel Cron), checked weekly — there
           is no manual, hand-curated data on this site. A periodic check doesn&rsquo;t mean each
-          source itself publishes that often; it means this site never lags more than about 3
-          days behind whatever the source most recently published:
+          source itself publishes that often; it means this site never lags more than about a
+          week behind whatever the source most recently published. (Checked every 3 days until
+          2026-08-23, moved to weekly to cut Vercel invocation volume — most of these sources
+          republish far less often than either schedule checks, so the practical staleness
+          difference is small.)
         </p>
         <ul className="text-sm flex flex-col gap-2">
           <li>
-            <strong>EIA-860M</strong> — checked every 3 days at 13:00 UTC. EIA itself republishes
+            <strong>EIA-860M</strong> — checked weekly at 13:00 UTC. EIA itself republishes
             the &ldquo;Planned&rdquo; workbook monthly, with roughly a two-month publication lag on
             EIA&rsquo;s end; most checks simply find the same file already ingested and no-op.
           </li>
           <li>
-            <strong>Federal Permitting Dashboard</strong> — checked every 3 days at 14:00 UTC
+            <strong>Federal Permitting Dashboard</strong> — checked weekly at 14:00 UTC
             against a live queryable API, not a periodic file, so this is the closest of the five
             to real-time: whatever the Permitting Council&rsquo;s data reflects is picked up
-            within a few days.
+            within about a week.
           </li>
           <li>
-            <strong>LBNL Queued Up</strong> — checked every 3 days at 15:00 UTC. LBNL republishes
+            <strong>LBNL Queued Up</strong> — checked weekly at 15:00 UTC. LBNL republishes
             this dataset only about once a year; a periodic check costs one cheap page fetch on
-            the days nothing&rsquo;s changed and still guarantees a new edition is picked up
+            the weeks nothing&rsquo;s changed and still guarantees a new edition is picked up
             quickly after release rather than waiting on a manual download.
           </li>
           <li>
-            <strong>ORNL HydroSource hydropower relicensing</strong> — checked every 3 days at
+            <strong>ORNL HydroSource hydropower relicensing</strong> — checked weekly at
             16:00 UTC, same rationale as LBNL Queued Up: ORNL republishes this dataset about once
             a year too.
           </li>
           <li>
-            <strong>EIA Natural Gas Pipeline Projects tracker</strong> — checked every 3 days at
+            <strong>EIA Natural Gas Pipeline Projects tracker</strong> — checked weekly at
             17:00 UTC. EIA republishes this one roughly quarterly; same rationale as the two
             annual sources above.
           </li>

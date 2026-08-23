@@ -82,10 +82,10 @@
 // GridTracker" required. `sources` below carries that attribution and a
 // link back to the source page.
 //
-// Runs on a daily cron (src/app/api/cron/ingest-lbnl) in production, same
-// as the other two sources — even though LBNL only republishes this file
-// annually, checking daily costs one cheap HTML fetch on the days nothing's
-// changed, and picks up a new edition within 24 hours of publication with
+// Runs on a weekly cron (src/app/api/cron/ingest-lbnl) in production, same
+// as the other sources — even though LBNL only republishes this file
+// annually, checking weekly costs one cheap HTML fetch on the weeks nothing's
+// changed, and picks up a new edition within a week of publication with
 // no manual step. Run `npx tsx src/lib/ingest/lbnlQueuedUp.ts` (or
 // `npm run ingest:lbnl`) yourself for a manual pull; pass a local file path
 // as argv[1] to parse an already-downloaded workbook instead of fetching.

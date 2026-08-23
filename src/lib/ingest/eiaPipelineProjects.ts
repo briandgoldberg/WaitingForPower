@@ -91,9 +91,9 @@
 // Dashboard, and ORNL hydropower relicensing; this source doesn't publish
 // why a project is delayed.
 //
-// Runs on a daily cron (src/app/api/cron/ingest-eia-pipelines) in
-// production, same "cheap daily check of a quarterly source" rationale as
-// the other non-daily-published sources. Run
+// Runs on a weekly cron (src/app/api/cron/ingest-eia-pipelines) in
+// production, same "cheap weekly check of a quarterly source" rationale as
+// the other non-weekly-published sources. Run
 // `npx tsx src/lib/ingest/eiaPipelineProjects.ts` (or `npm run
 // ingest:eia-pipelines`) for a manual pull; pass a local file path as
 // argv[1] to parse an already-downloaded workbook instead of fetching.

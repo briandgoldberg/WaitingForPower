@@ -1,8 +1,10 @@
 // Scheduled EIA-860M refresh — triggered by Vercel Cron (see vercel.json
 // "crons"). EIA republishes the "Planned" generator inventory monthly;
-// this runs daily (Vercel Hobby's cron granularity floor) and just no-ops
-// most days once it finds the same file it already ingested — cheap and
-// simple beats trying to predict EIA's exact release day.
+// this runs weekly and just no-ops most weeks once it finds the same file
+// it already ingested — cheap, and simpler than trying to predict EIA's
+// exact release day. Weekly (not daily) is a deliberate cost tradeoff: it
+// bounds staleness to ~1 week behind EIA's own publish rather than ~3 days,
+// in exchange for a fraction of the invocation volume.
 //
 // Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}` on cron
 // invocations once CRON_SECRET is set in the project's env vars — checked

@@ -1,8 +1,8 @@
 // Scheduled LBNL Queued Up refresh — triggered by Vercel Cron (see
 // vercel.json "crons"). LBNL only republishes this dataset annually, but
-// this runs daily like the other two sources: cheap (one HTML fetch on days
-// the current edition hasn't changed) and picks up a new edition within 24
-// hours of publication with no manual step.
+// this runs weekly like the other sources: cheap (one HTML fetch on weeks
+// the current edition hasn't changed) and picks up a new edition within a
+// week of publication with no manual step.
 //
 // See src/app/api/cron/ingest-eia/route.ts for the CRON_SECRET auth pattern
 // and why maxDuration is generous — same reasoning applies here (15MB

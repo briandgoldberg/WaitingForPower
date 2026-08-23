@@ -9,20 +9,24 @@ sources that can be re-run and stay current on their own).
 
 | Module | Source | Live API? | Auth needed | Scheduled? |
 |---|---|---|---|---|
-| `eia860mPlanned.ts` | EIA-860M "Planned" generator inventory | Yes — monthly Excel workbook, auto-discovered | Free API key not required for this module (see `eia.ts` below for the one that does) | Cron every 3 days (13:00 UTC), `/api/cron/ingest-eia` |
-| `permittingDashboard.ts` | Federal Permitting Dashboard (FAST-41) | Yes — public Socrata endpoint | None found needed | Cron every 3 days (14:00 UTC), `/api/cron/ingest-permitting-dashboard` |
-| `lbnlQueuedUp.ts` | LBNL Queued Up | Yes — annual Excel workbook, scraped off the landing page | None (no auth, just a browser-like User-Agent — see file header) | Cron every 3 days (15:00 UTC), `/api/cron/ingest-lbnl`, even though LBNL itself only republishes ~annually — see file header for why checking this often still makes sense |
-| `ornlHydropowerRelicensing.ts` | ORNL HydroSource hydropower relicensing/license-surrender dataset | Yes — annual Excel workbook, edition-year page auto-discovered then scraped, same two-step pattern as LBNL | None (no auth, just a browser-like User-Agent) | Cron every 3 days (16:00 UTC), `/api/cron/ingest-ornl-hydro`, same "cheap periodic check of an annual source" rationale as LBNL |
-| `eiaPipelineProjects.ts` | EIA "Natural Gas Pipeline Projects" tracker | Yes — quarterly Excel workbook, scraped off the landing page (naming convention itself isn't consistent — see file header) | None (no auth) | Cron every 3 days (17:00 UTC), `/api/cron/ingest-eia-pipelines` |
+| `eia860mPlanned.ts` | EIA-860M "Planned" generator inventory | Yes — monthly Excel workbook, auto-discovered | Free API key not required for this module (see `eia.ts` below for the one that does) | Cron weekly (13:00 UTC Sundays), `/api/cron/ingest-eia` |
+| `permittingDashboard.ts` | Federal Permitting Dashboard (FAST-41) | Yes — public Socrata endpoint | None found needed | Cron weekly (14:00 UTC Sundays), `/api/cron/ingest-permitting-dashboard` |
+| `lbnlQueuedUp.ts` | LBNL Queued Up | Yes — annual Excel workbook, scraped off the landing page | None (no auth, just a browser-like User-Agent — see file header) | Cron weekly (15:00 UTC Sundays), `/api/cron/ingest-lbnl`, even though LBNL itself only republishes ~annually — see file header for why checking this still makes sense |
+| `ornlHydropowerRelicensing.ts` | ORNL HydroSource hydropower relicensing/license-surrender dataset | Yes — annual Excel workbook, edition-year page auto-discovered then scraped, same two-step pattern as LBNL | None (no auth, just a browser-like User-Agent) | Cron weekly (16:00 UTC Sundays), `/api/cron/ingest-ornl-hydro`, same "cheap periodic check of an annual source" rationale as LBNL |
+| `eiaPipelineProjects.ts` | EIA "Natural Gas Pipeline Projects" tracker | Yes — quarterly Excel workbook, scraped off the landing page (naming convention itself isn't consistent — see file header) | None (no auth) | Cron weekly (17:00 UTC Sundays), `/api/cron/ingest-eia-pipelines` |
 | `eia.ts` | EIA API v2 `operating-generator-capacity` | Yes | Free API key | **Superseded, do not run** — see file header. This route only covers already-operating plants; `eia860mPlanned.ts` replaced it. |
 | `vaSccDockets.ts` | Virginia State Corporation Commission (SCC) CPCN dockets | Yes — public Breeze/OData JSON API, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/vaSccDockets.ts`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
-manual step required — checking every 3 days bounds this site's staleness
-to ~3 days behind whatever each source most recently published, it doesn't
+manual step required — checking weekly bounds this site's staleness
+to ~1 week behind whatever each source most recently published, it doesn't
 mean the source itself changes that often (EIA-860M republishes monthly, the
 EIA pipeline tracker ~quarterly, LBNL and ORNL annually; only the Permitting
-Dashboard's live API is closer to real-time). Every ingestion run upserts by
+Dashboard's live API is closer to real-time). Weekly, not the every-3-days
+this site originally shipped with — changed 2026-08-23 to cut Vercel
+invocation volume; five sources running every 3 days was seven runs/source/
+week for no real freshness gain given how infrequently most of these
+sources actually republish. Every ingestion run upserts by
 a stable per-source ID, so re-running a source updates existing projects in place
 rather than duplicating them.
 

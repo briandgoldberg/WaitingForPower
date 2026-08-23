@@ -3,23 +3,23 @@
   "crons": [
     {
       "path": "/api/cron/ingest-eia",
-      "schedule": "0 13 */3 * *"
+      "schedule": "0 13 * * 0"
     },
     {
       "path": "/api/cron/ingest-permitting-dashboard",
-      "schedule": "0 14 */3 * *"
+      "schedule": "0 14 * * 0"
     },
     {
       "path": "/api/cron/ingest-lbnl",
-      "schedule": "0 15 */3 * *"
+      "schedule": "0 15 * * 0"
     },
     {
       "path": "/api/cron/ingest-ornl-hydro",
-      "schedule": "0 16 */3 * *"
+      "schedule": "0 16 * * 0"
     },
     {
       "path": "/api/cron/ingest-eia-pipelines",
-      "schedule": "0 17 */3 * *"
+      "schedule": "0 17 * * 0"
     }
   ]
 }

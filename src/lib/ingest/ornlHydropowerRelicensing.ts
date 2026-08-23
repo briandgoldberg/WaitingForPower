@@ -63,8 +63,8 @@
 // confirmed as a formal redistribution license, just cited/linked here per
 // that policy's evident request norm.
 //
-// Runs on a daily cron (src/app/api/cron/ingest-ornl-hydro) in production,
-// same rationale as LBNL Queued Up: annual source, cheap daily HTML check,
+// Runs on a weekly cron (src/app/api/cron/ingest-ornl-hydro) in production,
+// same rationale as LBNL Queued Up: annual source, cheap weekly HTML check,
 // no manual step. Run `npx tsx src/lib/ingest/ornlHydropowerRelicensing.ts`
 // (or `npm run ingest:ornl-hydro`) for a manual pull; pass a local file
 // path as argv[1] to parse an already-downloaded workbook instead.

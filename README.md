@@ -63,6 +63,7 @@ per-source table, open questions, and how each is scheduled:
 | Florida PSC + DEP siting certification | `src/lib/ingest/flPscDockets.ts` | Cron weekly (22:30 UTC Sundays), `/api/cron/ingest-fl-psc`. Tenth state — Florida has no CPCN at the PSC at all; siting runs through a separate DEP process the PSC only opens with a small "determination of need" sub-docket. Two agencies' pages are cross-checked against each other, and — unusually for this series — it's the *state-docket agency's own* status field that lies, while a second agency's page is the reliable one. | Real JSON API (PSC) + server-rendered HTML (DEP), no auth |
 | New York DPS Article VII/VIII dockets | `src/lib/ingest/nyDpsDockets.ts` | Cron weekly (23:00 UTC Sundays), `/api/cron/ingest-ny-dps`. Eleventh state — two live siting-certificate tracks (transmission under Article VII, renewable generation under Article VIII/its predecessor § 94-c) in one system, covered by one module. Publishes no status field at all, and the renewable track's grant order isn't even filed as an Order/Decision — it's a plain correspondence filing, found only by scanning every document title regardless of type. | Real JSON API, no auth |
 | Nevada PUCN UEPA permit dockets | `src/lib/ingest/nvPucnDockets.ts` | Cron weekly (23:30 UTC Sundays), `/api/cron/ingest-nv-pucn`. Twelfth state — no CPCN; Nevada's equivalent is a Utility Environmental Protection Act permit spanning two separate PUCN systems (a legacy WebForms docket list plus a modern OnBase JSON API). Its multi-phase transmission reviews (an already-"GRANTED" phase followed by a new phase filing months later) required a real "no later substantive filing" check, not just "does any order say GRANTED." | Legacy ASP.NET WebForms + real JSON API (OnBase), no auth |
+| Oregon EFSC facility site-certifications | `src/lib/ingest/orEfscFacilities.ts` | Cron weekly (00:00 UTC Mondays), `/api/cron/ingest-or-efsc`. Thirteenth state — like Washington, Oregon's own utility commission has no siting authority; the real body is the Energy Facility Siting Council. Unusually, *both* of its structured status fields turned out unreliable (37 of 97 facilities disagreed between them) — the real signal is a free-text narrative field instead. One current candidate, Cascade Renewable Transmission, is the same physical HVDC line already tracked via Washington's EFSEC module — merged via `manualOverrides.csv`. | Real JSON API (SharePoint REST), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all ten state
 docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -194,17 +195,17 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twelve states down, 38 to go, each with its
+10. **State PUC/PSC dockets: thirteen states down, 37 to go, each with its
     own hard problem.** Confirmed 2026-08-23: no national aggregator exists
     for state utility-commission dockets — each state runs its own system,
     and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
     `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`,
     `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`,
-    `nyDpsDockets.ts`, and `nvPucnDockets.ts` are all plain-HTTP-fetch
-    sources, not scraping projects — no headless browser needed for any of
-    them, same shape as this site's other sources — but none was "just add
-    a module":
+    `nyDpsDockets.ts`, `nvPucnDockets.ts`, and `orEfscFacilities.ts` are all
+    plain-HTTP-fetch sources, not scraping projects — no headless browser
+    needed for any of them, same shape as this site's other sources — but
+    none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -333,7 +334,20 @@ per-data-source version of this list.
       check. Fixed by requiring no later *substantive* filing (excluding
       routine same-day companion documents like service lists) after the
       most recent disposition.
-    Widening any of the twelve states' scope, or evaluating the other
+    - **Oregon** has no siting authority in its own utility commission
+      either, same pattern as Washington — the real body is the Energy
+      Facility Siting Council (EFSC). Unusually, *both* of its own
+      structured status fields turned out unreliable rather than just one:
+      confirmed by cross-checking all 97 tracked facilities against each
+      other, 37 disagreed, and every spot-checked disagreement was resolved
+      correctly by a free-text narrative field and incorrectly by at least
+      one structured field. Also this series' second real cross-state
+      duplicate (after Grain Belt Express): Cascade Renewable Transmission,
+      a 400kV HVDC line crossing the Columbia River, is the same physical
+      project as an existing Washington EFSEC entry — merged via
+      `manualOverrides.csv` into one row carrying both states' source
+      links.
+    Widening any of the thirteen states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

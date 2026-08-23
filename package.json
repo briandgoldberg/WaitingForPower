@@ -25,7 +25,8 @@
     "ingest:il-icc": "tsx src/lib/ingest/ilIccDockets.ts",
     "ingest:fl-psc": "tsx src/lib/ingest/flPscDockets.ts",
     "ingest:ny-dps": "tsx src/lib/ingest/nyDpsDockets.ts",
-    "ingest:nv-pucn": "tsx src/lib/ingest/nvPucnDockets.ts"
+    "ingest:nv-pucn": "tsx src/lib/ingest/nvPucnDockets.ts",
+    "ingest:or-efsc": "tsx src/lib/ingest/orEfscFacilities.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

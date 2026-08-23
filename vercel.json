@@ -68,6 +68,10 @@
     {
       "path": "/api/cron/ingest-nv-pucn",
       "schedule": "30 23 * * 0"
+    },
+    {
+      "path": "/api/cron/ingest-or-efsc",
+      "schedule": "0 0 * * 1"
     }
   ]
 }

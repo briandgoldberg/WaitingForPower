@@ -42,6 +42,8 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     estimatedMwDelayed: p.estimatedMwDelayed,
     verificationStatus: p.verificationStatus as VerificationStatus,
     dataQualityNote: p.dataQualityNote,
+    interconnectionQueueStage: p.interconnectionQueueStage,
+    networkUpgradeCostUsd: p.networkUpgradeCostUsd,
     sources: p.sources.map((s) => ({ label: s.label, url: s.url })),
     milestones: p.milestones
       .slice()

@@ -74,6 +74,17 @@ export function FilterPanel({
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [projects]);
 
+  // Free text from the source, not a fixed taxonomy — see queueStages'
+  // comment in src/lib/filters.ts. Built from whatever's actually present,
+  // same as stateOptions above.
+  const queueStageOptions = useMemo(() => {
+    const stages = new Set<string>();
+    for (const p of projects) {
+      if (p.interconnectionQueueStage) stages.add(p.interconnectionQueueStage);
+    }
+    return Array.from(stages).sort((a, b) => a.localeCompare(b));
+  }, [projects]);
+
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
       <Section title="State">
@@ -173,6 +184,22 @@ export function FilterPanel({
           ))}
         </div>
       </Section>
+
+      {queueStageOptions.length > 0 && (
+        <Section title="Interconnection queue stage">
+          <div className="flex flex-wrap gap-1.5">
+            {queueStageOptions.map((qs) => (
+              <Pill
+                key={qs}
+                active={filters.queueStages.includes(qs)}
+                onClick={() => onChange({ ...filters, queueStages: toggle<string>(filters.queueStages, qs) })}
+              >
+                {qs}
+              </Pill>
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section title="Data source">
         <div className="flex flex-wrap gap-1.5">

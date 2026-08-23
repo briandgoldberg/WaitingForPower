@@ -70,6 +70,18 @@ This site only tracks projects still waiting on approval — see
 "RESOLVED_STAGES" in `src/lib/ingest/README.md` for what's deliberately
 excluded and why.
 
+**Interconnection queue detail.** `lbnlQueuedUp.ts` carries two extra fields
+for LBNL-sourced projects, added 2026-08-21: `interconnectionQueueStage`
+(the workbook's own study-phase label, e.g. "Feasibility Study") and
+`networkUpgradeCostUsd` (reserved for a join against LBNL's separate,
+irregularly-updated interconnection cost-analysis datasets — not yet
+populated by any module). Per explicit product decision, a *suspended*
+interconnection request is treated the same as withdrawn: not shown as
+"waiting." Every ingestion run now also actively removes a previously-shown
+project the moment a later edition reports it withdrawn, suspended, or
+operational, rather than leaving it frozen in its last-known state — see
+`src/lib/ingest/README.md` for the full detail and open question #9.
+
 ## Open questions
 
 Flagged deliberately rather than guessed at — see also
@@ -126,7 +138,19 @@ per-data-source version of this list.
    pipeline, and LNG projects show "not estimated" rather than a number
    built on assumptions this project couldn't defend as well — see
    `src/lib/calc/investmentWaiting.ts` and `/methodology`.
-8. **SQLite + serverless deployment (resolved).** v1 originally shipped
+8. **LBNL's interconnection cost-analysis datasets aren't a single
+   reliably-updated source.** Confirmed 2026-08-21: `networkUpgradeCostUsd`
+   is reserved on the schema but not yet populated by any ingestion module.
+   The underlying data (`emp.lbl.gov/interconnection_costs`) is six
+   independent per-region publications (MISO, PJM, SPP, ISO-NE, NYISO,
+   non-ISO BAs), not one combined/annually-refreshed file like Queued Up —
+   several editions are years stale (MISO's is from 2021). The join to
+   existing LBNL Queued Up projects (by `entity`+`q_id`) does check out —
+   spot-checked against PJM — but coverage against currently-*active* queue
+   entries will be sparse, since most rows in these cost studies are
+   long-since-operational or withdrawn projects. See
+   `src/lib/ingest/README.md`.
+9. **SQLite + serverless deployment (resolved).** v1 originally shipped
    with a committed SQLite file for zero-config local dev. On the first
    Vercel deploy this broke completely: Next.js's serverless file tracer
    doesn't know to bundle a file that's only referenced via a connection
@@ -140,7 +164,7 @@ per-data-source version of this list.
 
 - **Next.js (App Router) + TypeScript + Tailwind v4**, single app.
 - **Prisma + Postgres** (`prisma/schema.prisma`) — one hosted instance used
-  for both local dev and production; see open question #7 for why this
+  for both local dev and production; see open question #9 for why this
   project moved off SQLite.
 - **MapLibre GL JS** for the map — a free CARTO Voyager vector basemap (no
   API token required), with projects rendered as plain DOM markers

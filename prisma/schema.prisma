@@ -60,6 +60,20 @@ model Project {
 
   causeDetail String
 
+  // Finer-grained than currentStage for interconnection-queue sources only
+  // (e.g. LBNL Queued Up's own "Feasibility Study" / "System Impact Study" /
+  // "Facilities Study" labels) — currentStage stays the shared seven-stage
+  // taxonomy every source populates, this is a source-specific detail layered
+  // on top. Null for every other source.
+  interconnectionQueueStage String?
+
+  // Preliminary network-upgrade cost estimate in USD, joined in from LBNL's
+  // separate interconnection cost-analysis datasets by matchKey. Always
+  // paired with a dataQualityNote — LBNL's own docs call these estimates
+  // preliminary, and the underlying studies are irregularly-updated
+  // per-region snapshots, not a live figure.
+  networkUpgradeCostUsd Float?
+
   // True for entries that represent a regional/aggregate statistic
   // (e.g. "PJM Interconnection Queue") rather than one physical project.
   // Always shown with a clear label — never mixed silently into per-project

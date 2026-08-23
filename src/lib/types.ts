@@ -41,6 +41,10 @@ export interface ProjectDTO {
   estimatedMwDelayed: number | null;
   verificationStatus: VerificationStatus;
   dataQualityNote: string | null;
+  // Interconnection-source-specific detail, null for every other source —
+  // see schema.prisma and src/lib/ingest/README.md.
+  interconnectionQueueStage: string | null;
+  networkUpgradeCostUsd: number | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
 

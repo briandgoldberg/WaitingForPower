@@ -59,6 +59,10 @@ export interface NormalizedProject {
   currentStage: ProjectStage;
   causeSlugs: CauseSlug[];
   causeDetail: string;
+  /** Interconnection-queue-source-specific stage detail — see schema.prisma. */
+  interconnectionQueueStage?: string | null;
+  /** Preliminary network-upgrade cost estimate in USD — see schema.prisma. */
+  networkUpgradeCostUsd?: number | null;
   isAggregateExample?: boolean;
   estimatedMwDelayed?: number | null;
   dataQualityNote?: string | null;
@@ -133,6 +137,8 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
       currentStatus: p.currentStatus,
       currentStage: p.currentStage,
       causeDetail: p.causeDetail,
+      interconnectionQueueStage: p.interconnectionQueueStage ?? null,
+      networkUpgradeCostUsd: p.networkUpgradeCostUsd ?? null,
       isAggregateExample: p.isAggregateExample ?? false,
       estimatedMwDelayed: p.estimatedMwDelayed ?? null,
       verificationStatus: "verified",
@@ -153,6 +159,8 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
       currentStatus: p.currentStatus,
       currentStage: p.currentStage,
       causeDetail: p.causeDetail,
+      interconnectionQueueStage: p.interconnectionQueueStage ?? null,
+      networkUpgradeCostUsd: p.networkUpgradeCostUsd ?? null,
       isAggregateExample: p.isAggregateExample ?? false,
       estimatedMwDelayed: p.estimatedMwDelayed ?? null,
       dataQualityNote: p.dataQualityNote ?? null,

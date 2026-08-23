@@ -43,6 +43,12 @@ export interface FilterState {
   stages: ProjectStage[];
   sourceKeys: SourceKey[];
   state: string | null; // USPS code, e.g. "CA", or null = all states
+  // Free text from the source (e.g. LBNL's "Feasibility Study" / "System
+  // Impact Study" / "Facilities Study") — not a fixed taxonomy like `stages`,
+  // so options are built dynamically from whatever's actually present, same
+  // as `state` above. Only ever set for interconnection-queue-sourced
+  // projects (see interconnectionQueueStage in src/lib/types.ts).
+  queueStages: string[];
 }
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -53,6 +59,7 @@ export const DEFAULT_FILTERS: FilterState = {
   stages: [],
   sourceKeys: [],
   state: null,
+  queueStages: [],
 };
 
 export function hasActiveFilters(f: FilterState): boolean {
@@ -63,7 +70,8 @@ export function hasActiveFilters(f: FilterState): boolean {
     f.minCapacity != null ||
     f.stages.length > 0 ||
     f.sourceKeys.length > 0 ||
-    f.state != null
+    f.state != null ||
+    f.queueStages.length > 0
   );
 }
 
@@ -77,6 +85,7 @@ export function matchesFilters(p: ProjectDTO, f: FilterState): boolean {
   if (f.stages.length > 0 && !f.stages.includes(p.currentStage)) return false;
   if (f.sourceKeys.length > 0 && !f.sourceKeys.includes(sourceKeyForProject(p))) return false;
   if (f.state != null && !splitStateCodes(p.state).includes(f.state)) return false;
+  if (f.queueStages.length > 0 && !f.queueStages.includes(p.interconnectionQueueStage ?? "")) return false;
   return true;
 }
 
@@ -135,6 +144,13 @@ export function buildChips(f: FilterState): FilterChip[] {
       key: "state",
       label: stateName(f.state),
       onRemove: (state) => ({ ...state, state: null }),
+    });
+  }
+  for (const qs of f.queueStages) {
+    chips.push({
+      key: `queueStage-${qs}`,
+      label: qs,
+      onRemove: (state) => ({ ...state, queueStages: state.queueStages.filter((x) => x !== qs) }),
     });
   }
   return chips;

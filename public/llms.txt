@@ -30,8 +30,11 @@
   Each object includes: project identity (`name`, `slug`, `projectType`, `fuelType`),
   location (`lat`, `lon`, `state`, `county`), `capacityValue`/`capacityUnit`,
   `currentStage`, why it's stuck (`causeSlugs`, `causeDetail`), `sources` (label + URL
-  per citation), a `milestones` timeline, and computed fields (`daysWaiting`,
-  `yearsWaiting`, `investmentWaiting`).
+  per citation), a `milestones` timeline, computed fields (`daysWaiting`,
+  `yearsWaiting`, `investmentWaiting`), and — for interconnection-queue-sourced
+  projects only — `interconnectionQueueStage` (e.g. "Feasibility Study", "System
+  Impact Study") and `networkUpgradeCostUsd` (null for most projects; see
+  /methodology for current coverage).
 
 ## Docs
 

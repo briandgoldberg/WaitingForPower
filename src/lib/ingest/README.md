@@ -30,6 +30,33 @@ Run a module directly with `npx tsx src/lib/ingest/<module>.ts` (or the
 ingest:lbnl` / `npm run ingest:ornl-hydro` / `npm run
 ingest:eia-pipelines` scripts) for a manual run outside the cron schedule.
 
+## Interconnection queue detail (`interconnectionQueueStage`, `networkUpgradeCostUsd`)
+
+Two `Project` fields, added 2026-08-21, hold interconnection-source-specific
+detail that doesn't fit the shared cross-source `currentStage`/`dataQualityNote`
+fields cleanly — see their comments in `schema.prisma`. Null for every
+non-interconnection source.
+
+- `interconnectionQueueStage`: `lbnlQueuedUp.ts` now carries the LBNL
+  workbook's own `IA_phase_clean` value (e.g. "Feasibility Study", "System
+  Impact Study") through onto the project, rather than discarding it after
+  collapsing it into the coarse shared `currentStage` bucket.
+- `networkUpgradeCostUsd`: reserved for a join against LBNL's *separate*
+  interconnection cost-analysis datasets (`emp.lbl.gov/interconnection_costs`)
+  — not yet populated by any module. Confirmed 2026-08-21: those datasets are
+  six independent per-region publications (MISO, PJM, SPP, ISO-NE, NYISO,
+  non-ISO BAs), not one combined/annually-refreshed file like Queued Up, and
+  several editions are years stale (MISO's is from 2021). The per-region
+  project IDs do join cleanly to LBNL Queued Up's own `entity`+`q_id` (spot-
+  checked against PJM: "A03" appears as both `q_id` in Queued Up and
+  `Project #` in the PJM cost file), so a join is technically sound — but
+  coverage against currently-*active* queue entries will be sparse, since
+  most rows in these cost studies are long-since-operational or withdrawn
+  projects. Whenever this gets built, any populated `networkUpgradeCostUsd`
+  must carry a `dataQualityNote` citing LBNL's own "preliminary estimate"
+  caveat, per the same pattern as this site's `dateConfidence: "approximate"`
+  fields.
+
 ## RESOLVED_STAGES: what never appears on the site
 
 This site tracks projects still waiting on a regulatory yes — a project
@@ -110,21 +137,22 @@ argument rests on data credibility shouldn't paper over gaps in that data.
    hydro projects are small municipal or private dams. That's expected,
    not a bug, but it means this source contributes a much thinner slice of
    real projects than EIA-860M or LBNL Queued Up do.
-9. **LBNL Queued Up and ORNL hydropower relicensing don't get the full
-   RESOLVED_STAGES cleanup guarantee the other two sources do** (see
-   "RESOLVED_STAGES" above). Both still filter out already-cleared rows
-   (withdrawn/operational/suspended queue entries; IA-executed/pending/
+9. **Resolved for `lbnlQueuedUp.ts` as of 2026-08-21; still open for ORNL
+   hydropower relicensing.** Both modules used to filter out already-cleared
+   rows (withdrawn/operational/suspended queue entries; IA-executed/pending/
    under-construction phases; issued relicenses; exemption conversions)
    *before* ever calling `normalize*Row`, rather than normalizing them with
-   their real terminal stage and letting the shared guard delete a stale
-   row. Practically: if a project either module previously tracked as
-   waiting later shows up in a new annual edition with a cleared status,
-   it will keep displaying on the site in its last-known waiting state
-   until someone notices and fixes this — audited 2026-08-16 and confirmed
-   zero rows from either source are currently in that stale state, but the
-   gap is real for whenever the next annual edition ships. Bringing both in
-   line with `eia860mPlanned.ts` / `permittingDashboard.ts` (normalize
-   every row, let `common.ts` decide) is the follow-up.
+   their real terminal stage and letting the shared `RESOLVED_STAGES` guard
+   in `common.ts` delete a stale row (see "RESOLVED_STAGES" above).
+   `lbnlQueuedUp.ts` now normalizes every row regardless of status — see
+   `STATUS_TO_RESOLVED_STAGE` and the module header — so a project that
+   moves to withdrawn/suspended/operational, or clears its interconnection
+   agreement, gets removed the moment a new edition reports it, same
+   guarantee as `eia860mPlanned.ts` / `permittingDashboard.ts`.
+   `ornlHydropowerRelicensing.ts` still has the gap: audited 2026-08-16 and
+   confirmed zero rows were in that stale state as of then, but it's real for
+   whenever the next annual edition ships. Bringing it in line is the
+   follow-up.
 10. **EIA's pipeline projects tracker's filename convention isn't
     consistent** — confirmed 2026-08-16, most historical archive links use
     `EIA-NaturalGasPipelineProjects_<Mon><YYYY>.xlsx` (leading underscore,

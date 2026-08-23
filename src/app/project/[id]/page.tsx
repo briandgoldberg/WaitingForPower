@@ -105,6 +105,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           label="Verification"
           value={p.verificationStatus.replace(/_/g, " ")}
         />
+        {p.interconnectionQueueStage && (
+          <Stat label="Queue stage" value={p.interconnectionQueueStage} />
+        )}
       </div>
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
@@ -127,6 +130,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <p className="text-sm text-[var(--muted)]">Not estimated: {p.investmentWaiting.reason}</p>
         )}
       </section>
+
+      {p.networkUpgradeCostUsd != null && (
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+          <h2 className="text-lg font-semibold mb-2">Estimated network upgrade cost</h2>
+          <div className="text-3xl font-bold tabular-nums">{formatUsd(p.networkUpgradeCostUsd)}</div>
+          <p className="text-xs text-[var(--muted)] mt-2">
+            The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
+            interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
+            preliminary — see the data quality note below.
+          </p>
+        </section>
+      )}
 
       {(p.lat != null && p.lon != null) && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">

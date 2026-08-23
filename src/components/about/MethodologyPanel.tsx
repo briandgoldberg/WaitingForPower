@@ -147,6 +147,17 @@ export function MethodologyPanel() {
             source can produce it.
           </li>
           <li>
+            <strong>Interconnection queue stage</strong> — finer-grained than Stage, and only shown
+            for LBNL Queued Up-sourced projects: the grid operator&rsquo;s own study-phase label
+            (e.g. &ldquo;Feasibility Study,&rdquo; &ldquo;System Impact Study,&rdquo; &ldquo;Facilities
+            Study&rdquo;), carried through rather than collapsed into the shared Stage bucket.
+          </li>
+          <li>
+            <strong>Network upgrade cost</strong> — a preliminary estimate of what it would cost to
+            connect a project to the grid, where available. Reserved on the schema but not yet
+            populated by any ingestion module — see &ldquo;Data &amp; sourcing&rdquo; below.
+          </li>
+          <li>
             <strong>Source</strong> — which of the four data pipelines below ingested this project.
             Derived from the project&rsquo;s citation link, not a stored field — see &ldquo;Data
             &amp; sourcing&rdquo; below.
@@ -249,7 +260,15 @@ export function MethodologyPanel() {
             only source on this site that publishes a real date each project entered the queue,
             which is what most of the &ldquo;time waiting&rdquo; figures on this site are built
             from. We include only requests with an active queue status and at least 250 MW of
-            capacity, matching the site-wide capacity floor also used for EIA-860M. Licensed{" "}
+            capacity, matching the site-wide capacity floor also used for EIA-860M. A suspended
+            interconnection request is treated the same as withdrawn — not shown as
+            &ldquo;waiting&rdquo; — and a project that moves to withdrawn, suspended, or already-
+            operational status in a later edition is removed the moment that&rsquo;s reported,
+            rather than staying frozen in its last-known state. Also the source of this
+            site&rsquo;s &ldquo;interconnection queue stage&rdquo; detail (see &ldquo;Fields shown
+            on this site&rdquo; above); a separate LBNL dataset with per-project network-upgrade
+            cost estimates exists but isn&rsquo;t yet wired in — see the repo README&rsquo;s open
+            questions. Licensed{" "}
             <a
               href="https://creativecommons.org/licenses/by/4.0/deed.en"
               target="_blank"

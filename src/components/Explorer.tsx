@@ -97,13 +97,13 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-2 flex-1 min-h-[440px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-2 flex-1">
         {panelOpen && (
-          <div className="h-[440px] lg:h-[calc(100vh-375px)] lg:sticky lg:top-4 lg:self-start lg:overflow-y-auto">
+          <div className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
             <FilterPanel filters={filters} onChange={setFilters} projects={projects} />
           </div>
         )}
-        <div className="h-[440px] lg:h-[calc(100vh-375px)]">
+        <div className="h-[560px]">
           {view === "map" ? (
             <Map projects={filtered} />
           ) : (

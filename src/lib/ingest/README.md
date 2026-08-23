@@ -15,8 +15,9 @@ sources that can be re-run and stay current on their own).
 | `ornlHydropowerRelicensing.ts` | ORNL HydroSource hydropower relicensing/license-surrender dataset | Yes — annual Excel workbook, edition-year page auto-discovered then scraped, same two-step pattern as LBNL | None (no auth, just a browser-like User-Agent) | Cron every 3 days (16:00 UTC), `/api/cron/ingest-ornl-hydro`, same "cheap periodic check of an annual source" rationale as LBNL |
 | `eiaPipelineProjects.ts` | EIA "Natural Gas Pipeline Projects" tracker | Yes — quarterly Excel workbook, scraped off the landing page (naming convention itself isn't consistent — see file header) | None (no auth) | Cron every 3 days (17:00 UTC), `/api/cron/ingest-eia-pipelines` |
 | `eia.ts` | EIA API v2 `operating-generator-capacity` | Yes | Free API key | **Superseded, do not run** — see file header. This route only covers already-operating plants; `eia860mPlanned.ts` replaced it. |
+| `vaSccDockets.ts` | Virginia State Corporation Commission (SCC) CPCN dockets | Yes — public Breeze/OData JSON API, no auth | None (no auth) | **Not scheduled yet** — see file header. Run manually: `npx tsx src/lib/ingest/vaSccDockets.ts`. |
 
-All five scheduled sources run via Vercel Cron (see `vercel.json`) with no
+All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking every 3 days bounds this site's staleness
 to ~3 days behind whatever each source most recently published, it doesn't
 mean the source itself changes that often (EIA-860M republishes monthly, the

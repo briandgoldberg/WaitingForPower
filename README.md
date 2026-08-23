@@ -51,8 +51,9 @@ per-source table, open questions, and how each is scheduled:
 | LBNL Queued Up | `src/lib/ingest/lbnlQueuedUp.ts` | Cron every 3 days (15:00 UTC), `/api/cron/ingest-lbnl` | ~Annual |
 | ORNL HydroSource hydropower relicensing | `src/lib/ingest/ornlHydropowerRelicensing.ts` | Cron every 3 days (16:00 UTC), `/api/cron/ingest-ornl-hydro` | ~Annual |
 | EIA Natural Gas Pipeline Projects tracker | `src/lib/ingest/eiaPipelineProjects.ts` | Cron every 3 days (17:00 UTC), `/api/cron/ingest-eia-pipelines` | ~Quarterly |
+| Virginia SCC CPCN dockets | `src/lib/ingest/vaSccDockets.ts` | **Not scheduled yet — run manually.** First of a planned per-state series covering state PUC/PSC dockets, the structural bottleneck this site's other sources can't see (see open question #10). | Live API, but only one state so far |
 
-All five run on Vercel Cron (`vercel.json`) with no manual step — checking every 3 days means
+All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking every 3 days means
 this site never lags more than ~3 days behind whatever each source most recently published, not
 that each source itself updates that often. Every ingestion run upserts by a stable per-source
 ID, so a re-run updates existing projects in place instead of duplicating them.
@@ -159,6 +160,22 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
+10. **State PUC/PSC dockets: one state down, 49 to go, and even Virginia's
+    scope is narrower than it could be.** Confirmed 2026-08-23: no national
+    aggregator exists for state utility-commission dockets — each state
+    runs its own system, and FERC eLibrary covers the federal side alone.
+    `vaSccDockets.ts` is the first entry, built after confirming Virginia's
+    docket-search tool is backed by a real, free, unauthenticated JSON API
+    (see its file header) — not a scraping project, a plain-HTTP-fetch one,
+    same shape as this site's other sources. Its search scope (caption
+    contains the exact phrase "Certificate of Public Convenience and
+    Necessity") is deliberately precise but narrow: only 46 cases in
+    Virginia's *entire history* match it, and only 1 is currently active.
+    The API measured fast enough (13.8s for a 46-candidate run) that
+    widening this net — more case types, a broader keyword set — is a real
+    option, not a performance risk; it just needs the same "confirm before
+    guessing" treatment the rest of this project holds itself to, one state
+    (and one scope decision) at a time, not assumed to generalize.
 
 ## Architecture
 

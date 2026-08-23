@@ -58,6 +58,7 @@ per-source table, open questions, and how each is scheduled:
 | South Carolina PSC siting-certificate dockets | `src/lib/ingest/scPscDockets.ts` | **Not scheduled yet — run manually.** Fifth state — like Texas, has no reliable status field, but its captions are unusually descriptive (facility type, capacity, county spelled out in the text), and "still waiting" is inferred from an embedded Orders sub-table rather than a full filing-history scan. | Server-rendered HTML, no auth |
 | Arizona ACC Line Siting Committee dockets | `src/lib/ingest/azAccLineSiting.ts` | **Not scheduled yet — run manually.** Sixth state — a real JSON API, but with the same "status field lies" problem as South Carolina, independently rediscovered: `docketStatus` can read "Open" on a docket that's actually been decided. The real signal is a separate `decisions` array. | Real JSON API, no auth |
 | Washington EFSEC facility site-certifications | `src/lib/ingest/waEfsecFacilities.ts` | **Not scheduled yet — run manually.** Seventh state — Washington's own utility commission (WUTC) turned out to have no siting-certificate authority at all; the real authority is a separate body, EFSEC, whose small (19-facility) all-time list is ingested directly. The one state so far where the *structured* status field is the reliable one and a free-text description was the one caught lying. | Server-rendered HTML, no auth |
+| New Mexico PRC CCN dockets | `src/lib/ingest/nmPrcDockets.ts` | **Not scheduled yet — run manually.** Eighth state — a real JSON API behind an Angular SPA front-end, found by capturing the app's own network requests. Its CCN category also catches water-utility certificates and intake-rejected duplicate filings, both filtered out locally; its status field held up under testing, unlike several other states here. | Real JSON API, no auth |
 
 All five workbook/API sources above `vaSccDockets.ts` run on Vercel Cron (`vercel.json`) with no manual step — checking weekly means
 this site never lags more than ~1 week behind whatever each source most recently published, not
@@ -168,15 +169,15 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: seven states down, 43 to go, each with its own
+10. **State PUC/PSC dockets: eight states down, 42 to go, each with its own
     hard problem.** Confirmed 2026-08-23: no national aggregator exists for
     state utility-commission dockets — each state runs its own system, and
     FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
-    `scPscDockets.ts`, `azAccLineSiting.ts`, and `waEfsecFacilities.ts` are
-    all plain-HTTP-fetch sources, not scraping projects — no headless
-    browser needed for any of them, same shape as this site's other
-    sources — but none was "just add a module":
+    `scPscDockets.ts`, `azAccLineSiting.ts`, `waEfsecFacilities.ts`, and
+    `nmPrcDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    projects — no headless browser needed for any of them, same shape as
+    this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -243,19 +244,32 @@ per-data-source version of this list.
       described it as active and awaiting construction had actually had its
       site certification terminated four months earlier, correctly
       reflected only in the structured field.
-    Widening any of the seven states' scope, or evaluating the other
+    - **New Mexico** has a real JSON API behind an Angular SPA front end
+      (found by capturing the app's own network requests, not guessed),
+      and — unusually for this series — its status field held up under
+      independent testing rather than lying. Its real gotchas were
+      scoping ones instead: its CCN category also covers water/sewer
+      utility certificates (excluded by caption keyword) and, separately,
+      an e-filing *intake* rejection that never got a real docket number
+      assigned but still appeared in search results as if it were a case.
+    Widening any of the eight states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,
-    Georgia, and Minnesota stay deferred — PA has no caption field in
-    search results, GA's has one but it's server-side broken and always
-    returns the full unfiltered set, and Minnesota's entire eDockets/
+    Georgia, Minnesota, and Michigan stay deferred — PA has no caption
+    field in search results, GA's has one but it's server-side broken and
+    always returns the full unfiltered set, Minnesota's entire eDockets/
     eFiling platform sits behind a live Cloudflare Turnstile CAPTCHA or an
-    account login with no unauthenticated path at all, confirmed by hand
-    against every plausible search/API route), are real next options — each
-    needs the same "confirm before guessing" treatment this project holds
-    itself to, one state (and one scope/status decision) at a time, not
-    assumed to generalize.
+    account login with no unauthenticated path at all, and Michigan's real
+    docket search is a Salesforce Experience Cloud app whose data only
+    loads via an internal Aura RPC endpoint — the same access pattern
+    documented as a 2025-26 mass-scraping technique against misconfigured
+    Salesforce orgs, not a risk worth taking on for this project, and its
+    one plain-HTTP fallback has no caption field without adding a new
+    PDF-parsing dependency), are real next options — each needs the same
+    "confirm before guessing" treatment this project holds itself to, one
+    state (and one scope/status decision) at a time, not assumed to
+    generalize.
 
 ## Architecture
 

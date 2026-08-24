@@ -466,7 +466,7 @@ per-data-source version of this list.
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,
-    Georgia, Minnesota, Michigan, and Kansas stay deferred — PA has no caption
+    Georgia, Minnesota, Michigan, Kansas, and Iowa stay deferred — PA has no caption
     field in search results, GA's has one but it's server-side broken and
     always returns the full unfiltered set, Minnesota's entire eDockets/
     eFiling platform sits behind a live Cloudflare Turnstile CAPTCHA or an
@@ -482,7 +482,16 @@ per-data-source version of this list.
     as Michigan's (confirmed via its `robots.txt`, response headers, and a
     content-free Aura loading shell in place of any server-rendered docket
     data), but with no plain-HTTP fallback left at all, unlike Michigan's
-    partial one), are real next options — each needs the same
+    partial one — and Iowa's Electronic Filing System (`efs.iowa.gov`, a
+    2023-relaunched Angular SPA over a real REST API) confirmed its exact
+    CPCN-equivalent scope via its own public lookup-table endpoints (a
+    Generating Certificate Utility docket type and a separate Chapter 478
+    electric-franchise process, complete with a `countyIds` filter that
+    would have sidestepped Iowa's 99-county whitelist problem entirely) but
+    every docket/franchise search-view and detail endpoint returns a real
+    backend-enforced HTTP 401 requiring a logged-in account — a genuine auth
+    wall, not just a frontend guard, confirmed by hitting the API directly),
+    are real next options — each needs the same
     "confirm before guessing" treatment this project holds itself to, one
     state (and one scope/status decision) at a time, not assumed to
     generalize.

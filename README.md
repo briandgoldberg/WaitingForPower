@@ -80,8 +80,9 @@ per-source table, open questions, and how each is scheduled:
 | New Hampshire Site Evaluation Committee (SEC) dockets | `src/lib/ingest/nhSecDockets.ts` | Cron weekly (07:00 UTC Mondays), `/api/cron/ingest-nh-sec`. Twenty-seventh state — the fourth real instance of "the real siting authority isn't the obvious utility commission" (after WA/OR/MA/CT): the PUC's 3 commissioners are only 3 of SEC's 5 statutory members and cannot alone constitute a quorum. A December 2025 restructuring moved SEC's docket records onto the PUC's own website under an "SEC" prefix, which is what makes it look like "the PUC does siting" at first glance. Caught a real false-positive resolution signal before shipping — a docket "rejected" as procedurally incomplete reads exactly like a final denial by keyword match but isn't one, confirmed against a real 190+-filing docket that continued on after its own "rejection." A curl-specific TLS-fingerprint bot block on every nh.gov subdomain (unrelated to Node's own `fetch()`, which this module actually uses) is documented so a future maintainer doesn't mistake it for a real blocker. | Server-rendered HTML (ASP.NET WebForms), no auth |
 | Idaho PUC CPCN dockets | `src/lib/ingest/idPucDockets.ts` | Cron weekly (07:30 UTC Mondays), `/api/cron/ingest-id-puc`. Twenty-eighth state — one of the first to publish a genuinely structured Status field, but since `common.ts`'s RESOLVED_STAGES deletes a project identically whether it's "approved" or "cancelled," Idaho's own open/closed split alone is enough — no order-document text parsing needed here, unlike WV/MD/CT. A real singular/plural regex bug (`\bcertificate\b`'s trailing word boundary silently excluded every "CERTIFICATES OF..." plural caption) undercounted 4 real candidates down to 1, caught by comparing the dry-run's output against a hand-verified count before shipping — the same gap confirmed live in IPUC's own search box. Also caught a real joint-owner duplicate (two utilities each filing their own CPCN for the same physical transmission line), kept as two rows per this project's non-dedup policy. | Server-rendered HTML (ASP.NET-ish CMS), no auth |
 | Nebraska Power Review Board (PRB) applications | `src/lib/ingest/nePrbDockets.ts` | Cron weekly (08:00 UTC Mondays), `/api/cron/ingest-ne-prb`. Twenty-ninth state — Nebraska has no investor-owned electric utilities and no PSC jurisdiction over electric certificates at all; the real authority is the Power Review Board, which publishes no case-search tool or docket database of any kind — "still waiting" is inferred entirely from the Board's own meeting minutes prose. Two real structural bugs were found and fixed via a live DB check before shipping: a contested case's facts and its resolution can each live in a different, non-adjacent paragraph than its first/last mention, which an initial "first mention = facts, last mention = status" design got wrong both ways — once garbling a real case's name/fields, once misclassifying a genuinely-granted case as still pending. All 13 real in-scope candidates as of shipping had already resolved (Nebraska's small, mostly-uncontested caseload usually clears within a single Board meeting), a real zero-currently-pending result confirmed by hand, not a scraping gap. | Server-rendered HTML (Drupal, prose-only minutes, no search tool), no auth |
+| Louisiana PSC certification dockets | `src/lib/ingest/laPscDockets.ts` | Cron weekly (08:30 UTC Mondays), `/api/cron/ingest-la-psc`. Thirtieth state — no single named CPCN statute (a promising-looking hit, La. R.S. 45:1503, turned out to be a 1968 telecom statute, a real wrong-guess trap caught by reading the actual text); the real gate is a consistent "certification"/"approval to construct" docket practice confirmed against a full, real 191-docket sample with zero false positives. Confirmed New Orleans's exclusion definitively (Entergy New Orleans never appears in LPSC's ~16,900-docket history at all — it's regulated solely by the City Council). LPSC's own Status field lies in an unusually sharp way — it stays "Open" for months or years after a real granting order, since LPSC keeps a docket open for post-approval compliance monitoring. This project's own live-DB verification step caught a real bug the module's original calibration missed: a confirmed-real grant order used a curly Unicode apostrophe ("Judge’s Recommendation") that a straight-ASCII-apostrophe regex silently failed to match, leaving a resolved docket wrongly shown as still pending. | Real JSON API (ASP.NET MVC + Kendo UI), no auth |
 
-Every source above — the five original federal/national workbook/API sources plus all twenty-nine
+Every source above — the five original federal/national workbook/API sources plus all thirty
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
 no two sources' runs overlap. Checking weekly means this site never lags more than ~1 week behind
 whatever each source most recently published, not that each source itself updates that often.
@@ -211,7 +212,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twenty-nine states down, 21 to go, each with
+10. **State PUC/PSC dockets: thirty states down, 20 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -223,8 +224,8 @@ per-data-source version of this list.
     `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`,
     `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`,
     `ctCscDockets.ts`, `wvPscDockets.ts`, `tnTpucDockets.ts`,
-    `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`, and
-    `nePrbDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`,
+    `nePrbDockets.ts`, and `laPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
     projects — no headless browser needed for any of them, same shape as
     this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
@@ -596,7 +597,24 @@ per-data-source version of this list.
       — Nebraska's small, mostly-uncontested caseload usually clears
       within a single Board meeting — a real zero-currently-pending result
       confirmed by hand against live minutes text, not a scraping gap.
-    Widening any of the twenty-nine states' scope, or evaluating the other
+    - **Louisiana** has no single named CPCN statute — a promising-looking
+      hit, La. R.S. 45:1503, turned out to be a 1968 telecom statute, a
+      real wrong-guess trap caught only by reading the actual statute
+      text. The real gate is a consistent "certification"/"approval to
+      construct" docket practice, calibrated against a full, real
+      191-docket sample with zero false positives. New Orleans's exclusion
+      was confirmed definitively, not assumed: Entergy New Orleans never
+      appears anywhere in LPSC's ~16,900-docket history, since it's
+      regulated solely by the City Council. LPSC's own Status field lies
+      in an unusually sharp way among this series' sources — it stays
+      "Open" for months or years after a real granting order, since LPSC
+      keeps a docket open for post-approval compliance monitoring. This
+      project's own live-DB verification step caught a real bug the
+      module's original calibration missed: a confirmed-real grant order
+      used a curly Unicode apostrophe ("Judge’s Recommendation") that a
+      straight-ASCII-apostrophe regex silently failed to match, leaving a
+      resolved docket wrongly shown as still pending.
+    Widening any of the thirty states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

@@ -521,6 +521,12 @@ export function MethodologyPanel() {
             </a>{" "}
             — Power Review Board
           </li>
+          <li>
+            <a href="https://lpsc.louisiana.gov/" target="_blank" rel="noreferrer" className="underline">
+              Louisiana
+            </a>{" "}
+            — Public Service Commission
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
           Not geocoded yet: state-docket sources publish a county, not exact coordinates, so these
@@ -662,9 +668,12 @@ export function MethodologyPanel() {
           <li>
             <strong>Nebraska PRB</strong> — checked weekly at 08:00 UTC Mondays.
           </li>
+          <li>
+            <strong>Louisiana PSC</strong> — checked weekly at 08:30 UTC Mondays.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          All thirty-four sources run staggered by the hour (13:00 UTC Sunday through 08:00 UTC
+          All thirty-five sources run staggered by the hour (13:00 UTC Sunday through 08:30 UTC
           Monday) so
           no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
           identity, so re-running a source (on schedule or by hand) updates existing projects in

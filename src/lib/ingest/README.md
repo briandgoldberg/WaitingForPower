@@ -44,6 +44,7 @@ sources that can be re-run and stay current on their own).
 | `nhSecDockets.ts` | New Hampshire Site Evaluation Committee (SEC) dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron weekly (07:00 UTC Mondays), `/api/cron/ingest-nh-sec`. |
 | `idPucDockets.ts` | Idaho Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (ASP.NET-ish CMS), no auth | None (no auth) | Cron weekly (07:30 UTC Mondays), `/api/cron/ingest-id-puc`. |
 | `nePrbDockets.ts` | Nebraska Power Review Board (PRB) generation/transmission/storage applications | Yes — server-rendered HTML (Drupal, prose-only meeting minutes, no search tool), no auth | None (no auth) | Cron weekly (08:00 UTC Mondays), `/api/cron/ingest-ne-prb`. |
+| `laPscDockets.ts` | Louisiana Public Service Commission (LPSC) generation/storage/transmission certification dockets | Yes — real JSON API (ASP.NET MVC + Kendo UI), no auth | None (no auth) | Cron weekly (08:30 UTC Mondays), `/api/cron/ingest-la-psc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

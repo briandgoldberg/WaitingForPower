@@ -136,6 +136,10 @@
     {
       "path": "/api/cron/ingest-ne-prb",
       "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-la-psc",
+      "schedule": "30 8 * * 1"
     }
   ]
 }

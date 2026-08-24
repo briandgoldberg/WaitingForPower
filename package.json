@@ -42,7 +42,8 @@
     "ingest:ca-cec": "tsx src/lib/ingest/caCecDockets.ts",
     "ingest:nh-sec": "tsx src/lib/ingest/nhSecDockets.ts",
     "ingest:id-puc": "tsx src/lib/ingest/idPucDockets.ts",
-    "ingest:ne-prb": "tsx src/lib/ingest/nePrbDockets.ts"
+    "ingest:ne-prb": "tsx src/lib/ingest/nePrbDockets.ts",
+    "ingest:la-psc": "tsx src/lib/ingest/laPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

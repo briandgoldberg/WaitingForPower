@@ -32,7 +32,8 @@
     "ingest:ut-psc": "tsx src/lib/ingest/utPscDockets.ts",
     "ingest:wi-psc": "tsx src/lib/ingest/wiPscDockets.ts",
     "ingest:ky-psc": "tsx src/lib/ingest/kyPscDockets.ts",
-    "ingest:mo-psc": "tsx src/lib/ingest/moPscDockets.ts"
+    "ingest:mo-psc": "tsx src/lib/ingest/moPscDockets.ts",
+    "ingest:in-iurc": "tsx src/lib/ingest/inIurcDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

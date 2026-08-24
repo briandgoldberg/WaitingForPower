@@ -70,6 +70,7 @@ per-source table, open questions, and how each is scheduled:
 | Wisconsin PSC CPCN / Certificate of Authority dockets | `src/lib/ingest/wiPscDockets.ts` | Cron weekly (02:00 UTC Mondays), `/api/cron/ingest-wi-psc`. Seventeenth state — both the large-facility CPCN and smaller-facility Certificate of Authority processes share one docket case-type code. PSC's own "Status" field is a records-retention lifecycle flag, not a case-decision flag — dockets decided 7+ years ago still show "Active" indefinitely; the real signal is a filed order titled "Final Decision." | Server-rendered HTML (ASP.NET WebForms), no auth |
 | Kentucky PSC CPCN / Certificate of Construction dockets | `src/lib/ingest/kyPscDockets.ts` | Cron weekly (02:30 UTC Mondays), `/api/cron/ingest-ky-psc`. Eighteenth state — unusually, its "Include Closed" search filter turned out to be reliable, verified both directions against real dockets; used as the primary status signal for the first time in this series, with a text-based grant/deny scan kept as a defensive secondary check anyway. | Server-rendered HTML (ASP.NET MVC), no auth |
 | Missouri PSC Certificate of Convenience and Necessity dockets | `src/lib/ingest/moPscDockets.ts` | Cron weekly (03:00 UTC Mondays), `/api/cron/ingest-mo-psc`. Nineteenth state — a real antiforgery-protected AJAX API. A post-run data-quality check against the live DB caught a real bug before shipping: an anchored regex missed real "Order Approving Third/Unanimous Stipulation and Agreement" titles, and an Order/Notice-type filter entirely missed real "Closing File" filings, together leaving several already-resolved 2018/2019 dockets wrongly shown as still waiting. | Real JSON API (ASP.NET Core MVC, antiforgery-protected), no auth |
+| Indiana IURC CPCN dockets | `src/lib/ingest/inIurcDockets.ts` | Cron weekly (03:30 UTC Mondays), `/api/cron/ingest-in-iurc`. Twentieth state — the public portal's visible reCAPTCHA is only checked in client-side JS; the real backing API (a separate companion Azure App Service) never receives or validates a token. An "Appealed" case status maps to this site's own "litigation" stage instead of being deleted, since the Commission's Final Order exists but isn't yet legally final. | Real JSON API (separate companion Azure App Service), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all ten state
 docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -201,7 +202,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: nineteen states down, 31 to go, each with its
+10. **State PUC/PSC dockets: twenty states down, 30 to go, each with its
     own hard problem.** Confirmed 2026-08-23: no national aggregator exists
     for state utility-commission dockets — each state runs its own system,
     and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -210,10 +211,10 @@ per-data-source version of this list.
     `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`,
     `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`,
     `maEfsbDockets.ts`, `okOccDockets.ts`, `utPscDockets.ts`,
-    `wiPscDockets.ts`, `kyPscDockets.ts`, and `moPscDockets.ts` are all
-    plain-HTTP-fetch sources, not scraping projects — no headless browser
-    needed for any of them, same shape as this site's other sources — but
-    none was "just add a module":
+    `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`, and
+    `inIurcDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    projects — no headless browser needed for any of them, same shape as
+    this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -426,7 +427,18 @@ per-data-source version of this list.
       2018/2019 dockets showing as still waiting until a post-run
       data-quality check against the live DB caught it, fixed both, and
       confirmed the fix removed exactly the stale rows and no others.
-    Widening any of the nineteen states' scope, or evaluating the other
+    - **Indiana** turned out to have a soft security gap rather than a data
+      gotcha: its public docket-search page shows a Google reCAPTCHA
+      widget, but that widget is checked only in the page's own client-side
+      JS — the real backing search API (a separate companion Azure App
+      Service the portal's JS calls cross-origin) never receives or
+      validates a token, confirmed by posting to it directly. Its "Case
+      Status" field held up under independent checking against filed Final
+      Orders; an "Appealed" case gets its own dedicated stage
+      ("litigation") instead of being deleted like every other resolved
+      status, since the Commission's Final Order already exists but is
+      still being challenged in court.
+    Widening any of the twenty states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

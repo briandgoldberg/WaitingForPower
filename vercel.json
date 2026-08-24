@@ -96,6 +96,10 @@
     {
       "path": "/api/cron/ingest-mo-psc",
       "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-in-iurc",
+      "schedule": "30 3 * * 1"
     }
   ]
 }

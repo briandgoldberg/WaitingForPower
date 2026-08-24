@@ -132,6 +132,10 @@
     {
       "path": "/api/cron/ingest-id-puc",
       "schedule": "30 7 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-ne-prb",
+      "schedule": "0 8 * * 1"
     }
   ]
 }

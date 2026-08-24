@@ -79,8 +79,9 @@ per-source table, open questions, and how each is scheduled:
 | California Energy Commission (CEC) power plant siting dockets | `src/lib/ingest/caCecDockets.ts` | Cron weekly (06:30 UTC Mondays), `/api/cron/ingest-ca-cec`. Twenty-sixth state — CPUC (the obvious candidate) was tried and correctly deferred: its search form's real submit path is client-side Dynamic Action logic invisible to a plain `fetch()`, confirmed both via a raw POST replay and a real-browser session where the click never reached the actual search endpoint at all. CEC turned out to be the real siting gate instead — it has exclusive jurisdiction over ≥50MW thermal/geothermal plants and, since AB 205, ≥50MW solar/wind and ≥200MWh storage, and nearly every large project files there rather than at CPUC. A false-positive resolution signal (a local air district's own "Notice of Decision," unrelated to CEC's siting decision) was caught and excluded before shipping, along with the same "vanished candidate" structural bug already found in Connecticut/West Virginia. | Server-rendered HTML (Drupal + ASP.NET WebForms), no auth |
 | New Hampshire Site Evaluation Committee (SEC) dockets | `src/lib/ingest/nhSecDockets.ts` | Cron weekly (07:00 UTC Mondays), `/api/cron/ingest-nh-sec`. Twenty-seventh state — the fourth real instance of "the real siting authority isn't the obvious utility commission" (after WA/OR/MA/CT): the PUC's 3 commissioners are only 3 of SEC's 5 statutory members and cannot alone constitute a quorum. A December 2025 restructuring moved SEC's docket records onto the PUC's own website under an "SEC" prefix, which is what makes it look like "the PUC does siting" at first glance. Caught a real false-positive resolution signal before shipping — a docket "rejected" as procedurally incomplete reads exactly like a final denial by keyword match but isn't one, confirmed against a real 190+-filing docket that continued on after its own "rejection." A curl-specific TLS-fingerprint bot block on every nh.gov subdomain (unrelated to Node's own `fetch()`, which this module actually uses) is documented so a future maintainer doesn't mistake it for a real blocker. | Server-rendered HTML (ASP.NET WebForms), no auth |
 | Idaho PUC CPCN dockets | `src/lib/ingest/idPucDockets.ts` | Cron weekly (07:30 UTC Mondays), `/api/cron/ingest-id-puc`. Twenty-eighth state — one of the first to publish a genuinely structured Status field, but since `common.ts`'s RESOLVED_STAGES deletes a project identically whether it's "approved" or "cancelled," Idaho's own open/closed split alone is enough — no order-document text parsing needed here, unlike WV/MD/CT. A real singular/plural regex bug (`\bcertificate\b`'s trailing word boundary silently excluded every "CERTIFICATES OF..." plural caption) undercounted 4 real candidates down to 1, caught by comparing the dry-run's output against a hand-verified count before shipping — the same gap confirmed live in IPUC's own search box. Also caught a real joint-owner duplicate (two utilities each filing their own CPCN for the same physical transmission line), kept as two rows per this project's non-dedup policy. | Server-rendered HTML (ASP.NET-ish CMS), no auth |
+| Nebraska Power Review Board (PRB) applications | `src/lib/ingest/nePrbDockets.ts` | Cron weekly (08:00 UTC Mondays), `/api/cron/ingest-ne-prb`. Twenty-ninth state — Nebraska has no investor-owned electric utilities and no PSC jurisdiction over electric certificates at all; the real authority is the Power Review Board, which publishes no case-search tool or docket database of any kind — "still waiting" is inferred entirely from the Board's own meeting minutes prose. Two real structural bugs were found and fixed via a live DB check before shipping: a contested case's facts and its resolution can each live in a different, non-adjacent paragraph than its first/last mention, which an initial "first mention = facts, last mention = status" design got wrong both ways — once garbling a real case's name/fields, once misclassifying a genuinely-granted case as still pending. All 13 real in-scope candidates as of shipping had already resolved (Nebraska's small, mostly-uncontested caseload usually clears within a single Board meeting), a real zero-currently-pending result confirmed by hand, not a scraping gap. | Server-rendered HTML (Drupal, prose-only minutes, no search tool), no auth |
 
-Every source above — the five original federal/national workbook/API sources plus all twenty-eight
+Every source above — the five original federal/national workbook/API sources plus all twenty-nine
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
 no two sources' runs overlap. Checking weekly means this site never lags more than ~1 week behind
 whatever each source most recently published, not that each source itself updates that often.
@@ -210,7 +211,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twenty-eight states down, 22 to go, each with
+10. **State PUC/PSC dockets: twenty-nine states down, 21 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -222,7 +223,8 @@ per-data-source version of this list.
     `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`,
     `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`,
     `ctCscDockets.ts`, `wvPscDockets.ts`, `tnTpucDockets.ts`,
-    `caCecDockets.ts`, `nhSecDockets.ts`, and `idPucDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`, and
+    `nePrbDockets.ts` are all plain-HTTP-fetch sources, not scraping
     projects — no headless browser needed for any of them, same shape as
     this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
@@ -577,7 +579,24 @@ per-data-source version of this list.
       duplicate (two utilities each filing their own CPCN for the same
       physical transmission line segment), kept as two separate rows per
       this project's standing non-dedup policy.
-    Widening any of the twenty-eight states' scope, or evaluating the other
+    - **Nebraska** has no investor-owned electric utilities at all (the only
+      state served entirely by public power) and no PSC jurisdiction over
+      electric certificates — the real authority is the Power Review Board,
+      which publishes no case-search tool or docket database of any kind.
+      "Still waiting" is inferred entirely from the Board's own meeting
+      minutes prose. Two real structural bugs were found and fixed via a
+      live DB check before shipping: a contested case's facts and its
+      resolution can each live in a different, non-adjacent paragraph than
+      its first/last mention — an initial "first mention = facts, last
+      mention = status" design got this wrong both directions, once
+      garbling a real case's name and fields, once misclassifying a
+      genuinely-granted case as still pending because a later, unrelated
+      paragraph merely name-dropped the case number in a segue sentence.
+      All 13 real in-scope candidates as of shipping had already resolved
+      — Nebraska's small, mostly-uncontested caseload usually clears
+      within a single Board meeting — a real zero-currently-pending result
+      confirmed by hand against live minutes text, not a scraping gap.
+    Widening any of the twenty-nine states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

@@ -42,6 +42,7 @@ sources that can be re-run and stay current on their own).
 | `tnTpucDockets.ts` | Tennessee Public Utility Commission (TPUC) CCN dockets | Yes — server-rendered static HTML (S3/CloudFront), no auth | None (no auth) | Cron weekly (06:00 UTC Mondays), `/api/cron/ingest-tn-tpuc`. |
 | `caCecDockets.ts` | California Energy Commission (CEC) power plant siting dockets (AFC + Opt-In) | Yes — server-rendered HTML (Drupal + ASP.NET WebForms), no auth | None (no auth) | Cron weekly (06:30 UTC Mondays), `/api/cron/ingest-ca-cec`. |
 | `nhSecDockets.ts` | New Hampshire Site Evaluation Committee (SEC) dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron weekly (07:00 UTC Mondays), `/api/cron/ingest-nh-sec`. |
+| `idPucDockets.ts` | Idaho Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (ASP.NET-ish CMS), no auth | None (no auth) | Cron weekly (07:30 UTC Mondays), `/api/cron/ingest-id-puc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

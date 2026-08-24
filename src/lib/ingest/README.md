@@ -32,6 +32,7 @@ sources that can be re-run and stay current on their own).
 | `okOccDockets.ts` | Oklahoma Corporation Commission (OCC) High Voltage Transmission Certificate of Authority dockets | Yes — real JSON API (Laserfiche WebLink), no auth | None (no auth) | Cron weekly (01:00 UTC Mondays), `/api/cron/ingest-ok-occ`. |
 | `utPscDockets.ts` | Utah Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (01:30 UTC Mondays), `/api/cron/ingest-ut-psc`. |
 | `wiPscDockets.ts` | Wisconsin PSC CPCN / Certificate of Authority dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron weekly (02:00 UTC Mondays), `/api/cron/ingest-wi-psc`. |
+| `kyPscDockets.ts` | Kentucky PSC CPCN / Certificate of Construction dockets | Yes — server-rendered HTML (ASP.NET MVC), no auth | None (no auth) | Cron weekly (02:30 UTC Mondays), `/api/cron/ingest-ky-psc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

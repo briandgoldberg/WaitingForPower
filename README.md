@@ -74,8 +74,9 @@ per-source table, open questions, and how each is scheduled:
 | New Jersey BPU 40:55D-19 determination / CSI siting-waiver dockets | `src/lib/ingest/njBpuDockets.ts` | Cron weekly (04:00 UTC Mondays), `/api/cron/ingest-nj-bpu`. Twenty-first state — New Jersey has no CPCN at all; the closest equivalents are two distinct docket types covered by one module (a 40:55D-19 "reasonably necessary for the public" determination, and a Competitive Solar Incentive Program siting-prohibition waiver). BPU's own "Case Status" field was found stale by nine years on a real docket, so resolution is instead read from the most recent Board Order PDF's own text, decompressed with Node's built-in zlib (no PDF-parsing dependency exists in this project). | Server-rendered HTML (ASP.NET WebForms, Imperva-fronted), no auth |
 | Maryland PSC CPCN dockets | `src/lib/ingest/mdPscDockets.ts` | Cron weekly (04:30 UTC Mondays), `/api/cron/ingest-md-psc`. Twenty-second state — no "Status" field at all; "still waiting" is inferred from scanning every filed document for a dispositive Commission/Public Utility Law Judge order, an allow-vs-exclude-list approach needed because real dispositive orders use surprisingly varied phrasing (some with a blank subject beyond the order number itself). A post-run data-quality check caught a real county-extraction bug (a free-form regex swept in preceding caption text) and a genuine source typo ("DORCESTER" for "Dorchester" in one real caption), both fixed before shipping. | Server-rendered HTML (ASP.NET WebForms, cookie-less viewstate-only postback), no auth |
 | Connecticut Siting Council (CSC) dockets/petitions | `src/lib/ingest/ctCscDockets.ts` | Cron weekly (05:00 UTC Mondays), `/api/cron/ingest-ct-csc`. Twenty-third state — like Washington/Oregon/Massachusetts, the real siting authority isn't the obvious utility commission (PURA is only a commenter into CSC's own process). CSC has no queryable docket search at all, only hand-typed CMS pages; its own disclaimer that it "may not be able to keep the information ... up to date" was confirmed true by hand (a petition granted in 2013 still listed as open in 2026), so every candidate is cross-checked against CSC's own historical Decision and Order List before being treated as still pending. A structural bug found during this project's own verification step — resolved candidates were silently excluded from the ingestion run rather than passed through with a resolved stage, meaning a project that later resolved would never be deleted from the site — was fixed before shipping. | Server-rendered HTML (hand-authored CMS, no search/API), no auth |
+| West Virginia PSC CPCN + Siting Certificate dockets | `src/lib/ingest/wvPscDockets.ts` | Cron weekly (05:30 UTC Mondays), `/api/cron/ingest-wv-psc`. Twenty-fourth state — two docket types (a general CPCN and a separate Siting Certificate for merchant generators), and one of the richest real STATUS datasets in this series: a confirmed real denial, a case resolved via an ALJ Recommended Decision auto-finalizing with no separate Commission order, and a confirmed false-positive (an unrelated attorney-admission motion using the word "granted" in the same docket) that the resolution regex is written to avoid. Also caught a real fuel-classification bug (a hybrid gas+solar filing was tagged "solar" by a fixed keyword-priority order instead of whichever fuel is named first in the caption) and the same "vanished candidate" structural bug found in Connecticut — WV's own search is Active-only, so a case whose Active flag flips to Closed disappears from every future search rather than being caught by the module's own resolution check; fixed by diffing previously-tracked matchKeys against each run's active list. | Server-rendered HTML (decades-old ColdFusion, no auth) |
 
-Every source above — the five original federal/national workbook/API sources plus all twenty-three
+Every source above — the five original federal/national workbook/API sources plus all twenty-four
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
 no two sources' runs overlap. Checking weekly means this site never lags more than ~1 week behind
 whatever each source most recently published, not that each source itself updates that often.
@@ -205,7 +206,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twenty-three states down, 27 to go, each with
+10. **State PUC/PSC dockets: twenty-four states down, 26 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -215,8 +216,8 @@ per-data-source version of this list.
     `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`,
     `maEfsbDockets.ts`, `okOccDockets.ts`, `utPscDockets.ts`,
     `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`,
-    `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`, and
-    `ctCscDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`,
+    `ctCscDockets.ts`, and `wvPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
     projects — no headless browser needed for any of them, same shape as
     this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
@@ -481,7 +482,26 @@ per-data-source version of this list.
       it's *passed in* with a resolved stage — it never diffs "everything
       previously tracked, minus what showed up this run"). Fixed by pushing
       every resolved candidate through with `currentStage: "cancelled"`.
-    Widening any of the twenty-three states' scope, or evaluating the other
+    - **West Virginia** splits its construction-certificate authority
+      across a general CPCN and a separate Siting Certificate for merchant
+      generators, and produced this series' richest real STATUS dataset
+      yet: a confirmed real denial, a case resolved via an ALJ Recommended
+      Decision that auto-finalizes with no separate Commission order, and a
+      confirmed false-positive (an unrelated Pro Hac Vice attorney-admission
+      motion using the word "granted" in the same docket the resolution
+      regex is written to ignore). Also caught two real bugs before
+      shipping: a hybrid gas+solar filing was tagged "solar" because fuel
+      keywords were checked in a fixed declaration order rather than
+      whichever technology is actually named first in the caption; and the
+      same structural "vanished candidate" bug found in Connecticut, here
+      triggered a different way — WV's own case search is scoped
+      Active-only, so a case whose Active flag flips to Closed disappears
+      from every future search before this module's own resolution check
+      ever gets a chance to run on it, rather than the check itself missing
+      it. Fixed by diffing this source's previously-tracked matchKeys
+      (queried directly from the DB) against each run's active-candidate
+      list and pushing a resolved stub for anything that vanished.
+    Widening any of the twenty-four states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

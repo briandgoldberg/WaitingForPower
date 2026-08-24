@@ -479,6 +479,12 @@ export function MethodologyPanel() {
             </a>{" "}
             — Public Service Commission
           </li>
+          <li>
+            <a href="https://portal.ct.gov/csc" target="_blank" rel="noreferrer" className="underline">
+              Connecticut
+            </a>{" "}
+            — Siting Council
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
           Not geocoded yet: state-docket sources publish a county, not exact coordinates, so these
@@ -599,9 +605,12 @@ export function MethodologyPanel() {
           <li>
             <strong>Maryland PSC</strong> — checked weekly at 04:30 UTC Mondays.
           </li>
+          <li>
+            <strong>Connecticut CSC</strong> — checked weekly at 05:00 UTC Mondays.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          All twenty-seven sources run staggered by the hour (13:00 UTC Sunday through 04:30 UTC
+          All twenty-eight sources run staggered by the hour (13:00 UTC Sunday through 05:00 UTC
           Monday) so
           no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
           identity, so re-running a source (on schedule or by hand) updates existing projects in

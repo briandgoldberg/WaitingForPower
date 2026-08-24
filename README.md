@@ -73,8 +73,9 @@ per-source table, open questions, and how each is scheduled:
 | Indiana IURC CPCN dockets | `src/lib/ingest/inIurcDockets.ts` | Cron weekly (03:30 UTC Mondays), `/api/cron/ingest-in-iurc`. Twentieth state — the public portal's visible reCAPTCHA is only checked in client-side JS; the real backing API (a separate companion Azure App Service) never receives or validates a token. An "Appealed" case status maps to this site's own "litigation" stage instead of being deleted, since the Commission's Final Order exists but isn't yet legally final. | Real JSON API (separate companion Azure App Service), no auth |
 | New Jersey BPU 40:55D-19 determination / CSI siting-waiver dockets | `src/lib/ingest/njBpuDockets.ts` | Cron weekly (04:00 UTC Mondays), `/api/cron/ingest-nj-bpu`. Twenty-first state — New Jersey has no CPCN at all; the closest equivalents are two distinct docket types covered by one module (a 40:55D-19 "reasonably necessary for the public" determination, and a Competitive Solar Incentive Program siting-prohibition waiver). BPU's own "Case Status" field was found stale by nine years on a real docket, so resolution is instead read from the most recent Board Order PDF's own text, decompressed with Node's built-in zlib (no PDF-parsing dependency exists in this project). | Server-rendered HTML (ASP.NET WebForms, Imperva-fronted), no auth |
 | Maryland PSC CPCN dockets | `src/lib/ingest/mdPscDockets.ts` | Cron weekly (04:30 UTC Mondays), `/api/cron/ingest-md-psc`. Twenty-second state — no "Status" field at all; "still waiting" is inferred from scanning every filed document for a dispositive Commission/Public Utility Law Judge order, an allow-vs-exclude-list approach needed because real dispositive orders use surprisingly varied phrasing (some with a blank subject beyond the order number itself). A post-run data-quality check caught a real county-extraction bug (a free-form regex swept in preceding caption text) and a genuine source typo ("DORCESTER" for "Dorchester" in one real caption), both fixed before shipping. | Server-rendered HTML (ASP.NET WebForms, cookie-less viewstate-only postback), no auth |
+| Connecticut Siting Council (CSC) dockets/petitions | `src/lib/ingest/ctCscDockets.ts` | Cron weekly (05:00 UTC Mondays), `/api/cron/ingest-ct-csc`. Twenty-third state — like Washington/Oregon/Massachusetts, the real siting authority isn't the obvious utility commission (PURA is only a commenter into CSC's own process). CSC has no queryable docket search at all, only hand-typed CMS pages; its own disclaimer that it "may not be able to keep the information ... up to date" was confirmed true by hand (a petition granted in 2013 still listed as open in 2026), so every candidate is cross-checked against CSC's own historical Decision and Order List before being treated as still pending. A structural bug found during this project's own verification step — resolved candidates were silently excluded from the ingestion run rather than passed through with a resolved stage, meaning a project that later resolved would never be deleted from the site — was fixed before shipping. | Server-rendered HTML (hand-authored CMS, no search/API), no auth |
 
-Every source above — the five original federal/national workbook/API sources plus all twenty-two
+Every source above — the five original federal/national workbook/API sources plus all twenty-three
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
 no two sources' runs overlap. Checking weekly means this site never lags more than ~1 week behind
 whatever each source most recently published, not that each source itself updates that often.
@@ -204,8 +205,8 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twenty-two states down, 28 to go, each with
-    its own hard problem.** Confirmed 2026-08-23: no national aggregator
+10. **State PUC/PSC dockets: twenty-three states down, 27 to go, each with
+    its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
     `txPuctDockets.ts`, `coPucDockets.ts`, `ohOpsbCases.ts`,
@@ -214,7 +215,8 @@ per-data-source version of this list.
     `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`,
     `maEfsbDockets.ts`, `okOccDockets.ts`, `utPscDockets.ts`,
     `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`,
-    `inIurcDockets.ts`, `njBpuDockets.ts`, and `mdPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`, and
+    `ctCscDockets.ts` are all plain-HTTP-fetch sources, not scraping
     projects — no headless browser needed for any of them, same shape as
     this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
@@ -462,7 +464,24 @@ per-data-source version of this list.
       caption text since these captions are themselves ALL CAPS — fixed with
       a whitelist of Maryland's 23 real county names, which also caught a
       genuine source typo ("DORCESTER" for "Dorchester" in one real caption).
-    Widening any of the twenty-two states' scope, or evaluating the other
+    - **Connecticut** follows the same "real siting authority isn't the
+      obvious one" pattern as Washington, Oregon, and Massachusetts — PURA
+      is only a commenter into the Connecticut Siting Council's own process.
+      CSC has no queryable docket search at all, only hand-typed CMS pages,
+      and its own disclaimer that it may not stay up to date was confirmed
+      true by hand: a petition granted in 2013 was still listed as an open
+      matter in 2026, caught only by cross-checking every candidate against
+      CSC's own historical Decision and Order List. A structural bug — not
+      a parsing bug — was found and fixed during this project's own
+      verification step: the module was silently excluding resolved
+      candidates from its output entirely rather than passing them through
+      with a resolved stage, which meant a project already tracked from a
+      prior run that later resolved would never be revisited or deleted
+      (`upsertNormalizedProject` in `common.ts` only deletes a project when
+      it's *passed in* with a resolved stage — it never diffs "everything
+      previously tracked, minus what showed up this run"). Fixed by pushing
+      every resolved candidate through with `currentStage: "cancelled"`.
+    Widening any of the twenty-three states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

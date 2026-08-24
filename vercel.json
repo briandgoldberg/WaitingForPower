@@ -108,6 +108,10 @@
     {
       "path": "/api/cron/ingest-md-psc",
       "schedule": "30 4 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-ct-csc",
+      "schedule": "0 5 * * 1"
     }
   ]
 }

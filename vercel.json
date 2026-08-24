@@ -120,6 +120,10 @@
     {
       "path": "/api/cron/ingest-tn-tpuc",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-ca-cec",
+      "schedule": "30 6 * * 1"
     }
   ]
 }

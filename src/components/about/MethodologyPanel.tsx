@@ -497,6 +497,12 @@ export function MethodologyPanel() {
             </a>{" "}
             — Public Utility Commission
           </li>
+          <li>
+            <a href="https://www.energy.ca.gov/" target="_blank" rel="noreferrer" className="underline">
+              California
+            </a>{" "}
+            — Energy Commission
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
           Not geocoded yet: state-docket sources publish a county, not exact coordinates, so these
@@ -626,9 +632,12 @@ export function MethodologyPanel() {
           <li>
             <strong>Tennessee TPUC</strong> — checked weekly at 06:00 UTC Mondays.
           </li>
+          <li>
+            <strong>California CEC</strong> — checked weekly at 06:30 UTC Mondays.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          All thirty sources run staggered by the hour (13:00 UTC Sunday through 06:00 UTC
+          All thirty-one sources run staggered by the hour (13:00 UTC Sunday through 06:30 UTC
           Monday) so
           no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
           identity, so re-running a source (on schedule or by hand) updates existing projects in

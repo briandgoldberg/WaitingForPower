@@ -40,6 +40,7 @@ sources that can be re-run and stay current on their own).
 | `ctCscDockets.ts` | Connecticut Siting Council (CSC) Certificate of Environmental Compatibility and Public Need dockets/petitions | Yes — server-rendered HTML (hand-authored CMS, no search/API), no auth | None (no auth) | Cron weekly (05:00 UTC Mondays), `/api/cron/ingest-ct-csc`. |
 | `wvPscDockets.ts` | West Virginia Public Service Commission (PSC) CPCN + Siting Certificate dockets | Yes — server-rendered HTML (decades-old ColdFusion), no auth | None (no auth) | Cron weekly (05:30 UTC Mondays), `/api/cron/ingest-wv-psc`. |
 | `tnTpucDockets.ts` | Tennessee Public Utility Commission (TPUC) CCN dockets | Yes — server-rendered static HTML (S3/CloudFront), no auth | None (no auth) | Cron weekly (06:00 UTC Mondays), `/api/cron/ingest-tn-tpuc`. |
+| `caCecDockets.ts` | California Energy Commission (CEC) power plant siting dockets (AFC + Opt-In) | Yes — server-rendered HTML (Drupal + ASP.NET WebForms), no auth | None (no auth) | Cron weekly (06:30 UTC Mondays), `/api/cron/ingest-ca-cec`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

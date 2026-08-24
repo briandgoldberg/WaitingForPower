@@ -36,6 +36,7 @@ sources that can be re-run and stay current on their own).
 | `moPscDockets.ts` | Missouri PSC Certificate of Convenience and Necessity dockets | Yes — real JSON API (ASP.NET Core MVC, antiforgery-protected), no auth | None (no auth) | Cron weekly (03:00 UTC Mondays), `/api/cron/ingest-mo-psc`. |
 | `inIurcDockets.ts` | Indiana Utility Regulatory Commission (IURC) CPCN dockets | Yes — real JSON API (separate companion Azure App Service), no auth | None (no auth) | Cron weekly (03:30 UTC Mondays), `/api/cron/ingest-in-iurc`. |
 | `njBpuDockets.ts` | New Jersey Board of Public Utilities (BPU) 40:55D-19 determination + CSI siting-waiver dockets | Yes — server-rendered HTML (ASP.NET WebForms, Imperva-fronted), no auth | None (no auth) | Cron weekly (04:00 UTC Mondays), `/api/cron/ingest-nj-bpu`. |
+| `mdPscDockets.ts` | Maryland Public Service Commission (PSC) Certificate of Public Convenience and Necessity (CPCN) dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-less viewstate-only postback), no auth | None (no auth) | Cron weekly (04:30 UTC Mondays), `/api/cron/ingest-md-psc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

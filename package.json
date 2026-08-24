@@ -34,7 +34,8 @@
     "ingest:ky-psc": "tsx src/lib/ingest/kyPscDockets.ts",
     "ingest:mo-psc": "tsx src/lib/ingest/moPscDockets.ts",
     "ingest:in-iurc": "tsx src/lib/ingest/inIurcDockets.ts",
-    "ingest:nj-bpu": "tsx src/lib/ingest/njBpuDockets.ts"
+    "ingest:nj-bpu": "tsx src/lib/ingest/njBpuDockets.ts",
+    "ingest:md-psc": "tsx src/lib/ingest/mdPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

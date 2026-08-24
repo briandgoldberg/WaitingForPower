@@ -72,8 +72,9 @@ per-source table, open questions, and how each is scheduled:
 | Missouri PSC Certificate of Convenience and Necessity dockets | `src/lib/ingest/moPscDockets.ts` | Cron weekly (03:00 UTC Mondays), `/api/cron/ingest-mo-psc`. Nineteenth state — a real antiforgery-protected AJAX API. A post-run data-quality check against the live DB caught a real bug before shipping: an anchored regex missed real "Order Approving Third/Unanimous Stipulation and Agreement" titles, and an Order/Notice-type filter entirely missed real "Closing File" filings, together leaving several already-resolved 2018/2019 dockets wrongly shown as still waiting. | Real JSON API (ASP.NET Core MVC, antiforgery-protected), no auth |
 | Indiana IURC CPCN dockets | `src/lib/ingest/inIurcDockets.ts` | Cron weekly (03:30 UTC Mondays), `/api/cron/ingest-in-iurc`. Twentieth state — the public portal's visible reCAPTCHA is only checked in client-side JS; the real backing API (a separate companion Azure App Service) never receives or validates a token. An "Appealed" case status maps to this site's own "litigation" stage instead of being deleted, since the Commission's Final Order exists but isn't yet legally final. | Real JSON API (separate companion Azure App Service), no auth |
 | New Jersey BPU 40:55D-19 determination / CSI siting-waiver dockets | `src/lib/ingest/njBpuDockets.ts` | Cron weekly (04:00 UTC Mondays), `/api/cron/ingest-nj-bpu`. Twenty-first state — New Jersey has no CPCN at all; the closest equivalents are two distinct docket types covered by one module (a 40:55D-19 "reasonably necessary for the public" determination, and a Competitive Solar Incentive Program siting-prohibition waiver). BPU's own "Case Status" field was found stale by nine years on a real docket, so resolution is instead read from the most recent Board Order PDF's own text, decompressed with Node's built-in zlib (no PDF-parsing dependency exists in this project). | Server-rendered HTML (ASP.NET WebForms, Imperva-fronted), no auth |
+| Maryland PSC CPCN dockets | `src/lib/ingest/mdPscDockets.ts` | Cron weekly (04:30 UTC Mondays), `/api/cron/ingest-md-psc`. Twenty-second state — no "Status" field at all; "still waiting" is inferred from scanning every filed document for a dispositive Commission/Public Utility Law Judge order, an allow-vs-exclude-list approach needed because real dispositive orders use surprisingly varied phrasing (some with a blank subject beyond the order number itself). A post-run data-quality check caught a real county-extraction bug (a free-form regex swept in preceding caption text) and a genuine source typo ("DORCESTER" for "Dorchester" in one real caption), both fixed before shipping. | Server-rendered HTML (ASP.NET WebForms, cookie-less viewstate-only postback), no auth |
 
-Every source above — the five original federal/national workbook/API sources plus all twenty-one
+Every source above — the five original federal/national workbook/API sources plus all twenty-two
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
 no two sources' runs overlap. Checking weekly means this site never lags more than ~1 week behind
 whatever each source most recently published, not that each source itself updates that often.
@@ -203,7 +204,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twenty-one states down, 29 to go, each with
+10. **State PUC/PSC dockets: twenty-two states down, 28 to go, each with
     its own hard problem.** Confirmed 2026-08-23: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -213,7 +214,7 @@ per-data-source version of this list.
     `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`,
     `maEfsbDockets.ts`, `okOccDockets.ts`, `utPscDockets.ts`,
     `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`,
-    `inIurcDockets.ts`, and `njBpuDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    `inIurcDockets.ts`, `njBpuDockets.ts`, and `mdPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
     projects — no headless browser needed for any of them, same shape as
     this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
@@ -448,7 +449,20 @@ per-data-source version of this list.
       own text — decompressed with Node's built-in `zlib`, since this
       project has no PDF-parsing dependency and Utah's module
       (`utPscDockets.ts`) had already proven the same technique works.
-    Widening any of the twenty-one states' scope, or evaluating the other
+    - **Maryland** has no case "Status" field at all; "still waiting" is
+      inferred from scanning every filed document for a dispositive
+      Commission/Public Utility Law Judge order, calibrated against a full
+      scan of all 175 real cases (not a sample) after four different
+      heuristics were tried and rejected — real dispositive orders use
+      surprisingly varied phrasing, including some filed with no descriptive
+      subject at all beyond the order number itself. A post-run data-quality
+      check against the live DB (this project's own standard verification
+      step, not left to production) caught a real county-extraction bug — a
+      free-form "capitalized words before COUNTY" regex swept in preceding
+      caption text since these captions are themselves ALL CAPS — fixed with
+      a whitelist of Maryland's 23 real county names, which also caught a
+      genuine source typo ("DORCESTER" for "Dorchester" in one real caption).
+    Widening any of the twenty-two states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

@@ -77,8 +77,9 @@ per-source table, open questions, and how each is scheduled:
 | West Virginia PSC CPCN + Siting Certificate dockets | `src/lib/ingest/wvPscDockets.ts` | Cron weekly (05:30 UTC Mondays), `/api/cron/ingest-wv-psc`. Twenty-fourth state — two docket types (a general CPCN and a separate Siting Certificate for merchant generators), and one of the richest real STATUS datasets in this series: a confirmed real denial, a case resolved via an ALJ Recommended Decision auto-finalizing with no separate Commission order, and a confirmed false-positive (an unrelated attorney-admission motion using the word "granted" in the same docket) that the resolution regex is written to avoid. Also caught a real fuel-classification bug (a hybrid gas+solar filing was tagged "solar" by a fixed keyword-priority order instead of whichever fuel is named first in the caption) and the same "vanished candidate" structural bug found in Connecticut — WV's own search is Active-only, so a case whose Active flag flips to Closed disappears from every future search rather than being caught by the module's own resolution check; fixed by diffing previously-tracked matchKeys against each run's active list. | Server-rendered HTML (decades-old ColdFusion, no auth) |
 | Tennessee TPUC CCN dockets | `src/lib/ingest/tnTpucDockets.ts` | Cron weekly (06:00 UTC Mondays), `/api/cron/ingest-tn-tpuc`. Twenty-fifth state — a genuine, confirmed zero-yield source: TVA (a federal instrumentality exempt from TPUC's certificate jurisdiction) supplies the overwhelming majority of Tennessee's generation, and its ~150 local power companies hold exclusive pre-assigned territories, so a new-entrant electric CCN essentially never triggers. Scanning the entire 160-docket active population by hand found zero currently-open electric candidates — every real CCN-type caption is a water utility or telecom filing. Kept live (not dropped) as a "standing watch for a rare event" source, the same convention as ORNL hydro's own thin population, with the same preventive "vanished candidate" fix applied as Connecticut/West Virginia even though nothing exists yet to have gone stale. | Server-rendered static HTML (S3/CloudFront), no auth |
 | California Energy Commission (CEC) power plant siting dockets | `src/lib/ingest/caCecDockets.ts` | Cron weekly (06:30 UTC Mondays), `/api/cron/ingest-ca-cec`. Twenty-sixth state — CPUC (the obvious candidate) was tried and correctly deferred: its search form's real submit path is client-side Dynamic Action logic invisible to a plain `fetch()`, confirmed both via a raw POST replay and a real-browser session where the click never reached the actual search endpoint at all. CEC turned out to be the real siting gate instead — it has exclusive jurisdiction over ≥50MW thermal/geothermal plants and, since AB 205, ≥50MW solar/wind and ≥200MWh storage, and nearly every large project files there rather than at CPUC. A false-positive resolution signal (a local air district's own "Notice of Decision," unrelated to CEC's siting decision) was caught and excluded before shipping, along with the same "vanished candidate" structural bug already found in Connecticut/West Virginia. | Server-rendered HTML (Drupal + ASP.NET WebForms), no auth |
+| New Hampshire Site Evaluation Committee (SEC) dockets | `src/lib/ingest/nhSecDockets.ts` | Cron weekly (07:00 UTC Mondays), `/api/cron/ingest-nh-sec`. Twenty-seventh state — the fourth real instance of "the real siting authority isn't the obvious utility commission" (after WA/OR/MA/CT): the PUC's 3 commissioners are only 3 of SEC's 5 statutory members and cannot alone constitute a quorum. A December 2025 restructuring moved SEC's docket records onto the PUC's own website under an "SEC" prefix, which is what makes it look like "the PUC does siting" at first glance. Caught a real false-positive resolution signal before shipping — a docket "rejected" as procedurally incomplete reads exactly like a final denial by keyword match but isn't one, confirmed against a real 190+-filing docket that continued on after its own "rejection." A curl-specific TLS-fingerprint bot block on every nh.gov subdomain (unrelated to Node's own `fetch()`, which this module actually uses) is documented so a future maintainer doesn't mistake it for a real blocker. | Server-rendered HTML (ASP.NET WebForms), no auth |
 
-Every source above — the five original federal/national workbook/API sources plus all twenty-six
+Every source above — the five original federal/national workbook/API sources plus all twenty-seven
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
 no two sources' runs overlap. Checking weekly means this site never lags more than ~1 week behind
 whatever each source most recently published, not that each source itself updates that often.
@@ -208,7 +209,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: twenty-six states down, 24 to go, each with
+10. **State PUC/PSC dockets: twenty-seven states down, 23 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -219,8 +220,8 @@ per-data-source version of this list.
     `maEfsbDockets.ts`, `okOccDockets.ts`, `utPscDockets.ts`,
     `wiPscDockets.ts`, `kyPscDockets.ts`, `moPscDockets.ts`,
     `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`,
-    `ctCscDockets.ts`, `wvPscDockets.ts`, `tnTpucDockets.ts`, and
-    `caCecDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    `ctCscDockets.ts`, `wvPscDockets.ts`, `tnTpucDockets.ts`,
+    `caCecDockets.ts`, and `nhSecDockets.ts` are all plain-HTTP-fetch sources, not scraping
     projects — no headless browser needed for any of them, same shape as
     this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
@@ -538,7 +539,27 @@ per-data-source version of this list.
       along with the same "vanished candidate" structural bug already found
       in Connecticut/West Virginia (CEC's own listing query is scoped to
       Under Review/Suspended Proceedings status only).
-    Widening any of the twenty-six states' scope, or evaluating the other
+    - **New Hampshire** is the fourth real confirmed instance of "the real
+      siting authority isn't the obvious utility commission" (after
+      Washington, Oregon, Massachusetts, and Connecticut): RSA 162-H
+      assigns siting authority exclusively to the Site Evaluation
+      Committee, and the PUC's 3 commissioners are only 3 of SEC's 5
+      statutory members — they cannot alone constitute a quorum. A
+      December 2025 restructuring moved SEC's own docket records onto the
+      PUC's website under an "SEC" prefix, which is exactly what makes it
+      look like "the PUC does siting" at first glance. Caught a real
+      false-positive before shipping: a docket "rejected" as procedurally
+      incomplete reads exactly like a final denial by keyword match
+      ("Application" + "Certificate" + "Rejecting" all present) but isn't
+      one — confirmed against a real docket that continued for 190+ more
+      filings after its own "rejection." Also confirmed and documented a
+      real access-tooling gotcha: a bare `curl` GET against any nh.gov
+      subdomain returns a hard TLS-fingerprint bot block, but the exact
+      same request via Node's own `fetch()` (the real runtime this module
+      and Vercel's serverless functions use) returns a clean 200 with no
+      special handling — not a real blocker, just a curl-specific false
+      alarm, documented so a future maintainer doesn't mistake it for one.
+    Widening any of the twenty-seven states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

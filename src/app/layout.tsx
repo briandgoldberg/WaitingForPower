@@ -61,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-1.5 text-xs text-center">
-            🚧 We&rsquo;re actively adding state-level permitting dockets — 26 states live so far
+            🚧 We&rsquo;re actively adding state-level permitting dockets — 27 states live so far
             with more on the way.
           </div>
         </div>

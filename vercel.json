@@ -124,6 +124,10 @@
     {
       "path": "/api/cron/ingest-ca-cec",
       "schedule": "30 6 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-nh-sec",
+      "schedule": "0 7 * * 1"
     }
   ]
 }

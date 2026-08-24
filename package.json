@@ -39,7 +39,8 @@
     "ingest:ct-csc": "tsx src/lib/ingest/ctCscDockets.ts",
     "ingest:wv-psc": "tsx src/lib/ingest/wvPscDockets.ts",
     "ingest:tn-tpuc": "tsx src/lib/ingest/tnTpucDockets.ts",
-    "ingest:ca-cec": "tsx src/lib/ingest/caCecDockets.ts"
+    "ingest:ca-cec": "tsx src/lib/ingest/caCecDockets.ts",
+    "ingest:nh-sec": "tsx src/lib/ingest/nhSecDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

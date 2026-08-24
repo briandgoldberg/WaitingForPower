@@ -466,17 +466,23 @@ per-data-source version of this list.
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,
-    Georgia, Minnesota, and Michigan stay deferred — PA has no caption
+    Georgia, Minnesota, Michigan, and Kansas stay deferred — PA has no caption
     field in search results, GA's has one but it's server-side broken and
     always returns the full unfiltered set, Minnesota's entire eDockets/
     eFiling platform sits behind a live Cloudflare Turnstile CAPTCHA or an
-    account login with no unauthenticated path at all, and Michigan's real
+    account login with no unauthenticated path at all, Michigan's real
     docket search is a Salesforce Experience Cloud app whose data only
     loads via an internal Aura RPC endpoint — the same access pattern
     documented as a 2025-26 mass-scraping technique against misconfigured
     Salesforce orgs, not a risk worth taking on for this project, and its
     one plain-HTTP fallback has no caption field without adding a new
-    PDF-parsing dependency), are real next options — each needs the same
+    PDF-parsing dependency — and Kansas's old plain-HTTP docket portal
+    (`estar.kcc.ks.gov`) was fully decommissioned in November 2025, replaced
+    by "KCC-Connect," the exact same kind of Salesforce Aura Community site
+    as Michigan's (confirmed via its `robots.txt`, response headers, and a
+    content-free Aura loading shell in place of any server-rendered docket
+    data), but with no plain-HTTP fallback left at all, unlike Michigan's
+    partial one), are real next options — each needs the same
     "confirm before guessing" treatment this project holds itself to, one
     state (and one scope/status decision) at a time, not assumed to
     generalize.

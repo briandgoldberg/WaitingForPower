@@ -31,7 +31,8 @@
     "ingest:ok-occ": "tsx src/lib/ingest/okOccDockets.ts",
     "ingest:ut-psc": "tsx src/lib/ingest/utPscDockets.ts",
     "ingest:wi-psc": "tsx src/lib/ingest/wiPscDockets.ts",
-    "ingest:ky-psc": "tsx src/lib/ingest/kyPscDockets.ts"
+    "ingest:ky-psc": "tsx src/lib/ingest/kyPscDockets.ts",
+    "ingest:mo-psc": "tsx src/lib/ingest/moPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

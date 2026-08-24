@@ -92,6 +92,10 @@
     {
       "path": "/api/cron/ingest-ky-psc",
       "schedule": "30 2 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-mo-psc",
+      "schedule": "0 3 * * 1"
     }
   ]
 }

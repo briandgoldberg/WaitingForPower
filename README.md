@@ -69,6 +69,7 @@ per-source table, open questions, and how each is scheduled:
 | Utah PSC CPCN dockets | `src/lib/ingest/utPscDockets.ts` | Cron weekly (01:30 UTC Mondays), `/api/cron/ingest-ut-psc`. Sixteenth state — across Utah's entire electric-docket history back to 1987, only 12 dockets are genuine new CPCN applications and all 12 are already granted, another real zero-candidate result (PacifiCorp/Rocky Mountain Power's resource decisions go through Integrated Resource Plan acknowledgment instead). No PDF-parsing dependency exists in this project, so final orders (unstructured PDFs) are read by decompressing their own FlateDecode streams directly with Node's built-in zlib. | Server-rendered HTML, no auth |
 | Wisconsin PSC CPCN / Certificate of Authority dockets | `src/lib/ingest/wiPscDockets.ts` | Cron weekly (02:00 UTC Mondays), `/api/cron/ingest-wi-psc`. Seventeenth state — both the large-facility CPCN and smaller-facility Certificate of Authority processes share one docket case-type code. PSC's own "Status" field is a records-retention lifecycle flag, not a case-decision flag — dockets decided 7+ years ago still show "Active" indefinitely; the real signal is a filed order titled "Final Decision." | Server-rendered HTML (ASP.NET WebForms), no auth |
 | Kentucky PSC CPCN / Certificate of Construction dockets | `src/lib/ingest/kyPscDockets.ts` | Cron weekly (02:30 UTC Mondays), `/api/cron/ingest-ky-psc`. Eighteenth state — unusually, its "Include Closed" search filter turned out to be reliable, verified both directions against real dockets; used as the primary status signal for the first time in this series, with a text-based grant/deny scan kept as a defensive secondary check anyway. | Server-rendered HTML (ASP.NET MVC), no auth |
+| Missouri PSC Certificate of Convenience and Necessity dockets | `src/lib/ingest/moPscDockets.ts` | Cron weekly (03:00 UTC Mondays), `/api/cron/ingest-mo-psc`. Nineteenth state — a real antiforgery-protected AJAX API. A post-run data-quality check against the live DB caught a real bug before shipping: an anchored regex missed real "Order Approving Third/Unanimous Stipulation and Agreement" titles, and an Order/Notice-type filter entirely missed real "Closing File" filings, together leaving several already-resolved 2018/2019 dockets wrongly shown as still waiting. | Real JSON API (ASP.NET Core MVC, antiforgery-protected), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all ten state
 docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -200,7 +201,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: eighteen states down, 32 to go, each with its
+10. **State PUC/PSC dockets: nineteen states down, 31 to go, each with its
     own hard problem.** Confirmed 2026-08-23: no national aggregator exists
     for state utility-commission dockets — each state runs its own system,
     and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -209,10 +210,10 @@ per-data-source version of this list.
     `nmPrcDockets.ts`, `ilIccDockets.ts`, `flPscDockets.ts`,
     `nyDpsDockets.ts`, `nvPucnDockets.ts`, `orEfscFacilities.ts`,
     `maEfsbDockets.ts`, `okOccDockets.ts`, `utPscDockets.ts`,
-    `wiPscDockets.ts`, and `kyPscDockets.ts` are all plain-HTTP-fetch
-    sources, not scraping projects — no headless browser needed for any of
-    them, same shape as this site's other sources — but none was "just add
-    a module":
+    `wiPscDockets.ts`, `kyPscDockets.ts`, and `moPscDockets.ts` are all
+    plain-HTTP-fetch sources, not scraping projects — no headless browser
+    needed for any of them, same shape as this site's other sources — but
+    none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -414,7 +415,18 @@ per-data-source version of this list.
       buildings, AMI rollouts, fiber/broadband construction, and
       cooling-tower retrofits, none of them a generation/transmission
       project — filtered out by requiring the real construction phrase.
-    Widening any of the eighteen states' scope, or evaluating the other
+    - **Missouri** required a real post-shipping fix, caught in this
+      project's own standard verification step, not left to production: an
+      anchored regex for "Order Approving Stipulation and Agreement" missed
+      real title variants with a modifier word inserted ("...Approving
+      Third Stipulation..." / "...Approving Unanimous Stipulation..."), and
+      a second signal — "Closing File" — was filed under both "Order" and
+      "Notice" filing types, but the original resolution check only ever
+      scanned type "Order". Together these left several already-resolved
+      2018/2019 dockets showing as still waiting until a post-run
+      data-quality check against the live DB caught it, fixed both, and
+      confirmed the fix removed exactly the stale rows and no others.
+    Widening any of the nineteen states' scope, or evaluating the other
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,

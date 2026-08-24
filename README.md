@@ -542,7 +542,7 @@ per-data-source version of this list.
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,
-    Georgia, Minnesota, Michigan, Kansas, and Iowa stay deferred — PA has no caption
+    Georgia, Minnesota, Michigan, Kansas, Iowa, and Montana stay deferred — PA has no caption
     field in search results, GA's has one but it's server-side broken and
     always returns the full unfiltered set, Minnesota's entire eDockets/
     eFiling platform sits behind a live Cloudflare Turnstile CAPTCHA or an
@@ -566,8 +566,21 @@ per-data-source version of this list.
     would have sidestepped Iowa's 99-county whitelist problem entirely) but
     every docket/franchise search-view and detail endpoint returns a real
     backend-enforced HTTP 401 requiring a logged-in account — a genuine auth
-    wall, not just a frontend guard, confirmed by hitting the API directly),
-    are real next options — each needs the same
+    wall, not just a frontend guard, confirmed by hitting the API directly —
+    and Montana has two real candidate authorities, both confirmed
+    unworkable: the PSC's modern case system (REDDI, migrated onto Pega
+    Constellation) gates its login behind a live CAPTCHA and its own
+    "Continue as Guest" option only exists inside an HTML comment, rendered
+    by client-side JS never reachable via plain `fetch()` — its older
+    plain-HTML predecessor systems are fully decommissioned (connection
+    reset/404). The alternate real siting authority, DEQ's Major Facility
+    Siting Act (which, following this series' WA/OR/MA/CT precedent, turned
+    out to be the real gate for large transmission/pipeline projects, not
+    the PSC), is reachable with no auth at all but has a population of
+    exactly one in-scope project and no case-numbering, search, or
+    historical archive of any kind to calibrate a status heuristic
+    against — thinner and less verifiable than this series' existing
+    thinnest shipped source), are real next options — each needs the same
     "confirm before guessing" treatment this project holds itself to, one
     state (and one scope/status decision) at a time, not assumed to
     generalize.

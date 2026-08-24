@@ -37,7 +37,8 @@
     "ingest:nj-bpu": "tsx src/lib/ingest/njBpuDockets.ts",
     "ingest:md-psc": "tsx src/lib/ingest/mdPscDockets.ts",
     "ingest:ct-csc": "tsx src/lib/ingest/ctCscDockets.ts",
-    "ingest:wv-psc": "tsx src/lib/ingest/wvPscDockets.ts"
+    "ingest:wv-psc": "tsx src/lib/ingest/wvPscDockets.ts",
+    "ingest:tn-tpuc": "tsx src/lib/ingest/tnTpucDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

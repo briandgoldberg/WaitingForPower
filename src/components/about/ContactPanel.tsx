@@ -12,8 +12,20 @@ const TOPICS = [
   { value: "other", label: "Something else" },
 ] as const;
 
-export function ContactPanel() {
-  const [topic, setTopic] = useState<(typeof TOPICS)[number]["value"]>("bug");
+type TopicValue = (typeof TOPICS)[number]["value"];
+
+function isTopicValue(value: string | undefined): value is TopicValue {
+  return TOPICS.some((t) => t.value === value);
+}
+
+// `initialTopic` comes from /contact's own `?topic=` query param (see
+// src/app/contact/page.tsx) — used by the homepage changes feed's "Get a
+// custom feed" link to land directly on the data-access radio pre-selected,
+// rather than making someone re-select it. Falls back to the plain-visit
+// default ("bug") for any missing/unrecognized value rather than trusting
+// arbitrary query-string input.
+export function ContactPanel({ initialTopic }: { initialTopic?: string } = {}) {
+  const [topic, setTopic] = useState<TopicValue>(isTopicValue(initialTopic) ? initialTopic : "bug");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");

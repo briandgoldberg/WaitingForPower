@@ -7,10 +7,15 @@ export const metadata: Metadata = {
     "Get in touch with WaitingForPower about data feeds, API access, custom datasets, partnerships, press, feedback, and bugs.",
 };
 
-export default function ContactPage() {
+export default async function ContactPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string }>;
+}) {
+  const { topic } = await searchParams;
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6">
-      <ContactPanel />
+      <ContactPanel initialTopic={topic} />
     </div>
   );
 }

@@ -55,7 +55,7 @@ export default async function HomePage() {
       <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Know what&rsquo;s changing at America&rsquo;s energy projects.
+            Know what&rsquo;s changing in America&rsquo;s energy permitting.
           </h1>
           <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
             Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
@@ -66,13 +66,15 @@ export default async function HomePage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
             Recent changes
           </h2>
-          {/* Inline style, not the text-[var(--accent)] utility — see
-              globals.css's `a { color: inherit }` rule, which sits outside
-              Tailwind's layered utilities and silently wins over any
-              text-color class applied to a link. Confirmed live: every
-              text-[var(--accent)] link on the site was rendering as the
-              default foreground color, not accent, until this. */}
-          <Link href="/contact" className="text-xs underline" style={{ color: "var(--accent)" }}>
+          {/* color set via inline style, not text-white — see globals.css's
+              `a { color: inherit }` rule, which sits outside Tailwind's
+              layered utilities and wins over ANY class-based text color on
+              a link, confirmed earlier tonight for text-[var(--accent)]. */}
+          <Link
+            href="/contact?topic=data-access"
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent)] hover:opacity-90 whitespace-nowrap"
+            style={{ color: "white" }}
+          >
             Get a custom feed →
           </Link>
         </div>

@@ -50,6 +50,7 @@ sources that can be re-run and stay current on their own).
 | `dePscDockets.ts` | Delaware PSC Transmission CPCN (26 Del. C. §203F) + Community Energy Facility siting dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-based), no auth | None (no auth) | Cron weekly (10:00 UTC Mondays), `/api/cron/ingest-de-psc`. |
 | `meDepSiteLawPermits.ts` | Maine DEP Land Bureau Site Location of Development Act ("Site Law") permits | Yes — real ArcGIS REST endpoint, no auth | None (no auth) | Cron weekly (10:30 UTC Mondays), `/api/cron/ingest-me-dep`. |
 | `riEfsbDockets.ts` | Rhode Island Energy Facility Siting Board (EFSB) major-energy-facility license dockets | Yes — server-rendered HTML (Drupal/Acquia CMS), no auth | None (no auth) | Cron weekly (11:00 UTC Mondays), `/api/cron/ingest-ri-efsb`. |
+| `vtPucDockets.ts` | Vermont Public Utility Commission (PUC) Certificate of Public Good (CPG, 30 V.S.A. §248) dockets | Yes — server-rendered HTML (Drupal 7), no auth | None (no auth) | Cron weekly (11:30 UTC Mondays), `/api/cron/ingest-vt-puc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

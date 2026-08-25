@@ -44,7 +44,8 @@
     "ingest:id-puc": "tsx src/lib/ingest/idPucDockets.ts",
     "ingest:ne-prb": "tsx src/lib/ingest/nePrbDockets.ts",
     "ingest:la-psc": "tsx src/lib/ingest/laPscDockets.ts",
-    "ingest:al-psc": "tsx src/lib/ingest/alPscDockets.ts"
+    "ingest:al-psc": "tsx src/lib/ingest/alPscDockets.ts",
+    "ingest:ar-psc": "tsx src/lib/ingest/arPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

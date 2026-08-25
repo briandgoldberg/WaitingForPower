@@ -533,11 +533,18 @@ export function MethodologyPanel() {
             </a>{" "}
             — Public Service Commission
           </li>
+          <li>
+            <a href="https://apps.apsc.arkansas.gov/olsv2/" target="_blank" rel="noreferrer" className="underline">
+              Arkansas
+            </a>{" "}
+            — Public Service Commission
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
-          Not geocoded yet: state-docket sources publish a county, not exact coordinates, so these
-          projects won&rsquo;t appear on the map until a separate geocoding pass is built — see each
-          project&rsquo;s data quality note.
+          Not exactly geocoded: state-docket sources publish a county, not exact coordinates, so
+          these projects appear on the map as an approximate, dashed-outline pin centered on their
+          county (or, failing that, their state) rather than an exact site — see each project&rsquo;s
+          data quality note.
         </p>
 
         <p className="text-sm mt-4 pt-4 border-t border-[var(--border)]">
@@ -680,9 +687,12 @@ export function MethodologyPanel() {
           <li>
             <strong>Alabama PSC</strong> — checked weekly at 09:00 UTC Mondays.
           </li>
+          <li>
+            <strong>Arkansas PSC</strong> — checked weekly at 09:30 UTC Mondays.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          All thirty-six sources run staggered by the hour (13:00 UTC Sunday through 09:00 UTC
+          All thirty-seven sources run staggered by the hour (13:00 UTC Sunday through 09:30 UTC
           Monday) so
           no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
           identity, so re-running a source (on schedule or by hand) updates existing projects in

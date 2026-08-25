@@ -198,8 +198,20 @@ function buildChangeSummary(
  * milestones (a real new filing), and reappearing after having been
  * flagged noLongerReported count. A run that changes none of these writes
  * no ProjectChange row at all — this table is not a full audit log.
+ *
+ * `suppressNewChangeLog`: a brand new source's very first ingestion run
+ * makes every one of its candidates look "new" to this diff, even though
+ * they're just pre-existing dockets the site is only now starting to
+ * track — not real, same-day discoveries. Left unhandled, that floods the
+ * homepage changes feed with a wall of "New project discovered" cards on
+ * day one, exactly the noise the feed exists to cut through.
+ * `upsertNormalizedProjects` sets this whenever its source has zero
+ * previously-tracked rows before the run starts (see its own comment) and
+ * threads it into every project in that run; the `Project` row itself is
+ * still created completely normally either way, only the `ProjectChange`
+ * log entry is skipped.
  */
-export async function upsertNormalizedProject(p: NormalizedProject) {
+export async function upsertNormalizedProject(p: NormalizedProject, options: { suppressNewChangeLog?: boolean } = {}) {
   // Slug is only computed once, at creation, from whichever source's
   // normalizeX() call happens to create the row first; it deliberately
   // never changes after that so a project's URL stays stable even as later
@@ -289,7 +301,7 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
   const isNew = existing == null;
   const changeTypes: ChangeType[] = [];
   if (isNew) {
-    changeTypes.push("new");
+    if (!options.suppressNewChangeLog) changeTypes.push("new");
   } else {
     if (existing.currentStage !== p.currentStage) {
       changeTypes.push(RESOLVED_STAGES.includes(p.currentStage) ? "resolved" : "advanced");
@@ -425,9 +437,21 @@ export async function upsertNormalizedProjects(
   let removedResolved = 0;
   const errors: { matchKey: string; message: string }[] = [];
 
+  const sourcePrefix = options.sourcePrefix ?? sourcePrefixOf(projects[0]?.matchKey ?? "");
+  // See upsertNormalizedProject's `suppressNewChangeLog` comment: checked
+  // once, up front, against whatever the DB held before this run touches
+  // anything — a source with zero previously-tracked rows is getting its
+  // very first ingestion run, so every "new"-looking row below is really
+  // just this run's initial backfill, not a same-day discovery.
+  const isBackfillRun =
+    sourcePrefix !== "" &&
+    (await prisma.project.count({ where: { matchKey: { startsWith: `${sourcePrefix}:` } } })) === 0;
+
   for (let i = 0; i < projects.length; i += concurrency) {
     const batch = projects.slice(i, i + concurrency);
-    const results = await Promise.allSettled(batch.map((p) => upsertNormalizedProject(p)));
+    const results = await Promise.allSettled(
+      batch.map((p) => upsertNormalizedProject(p, { suppressNewChangeLog: isBackfillRun })),
+    );
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
       if (result.status === "fulfilled") {
@@ -439,7 +463,6 @@ export async function upsertNormalizedProjects(
     }
   }
 
-  const sourcePrefix = options.sourcePrefix ?? sourcePrefixOf(projects[0]?.matchKey ?? "");
   const vanished = sourcePrefix ? await markVanished(sourcePrefix, new Set(projects.map((p) => p.matchKey))) : 0;
 
   return { upserted, removedResolved, vanished, errors };

@@ -47,6 +47,7 @@ sources that can be re-run and stay current on their own).
 | `laPscDockets.ts` | Louisiana Public Service Commission (LPSC) generation/storage/transmission certification dockets | Yes — real JSON API (ASP.NET MVC + Kendo UI), no auth | None (no auth) | Cron weekly (08:30 UTC Mondays), `/api/cron/ingest-la-psc`. |
 | `alPscDockets.ts` | Alabama Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML (stateful ASP.NET WebForms via session cookie, no ViewState), no auth | None (no auth) | Cron weekly (09:00 UTC Mondays), `/api/cron/ingest-al-psc`. |
 | `arPscDockets.ts` | Arkansas Public Service Commission (APSC) Certificate of Environmental Compatibility and Public Need (CECPN) + Certificate of Convenience and Necessity (CCN) dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (09:30 UTC Mondays), `/api/cron/ingest-ar-psc`. |
+| `dePscDockets.ts` | Delaware PSC Transmission CPCN (26 Del. C. §203F) + Community Energy Facility siting dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-based), no auth | None (no auth) | Cron weekly (10:00 UTC Mondays), `/api/cron/ingest-de-psc`. |
 
 All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
 manual step required — checking weekly bounds this site's staleness

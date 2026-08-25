@@ -83,6 +83,7 @@ per-source table, open questions, and how each is scheduled:
 | Louisiana PSC certification dockets | `src/lib/ingest/laPscDockets.ts` | Cron weekly (08:30 UTC Mondays), `/api/cron/ingest-la-psc`. Thirtieth state — no single named CPCN statute (a promising-looking hit, La. R.S. 45:1503, turned out to be a 1968 telecom statute, a real wrong-guess trap caught by reading the actual text); the real gate is a consistent "certification"/"approval to construct" docket practice confirmed against a full, real 191-docket sample with zero false positives. Confirmed New Orleans's exclusion definitively (Entergy New Orleans never appears in LPSC's ~16,900-docket history at all — it's regulated solely by the City Council). LPSC's own Status field lies in an unusually sharp way — it stays "Open" for months or years after a real granting order, since LPSC keeps a docket open for post-approval compliance monitoring. This project's own live-DB verification step caught a real bug the module's original calibration missed: a confirmed-real grant order used a curly Unicode apostrophe ("Judge’s Recommendation") that a straight-ASCII-apostrophe regex silently failed to match, leaving a resolved docket wrongly shown as still pending. | Real JSON API (ASP.NET MVC + Kendo UI), no auth |
 | Alabama PSC CPCN dockets | `src/lib/ingest/alPscDockets.ts` | Cron weekly (09:00 UTC Mondays), `/api/cron/ingest-al-psc`. Thirty-first state — Alabama's CPCN statute isn't electric-specific and shares one flat docket-number sequence across every utility type, so scoping runs on client-side content filtering rather than a docket-code prefix. Found a real full-text search indexing gap that would have made the exact kind of very-recently-filed docket this site cares about most systematically invisible — Alabama Power's real, current "Lindsay Hill" CPCN (granted 2025) never appeared in the phrase search at all across a 26-year lookback; fixed with a second, structured-metadata discovery path scoped to Alabama Power's own filings. A real vanished-candidate bug was also found in a new shape: two false positives upserted before a content filter was tightened would have frozen in the DB forever, since content-based rejection (unlike every prior state's status-filter-based version of this bug) never naturally revisits an already-tracked row — fixed the same way, by diffing every matchKey this run reached a confident decision about against what actually got upserted. | Server-rendered HTML (stateful ASP.NET WebForms via session cookie, no ViewState), no auth |
 | Arkansas PSC CECPN/CCN dockets | `src/lib/ingest/arPscDockets.ts` | Cron weekly (09:30 UTC Mondays), `/api/cron/ingest-ar-psc`. Thirty-second state — Arkansas has no dedicated per-type case code; every matter (CECPN, CCN, rate cases, complaints, rulemakings, etc.) shares one flat docket-number sequence, with only the "-U" ("Utility") suffix ever carrying a real construction-certificate application, confirmed by sampling a live docket under every other real suffix in use. Also the first state in this series to be re-run live to verify the new Status-filter architecture (see the "Stop hiding resolved projects" commit): 17 real Arkansas dockets now persist at their true stage (11 granted, 1 denied, 5 pending) instead of resolved ones being deleted. | Server-rendered HTML, no auth |
+| Delaware PSC Transmission CPCN + Community Energy Facility dockets | `src/lib/ingest/dePscDockets.ts` | Cron weekly (10:00 UTC Mondays), `/api/cron/ingest-de-psc`. Thirty-third state — Delaware's CPCN authority is split across two different statutes; this module deliberately tracks the project-specific one (26 Del. C. §203F, for renewable-interconnection facilities ≥30 MW) plus the non-CPCN "Preliminary Certificate to Operate" gate for Community Solar facilities up to 4 MW, and excludes the entity-level electric-supplier CPCN the same way this series excludes every other state's utility-licensing docket. | Server-rendered HTML (ASP.NET WebForms, cookie-based), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all thirty-one
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -214,7 +215,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: thirty-two states down, 18 to go, each with
+10. **State PUC/PSC dockets: thirty-three states down, 17 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -227,10 +228,11 @@ per-data-source version of this list.
     `inIurcDockets.ts`, `njBpuDockets.ts`, `mdPscDockets.ts`,
     `ctCscDockets.ts`, `wvPscDockets.ts`, `tnTpucDockets.ts`,
     `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`,
-    `nePrbDockets.ts`, `laPscDockets.ts`, `alPscDockets.ts`, and
-    `arPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
-    projects — no headless browser needed for any of them, same shape as
-    this site's other sources — but none was "just add a module":
+    `nePrbDockets.ts`, `laPscDockets.ts`, `alPscDockets.ts`,
+    `arPscDockets.ts`, and `dePscDockets.ts` are all plain-HTTP-fetch
+    sources, not scraping projects — no headless browser needed for any
+    of them, same shape as this site's other sources — but none was
+    "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in

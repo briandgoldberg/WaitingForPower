@@ -152,6 +152,10 @@
     {
       "path": "/api/cron/ingest-de-psc",
       "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-me-dep",
+      "schedule": "30 10 * * 1"
     }
   ]
 }

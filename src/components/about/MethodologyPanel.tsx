@@ -545,6 +545,17 @@ export function MethodologyPanel() {
             </a>{" "}
             — Public Service Commission
           </li>
+          <li>
+            <a
+              href="https://www.maine.gov/dep/gis/datamaps/LAWB_Permits/index.html"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Maine
+            </a>{" "}
+            — Department of Environmental Protection, Land Bureau (Site Law permits)
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
           Not exactly geocoded: state-docket sources publish a county, not exact coordinates, so
@@ -699,9 +710,12 @@ export function MethodologyPanel() {
           <li>
             <strong>Delaware PSC</strong> — checked weekly at 10:00 UTC Mondays.
           </li>
+          <li>
+            <strong>Maine DEP</strong> — checked weekly at 10:30 UTC Mondays.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          All thirty-eight sources run staggered by the hour (13:00 UTC Sunday through 10:00 UTC
+          All thirty-nine sources run staggered by the hour (13:00 UTC Sunday through 10:30 UTC
           Monday) so
           no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
           identity, so re-running a source (on schedule or by hand) updates existing projects in

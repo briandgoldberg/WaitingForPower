@@ -46,7 +46,8 @@
     "ingest:la-psc": "tsx src/lib/ingest/laPscDockets.ts",
     "ingest:al-psc": "tsx src/lib/ingest/alPscDockets.ts",
     "ingest:ar-psc": "tsx src/lib/ingest/arPscDockets.ts",
-    "ingest:de-psc": "tsx src/lib/ingest/dePscDockets.ts"
+    "ingest:de-psc": "tsx src/lib/ingest/dePscDockets.ts",
+    "ingest:me-dep": "tsx src/lib/ingest/meDepSiteLawPermits.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

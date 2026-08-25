@@ -102,17 +102,79 @@ model Project {
   // developer-stated design capacity; not independently verified."
   dataQualityNote String?
 
+  // True when this project's own source last confirmed it was STILL
+  // tracked as still-pending (currentStage not in RESOLVED_STAGES), but
+  // then a later run of that same source's candidate list didn't include
+  // it anymore — set by upsertNormalizedProjects (common.ts), never
+  // guessed at the per-module level. Deliberately does NOT change
+  // currentStage (which keeps holding the true last-known real stage) —
+  // this is an orthogonal "are we still seeing it" signal, surfaced as its
+  // own Status filter bucket ("No Longer Being Reported", see
+  // statusBucketForProject in taxonomies.ts) rather than folded into
+  // Cancelled/Suspended, since we genuinely don't know what happened
+  // (could be resolved off-book, could just be a source search quirk).
+  // Only ever set true for a still-pending project — an already-resolved
+  // project dropping out of a source's "active" search is expected
+  // behavior, not a signal. Cleared automatically the next time that same
+  // matchKey is seen again in a run.
+  noLongerReported Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   causes     ProjectCause[]
   sources    ProjectSource[]
   milestones Milestone[]
+  changes    ProjectChange[]
 
   @@index([projectType])
   @@index([fuelType])
   @@index([currentStage])
   @@index([verificationStatus])
+  @@index([noLongerReported])
+}
+
+// One row per (project, ingestion run) where something worth telling a
+// user about actually changed — the data source for the homepage "changes"
+// feed (the site's core value prop as of 2026-08-25: actionable
+// intelligence on what changed, not just a static snapshot). Deliberately
+// bundles every change type detected in one run into a single row (one
+// event per project per run), not one row per changed field — see
+// upsertNormalizedProject in common.ts for the detection logic. A run that
+// changes nothing about a project writes no row at all; this table is not
+// a full audit log of every ingestion run, only the runs that produced a
+// real, user-facing change.
+model ProjectChange {
+  id        Int     @id @default(autoincrement())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // One or more of: "new" | "advanced" | "resolved" | "fact_revised" |
+  // "new_filing" | "no_longer_reported" | "reappeared" — see
+  // buildChangeSummary in common.ts for what triggers each and how they're
+  // combined into `summary` below. Kept as a Postgres string array (not a
+  // separate join table) since this is a small, fixed, code-reviewed
+  // vocabulary read far more often than written, the same reasoning
+  // causeCategories.ts already documents for cause slugs.
+  changeTypes String[]
+
+  // Only set when a "advanced" or "resolved" changeType fired — the real
+  // stage transition, for a more structured feed UI than parsing `summary`.
+  previousStage String?
+  newStage      String?
+
+  // Pre-rendered human-readable summary (e.g. "Advanced from
+  // Interconnection Study to Agency Permitting; capacity revised to 187
+  // MW"), computed once at ingest time rather than recomputed per page
+  // view — the underlying old/new field values that produced it aren't all
+  // separately persisted (e.g. previous capacity), so this is the
+  // authoritative record of what was observed to change.
+  summary String
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([createdAt])
 }
 
 model ProjectCause {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import type { ProjectDTO } from "@/lib/types";
 import { DEFAULT_FILTERS, buildChips, hasActiveFilters, matchesFilters, type FilterState } from "@/lib/filters";
@@ -42,12 +43,13 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
   return (
     <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-2 flex flex-col gap-2 flex-1">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Know what&rsquo;s happening at America&rsquo;s energy projects.
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">All projects</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5 max-w-3xl">
-          America&rsquo;s premier data source for power projects in permitting. We turn new
-          filings into project intelligence.
+          Every U.S. energy project we track — map and list views, filterable by state, status,
+          fuel type, and permitting stage.{" "}
+          <Link href="/" className="underline text-[var(--accent)]">
+            See what changed recently →
+          </Link>
         </p>
       </div>
 

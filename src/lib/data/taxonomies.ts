@@ -127,21 +127,27 @@ export const TRACKED_PROJECT_STAGES = PROJECT_STAGES.filter(
   (s) => !RESOLVED_STAGES.includes(s.value),
 );
 
-// The three broad buckets the frontend's top-level Status filter offers —
+// The broad buckets the frontend's top-level Status filter offers —
 // coarser than the individual ProjectStage values above, and the thing
 // most users actually want to ask ("is this still in permitting, did it
-// die, or did it get through?"). "in_permitting" is every non-resolved
-// stage (unchanged from this site's original "waiting" definition, so
-// it's the default filter value — see DEFAULT_FILTERS in
-// src/lib/filters.ts — and reproduces the exact same project set/count
-// this site always showed, before resolved-stage projects started being
-// kept at all).
-export type StatusBucket = "in_permitting" | "cancelled_suspended" | "permits_complete";
+// die, did it get through, or did we just lose track of it?").
+// "in_permitting" is every non-resolved, still-reported stage (unchanged
+// from this site's original "waiting" definition, so it's the default
+// filter value — see DEFAULT_FILTERS in src/lib/filters.ts — and
+// reproduces the exact same project set/count this site always showed,
+// before resolved-stage projects started being kept at all).
+// "no_longer_reported" (added 2026-08-25) is orthogonal to the other three
+// — see Project.noLongerReported in schema.prisma — a still-pending
+// project whose source stopped listing it, not a real outcome we
+// observed, so it gets its own bucket rather than being folded into
+// Cancelled/Suspended.
+export type StatusBucket = "in_permitting" | "cancelled_suspended" | "permits_complete" | "no_longer_reported";
 
 export const STATUS_BUCKETS: { value: StatusBucket; label: string }[] = [
   { value: "in_permitting", label: "In Permitting" },
   { value: "cancelled_suspended", label: "Cancelled / Suspended" },
   { value: "permits_complete", label: "Permits Complete" },
+  { value: "no_longer_reported", label: "No Longer Being Reported" },
 ];
 
 // No ingestion module in this project currently distinguishes a genuine
@@ -159,10 +165,25 @@ const PERMITS_COMPLETE_STAGES: ProjectStage[] = [
   "completed",
 ];
 
+// Deprecated alias kept only because it's a small, self-contained pure
+// function with no reason to force every call site to thread a
+// noLongerReported flag through if they don't have one — prefer
+// statusBucketForProject below wherever a Project/ProjectDTO is in hand.
 export function statusBucketForStage(stage: ProjectStage): StatusBucket {
   if (CANCELLED_SUSPENDED_STAGES.includes(stage)) return "cancelled_suspended";
   if (PERMITS_COMPLETE_STAGES.includes(stage)) return "permits_complete";
   return "in_permitting";
+}
+
+// The real bucket function every project-list/filter/stats call site
+// should use — noLongerReported takes priority over the stage-derived
+// bucket. By construction (see common.ts's vanished-detection logic)
+// noLongerReported is only ever true for a project whose last-known stage
+// was still non-resolved, so there's no real conflict between the two
+// signals in practice, but the flag is checked first regardless.
+export function statusBucketForProject(stage: ProjectStage, noLongerReported: boolean): StatusBucket {
+  if (noLongerReported) return "no_longer_reported";
+  return statusBucketForStage(stage);
 }
 
 export const PROJECT_STAGE_BY_VALUE: Record<ProjectStage, string> = Object.fromEntries(

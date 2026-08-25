@@ -20,14 +20,16 @@ function ExampleNote({ children }: { children: React.ReactNode }) {
 // investment figures at all.
 function ResolvedStatusCard({ stats, status }: { stats: AggregateStats; status: StatusBucket }) {
   const label = STATUS_BUCKETS.find((s) => s.value === status)?.label ?? status;
+  const explanation =
+    status === "no_longer_reported"
+      ? "These projects were still waiting on a decision when their source stopped listing them as active — we don't know if they resolved quietly or the source just stopped surfacing them. Capacity and investment “waiting” figures don't apply here since we can't confirm they're still real waits."
+      : "These projects are no longer waiting on a decision, so capacity and investment “waiting” figures don't apply here.";
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
       <div className="text-lg font-bold">{stats.totalProjects.toLocaleString("en-US")}</div>
       <div className="text-xs text-[var(--muted)] mt-0.5">{label} projects</div>
       <p className="text-[11px] text-[var(--muted)] mt-2">
-        These projects are no longer waiting on a decision, so capacity and investment &ldquo;waiting&rdquo;
-        figures don&rsquo;t apply here — switch to{" "}
-        <span className="font-medium">In Permitting</span> for those stats.
+        {explanation} Switch to <span className="font-medium">In Permitting</span> for those stats.
       </p>
     </div>
   );

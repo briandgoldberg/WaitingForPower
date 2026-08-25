@@ -22,7 +22,7 @@
 import { prisma } from "@/lib/db";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
-import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
+import { PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES } from "@/lib/data/taxonomies";
 
 export interface NormalizedSource {
   label: string;
@@ -94,6 +94,59 @@ function slugify(name: string, matchKey: string): string {
   return `${base}-${suffix}`;
 }
 
+// Small, fixed, code-reviewed vocabulary — see ProjectChange.changeTypes in
+// schema.prisma. Kept as a type here (not re-derived from the DB) since
+// it's also what buildChangeSummary below switches on.
+export type ChangeType = "new" | "advanced" | "resolved" | "fact_revised" | "new_filing" | "no_longer_reported" | "reappeared";
+
+// Turns a bundle of changeTypes detected for one project in one run into
+// the pre-rendered feed sentence stored on ProjectChange.summary — see the
+// homepage changes feed. Order here is deliberately fixed (most
+// significant first) rather than the order changeTypes happened to be
+// pushed in, so "New project — Advanced to X" always reads the same way
+// regardless of which detection branch fired first.
+function buildChangeSummary(
+  changeTypes: ChangeType[],
+  detail: {
+    previousStage: ProjectStage | null;
+    newStage: ProjectStage;
+    previousCapacityValue: number | null;
+    newCapacityValue: number | null;
+    capacityUnit: string | null;
+    newFilingDescriptions: string[];
+  },
+): string {
+  const parts: string[] = [];
+  if (changeTypes.includes("new")) {
+    parts.push("New project discovered");
+  }
+  if (changeTypes.includes("resolved")) {
+    parts.push(`Resolved: ${PROJECT_STAGE_BY_VALUE[detail.newStage]}`);
+  } else if (changeTypes.includes("advanced")) {
+    const from = detail.previousStage ? PROJECT_STAGE_BY_VALUE[detail.previousStage] : "an earlier stage";
+    parts.push(`Advanced from ${from} to ${PROJECT_STAGE_BY_VALUE[detail.newStage]}`);
+  }
+  if (changeTypes.includes("fact_revised")) {
+    const unit = detail.capacityUnit ?? "";
+    if (detail.previousCapacityValue == null && detail.newCapacityValue != null) {
+      parts.push(`Capacity disclosed: ${detail.newCapacityValue.toLocaleString("en-US")} ${unit}`.trim());
+    } else if (detail.newCapacityValue != null) {
+      parts.push(`Capacity revised to ${detail.newCapacityValue.toLocaleString("en-US")} ${unit}`.trim());
+    }
+  }
+  if (changeTypes.includes("new_filing")) {
+    const list = detail.newFilingDescriptions.slice(0, 3).join("; ");
+    parts.push(detail.newFilingDescriptions.length > 0 ? `New filing: ${list}` : "New filing added");
+  }
+  if (changeTypes.includes("reappeared")) {
+    parts.push("Reappeared in its source's active list");
+  }
+  if (changeTypes.includes("no_longer_reported")) {
+    parts.push("No longer appearing in its source's active list");
+  }
+  return parts.join("; ");
+}
+
 /**
  * Upserts a normalized project keyed by `matchKey` — the real cross-source
  * identity (see the Project.matchKey schema comment): `${source}:${sourceId}`
@@ -131,6 +184,20 @@ function slugify(name: string, matchKey: string): string {
  * filter), plus "Cancelled / Suspended" and "Permits Complete" as
  * explicit opt-in views. A resolved-stage project therefore just updates
  * (or creates) normally below, same as any other stage.
+ *
+ * CHANGE DETECTION (added 2026-08-25, for the homepage changes feed — see
+ * ProjectChange in schema.prisma): every write here diffs the incoming
+ * values against whatever `existing` held before the write, and — if
+ * anything a user would actually care about changed — writes one bundled
+ * ProjectChange row summarizing all of it. Deliberately NOT diffed:
+ * `currentStatus` free text, `dataQualityNote`, county/coordinates being
+ * filled in later, name corrections — these are usually this project's own
+ * parsing improving on the same underlying filing, not the real world
+ * changing, and surfacing them would make the feed noisy. Only currentStage
+ * (a real transition), capacityValue (a real fact revision), new
+ * milestones (a real new filing), and reappearing after having been
+ * flagged noLongerReported count. A run that changes none of these writes
+ * no ProjectChange row at all — this table is not a full audit log.
  */
 export async function upsertNormalizedProject(p: NormalizedProject) {
   // Slug is only computed once, at creation, from whichever source's
@@ -143,6 +210,12 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
   const existing =
     (await prisma.project.findUnique({ where: { matchKey: p.matchKey } })) ??
     (await prisma.project.findUnique({ where: { slug } }));
+
+  // Captured BEFORE the milestone deleteMany/createMany below overwrites
+  // them, so "new_filing" can be detected by diffing descriptions.
+  const existingMilestoneDescriptions = existing
+    ? new Set((await prisma.milestone.findMany({ where: { projectId: existing.id }, select: { description: true } })).map((m) => m.description))
+    : new Set<string>();
 
   const fields = {
     name: p.name,
@@ -164,6 +237,10 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,
+    // Being upserted at all means this run's source DID see this project —
+    // always reset the flag, whether or not it was previously set (that's
+    // exactly the "reappeared" case).
+    noLongerReported: false,
   };
 
   const project = existing
@@ -208,7 +285,111 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
     });
   }
 
+  // See CHANGE DETECTION above.
+  const isNew = existing == null;
+  const changeTypes: ChangeType[] = [];
+  if (isNew) {
+    changeTypes.push("new");
+  } else {
+    if (existing.currentStage !== p.currentStage) {
+      changeTypes.push(RESOLVED_STAGES.includes(p.currentStage) ? "resolved" : "advanced");
+    }
+    if ((existing.capacityValue ?? null) !== (p.capacityValue ?? null)) {
+      changeTypes.push("fact_revised");
+    }
+    if (existing.noLongerReported) {
+      changeTypes.push("reappeared");
+    }
+  }
+  const newFilingDescriptions = !isNew && p.milestones ? p.milestones.map((m) => m.description).filter((d) => !existingMilestoneDescriptions.has(d)) : [];
+  if (newFilingDescriptions.length > 0) changeTypes.push("new_filing");
+
+  if (changeTypes.length > 0) {
+    await prisma.projectChange.create({
+      data: {
+        projectId: project.id,
+        changeTypes,
+        previousStage: existing?.currentStage ?? null,
+        newStage: p.currentStage,
+        summary: buildChangeSummary(changeTypes, {
+          previousStage: (existing?.currentStage as ProjectStage | undefined) ?? null,
+          newStage: p.currentStage,
+          previousCapacityValue: existing?.capacityValue ?? null,
+          newCapacityValue: p.capacityValue ?? null,
+          capacityUnit: p.capacityUnit ?? null,
+          newFilingDescriptions,
+        }),
+      },
+    });
+  }
+
   return project;
+}
+
+// The part of a matchKey before its first ":" — `${source}:${sourceId}` by
+// default (see resolveMatchKey in manualOverrides.ts). Used only to scope
+// vanished-detection to "other rows this same source has previously
+// tracked," so a manually-overridden shared matchKey (no ":"-prefixed
+// source segment at all, or a different one than either source's own
+// default) simply won't match anything and that row is silently excluded
+// from vanished-detection — an accepted, documented gap for the rare
+// human-curated-merge case, not a correctness bug for the vast majority of
+// unmerged rows.
+function sourcePrefixOf(matchKey: string): string {
+  const i = matchKey.indexOf(":");
+  return i === -1 ? matchKey : matchKey.slice(0, i);
+}
+
+/**
+ * VANISHED-DETECTION (added 2026-08-25, replacing the old per-module
+ * "vanished-candidate fix" pattern retired the same day — see each
+ * module's own header for that history): after upserting this run's real
+ * candidates, any OTHER project previously tracked from the same source
+ * (same matchKey prefix) that is still non-resolved and not already
+ * flagged is marked Project.noLongerReported=true, with a ProjectChange
+ * row logged. This runs centrally here, once, generically for every
+ * source — not duplicated per-module — so there's exactly one
+ * implementation to get right instead of ~40.
+ *
+ * `sourcePrefix` is inferred from the first candidate's own matchKey when
+ * omitted, which is correct for the overwhelmingly common case (one
+ * module, one source, one call). It must be passed explicitly for a
+ * source whose real population can legitimately be zero on a given run
+ * (e.g. tnTpucDockets.ts) — with an empty `projects` array there's nothing
+ * to infer a prefix from, and vanished-detection is silently skipped for
+ * that run rather than guessed at.
+ */
+async function markVanished(sourcePrefix: string, seenMatchKeys: Set<string>): Promise<number> {
+  const previouslyTracked = await prisma.project.findMany({
+    where: {
+      matchKey: { startsWith: `${sourcePrefix}:` },
+      currentStage: { notIn: RESOLVED_STAGES },
+      noLongerReported: false,
+    },
+    select: { id: true, matchKey: true, currentStage: true },
+  });
+
+  const vanished = previouslyTracked.filter((row) => row.matchKey && !seenMatchKeys.has(row.matchKey));
+  for (const row of vanished) {
+    await prisma.project.update({ where: { id: row.id }, data: { noLongerReported: true } });
+    await prisma.projectChange.create({
+      data: {
+        projectId: row.id,
+        changeTypes: ["no_longer_reported"],
+        previousStage: row.currentStage,
+        newStage: row.currentStage,
+        summary: buildChangeSummary(["no_longer_reported"], {
+          previousStage: row.currentStage as ProjectStage,
+          newStage: row.currentStage as ProjectStage,
+          previousCapacityValue: null,
+          newCapacityValue: null,
+          capacityUnit: null,
+          newFilingDescriptions: [],
+        }),
+      },
+    });
+  }
+  return vanished.length;
 }
 
 /**
@@ -229,11 +410,17 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
  * successful writes carried a resolved stage (approved/under
  * construction/cancelled/completed), for the same "how many resolved
  * this run" signal each module's own CLI summary line already reports.
+ *
+ * See markVanished above for `sourcePrefix` and the noLongerReported side
+ * effect this now also has — a purely additive behavior change from this
+ * function's prior signature, so every existing call site
+ * (`upsertNormalizedProjects(toUpsert)`) keeps working unchanged.
  */
 export async function upsertNormalizedProjects(
   projects: NormalizedProject[],
-  concurrency = 40,
-): Promise<{ upserted: number; removedResolved: number; errors: { matchKey: string; message: string }[] }> {
+  options: { sourcePrefix?: string; concurrency?: number } = {},
+): Promise<{ upserted: number; removedResolved: number; vanished: number; errors: { matchKey: string; message: string }[] }> {
+  const concurrency = options.concurrency ?? 40;
   let upserted = 0;
   let removedResolved = 0;
   const errors: { matchKey: string; message: string }[] = [];
@@ -252,5 +439,8 @@ export async function upsertNormalizedProjects(
     }
   }
 
-  return { upserted, removedResolved, errors };
+  const sourcePrefix = options.sourcePrefix ?? sourcePrefixOf(projects[0]?.matchKey ?? "");
+  const vanished = sourcePrefix ? await markVanished(sourcePrefix, new Set(projects.map((p) => p.matchKey))) : 0;
+
+  return { upserted, removedResolved, vanished, errors };
 }

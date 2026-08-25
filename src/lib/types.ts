@@ -35,6 +35,9 @@ export interface ProjectDTO {
   dateConfidence: "exact" | "approximate";
   currentStatus: string;
   currentStage: ProjectStage;
+  // See Project.noLongerReported in schema.prisma — true only for a
+  // still-pending project whose source stopped listing it in a later run.
+  noLongerReported: boolean;
   causeSlugs: CauseSlug[];
   causeDetail: string;
   isAggregateExample: boolean;
@@ -56,6 +59,28 @@ export interface ProjectDTO {
     reason?: string;
     estimatedUsd?: number;
     costPerKw?: number;
+  };
+}
+
+// One row of the homepage changes feed — see ProjectChange in
+// schema.prisma. `project` is a trimmed summary (not the full ProjectDTO)
+// since a feed of many entries only needs enough to render a card and link
+// out, not sources/milestones/etc.
+export interface ProjectChangeDTO {
+  id: number;
+  changeTypes: string[];
+  previousStage: ProjectStage | null;
+  newStage: ProjectStage | null;
+  summary: string;
+  createdAt: string; // ISO date
+  project: {
+    slug: string;
+    name: string;
+    state: string | null;
+    projectType: ProjectType;
+    fuelType: FuelType;
+    capacityValue: number | null;
+    capacityUnit: string | null;
   };
 }
 

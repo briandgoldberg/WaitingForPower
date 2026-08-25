@@ -48,6 +48,7 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     dateConfidence: p.dateConfidence as "exact" | "approximate",
     currentStatus: p.currentStatus,
     currentStage: p.currentStage as ProjectStage,
+    noLongerReported: p.noLongerReported,
     causeSlugs: p.causes.map((c) => c.causeSlug as CauseSlug),
     causeDetail: p.causeDetail,
     isAggregateExample: p.isAggregateExample,

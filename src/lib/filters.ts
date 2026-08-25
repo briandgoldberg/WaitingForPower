@@ -1,7 +1,7 @@
 import {
   PROJECT_STAGE_BY_VALUE,
   STATUS_BUCKETS,
-  statusBucketForStage,
+  statusBucketForProject,
   type FuelType,
   type ProjectStage,
   type ProjectType,
@@ -90,7 +90,7 @@ export function hasActiveFilters(f: FilterState): boolean {
 }
 
 export function matchesFilters(p: ProjectDTO, f: FilterState): boolean {
-  if (statusBucketForStage(p.currentStage) !== f.status) return false;
+  if (statusBucketForProject(p.currentStage, p.noLongerReported) !== f.status) return false;
   if (f.minYearsWaiting != null) {
     if (p.yearsWaiting == null || p.yearsWaiting < f.minYearsWaiting) return false;
   }

@@ -48,6 +48,41 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Same day-bucketing most social/notification feeds use (GitHub, Slack,
+// etc.): Today / Yesterday / This Week / This Month, then by calendar
+// month for anything older. Computed from calendar-day boundaries in the
+// viewer's local time, not a rolling 24h/7d window, so "Today" always
+// means the same thing a clock on the wall would.
+function dateGroupLabel(iso: string, now: Date): string {
+  const date = new Date(iso);
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = startOfDay(now);
+  const changeDay = startOfDay(date);
+  const dayDiff = Math.round((today.getTime() - changeDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (dayDiff <= 0) return "Today";
+  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff <= 7) return "This Week";
+  if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) return "This Month";
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString("en-US", sameYear ? { month: "long" } : { month: "long", year: "numeric" });
+}
+
+function groupByDate(changes: ProjectChangeDTO[]): { label: string; items: ProjectChangeDTO[] }[] {
+  const now = new Date();
+  const groups: { label: string; items: ProjectChangeDTO[] }[] = [];
+  for (const c of changes) {
+    const label = dateGroupLabel(c.createdAt, now);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      last.items.push(c);
+    } else {
+      groups.push({ label, items: [c] });
+    }
+  }
+  return groups;
+}
+
 function ChangeCard({ change }: { change: ProjectChangeDTO }) {
   const badge = badgeFor(change.changeTypes, change.newStage);
   const fuel = FUEL_TYPE_BY_VALUE[change.project.fuelType];
@@ -121,10 +156,17 @@ export function ChangesFeed({
     );
   }
 
+  const groups = groupByDate(changes);
+
   return (
-    <div className="flex flex-col gap-2">
-      {changes.map((c) => (
-        <ChangeCard key={c.id} change={c} />
+    <div className="flex flex-col gap-4">
+      {groups.map((group) => (
+        <div key={group.label} className="flex flex-col gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{group.label}</h3>
+          {group.items.map((c) => (
+            <ChangeCard key={c.id} change={c} />
+          ))}
+        </div>
       ))}
       {hasMore && (
         <button

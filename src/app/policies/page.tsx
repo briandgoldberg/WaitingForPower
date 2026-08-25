@@ -7,7 +7,8 @@ export default function PoliciesPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">What we&rsquo;re advocating for</h1>
         <p className="text-sm text-[var(--muted)] mt-2 max-w-2xl">
-          Six bipartisan asks, one per bottleneck. No silver bullets, real trade-offs included.
+          Six bipartisan policies to speed up permit decisions, one per bottleneck. No silver
+          bullets, real trade-offs included.
         </p>
         <p className="text-xs text-[var(--muted)] mt-2 max-w-2xl">
           Inspired by{" "}

@@ -3,11 +3,12 @@
 import { useState } from "react";
 
 const TOPICS = [
-  { value: "bug", label: "Report a technical issue" },
-  { value: "feedback", label: "Feedback or suggestion" },
-  { value: "data", label: "Add a project or data source" },
+  { value: "data-access", label: "Data feeds, API access, or custom data" },
   { value: "partnership", label: "Partnership or campaign collaboration" },
   { value: "press", label: "Press or media inquiry" },
+  { value: "data", label: "Add a project or data source" },
+  { value: "feedback", label: "Feedback or suggestion" },
+  { value: "bug", label: "Report a technical issue" },
   { value: "other", label: "Something else" },
 ] as const;
 
@@ -53,10 +54,11 @@ export function ContactPanel() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">I Want Your Feedback</h2>
+        <h1 className="text-2xl font-bold tracking-tight">Contact Us</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          Found a bug, have an enhancement idea, or want to partner with us? We want to hear from
-          you!
+          Interested in a data feed, API access, or a custom dataset? That&rsquo;s exactly what
+          we&rsquo;re building toward — tell us what you need. Also happy to hear feedback, bug
+          reports, or partnership ideas.
         </p>
       </div>
 

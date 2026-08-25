@@ -4,11 +4,12 @@ import { Resend } from "resend";
 const CONTACT_EMAIL = "briandgoldberg@gmail.com";
 
 const TOPIC_LABELS: Record<string, string> = {
-  bug: "Report a technical issue",
-  feedback: "Feedback or suggestion",
-  data: "Add a project or data source",
+  "data-access": "Data feeds, API access, or custom data",
   partnership: "Partnership or campaign collaboration",
   press: "Press or media inquiry",
+  data: "Add a project or data source",
+  feedback: "Feedback or suggestion",
+  bug: "Report a technical issue",
   other: "Something else",
 };
 

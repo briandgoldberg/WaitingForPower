@@ -43,10 +43,11 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
     <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-2 flex flex-col gap-2 flex-1">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
-          America needs power. It&rsquo;s stuck waiting.
+          Know what&rsquo;s happening at America&rsquo;s energy projects.
         </h1>
         <p className="text-sm text-[var(--muted)] mt-0.5 max-w-3xl">
-          Cheaper bills, cleaner air, power for businesses and consumers, all just waiting on a yes.
+          America&rsquo;s premier data source for power projects in permitting — turning new
+          filings into project intelligence.
         </p>
       </div>
 

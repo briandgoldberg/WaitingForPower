@@ -10,11 +10,12 @@ export default function PoliciesPage() {
           Six bipartisan asks, one per bottleneck. No silver bullets — real trade-offs included.
         </p>
         <p className="text-xs text-[var(--muted)] mt-2 max-w-2xl">
-          Informed by{" "}
+          Inspired by{" "}
           <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
             Citizens&rsquo; Climate Lobby
-          </a>{" "}
-          and other bipartisan reform advocates, in this site&rsquo;s own words.
+          </a>
+          &rsquo;s approach to durable, market-based climate policy — here are some potential
+          bipartisan policies to speed up permitting, in this site&rsquo;s own words.
         </p>
       </div>
 

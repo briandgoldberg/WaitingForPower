@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { AboutPanel } from "@/components/about/AboutPanel";
+import { ContactPanel } from "@/components/about/ContactPanel";
 
 export const metadata: Metadata = {
   title: "Contact — WaitingForPower",
-  description: "Get in touch with WaitingForPower — bugs, feedback, data, partnerships, and press.",
+  description:
+    "Get in touch with WaitingForPower — data feeds, API access, custom datasets, partnerships, press, feedback, and bugs.",
 };
 
 export default function ContactPage() {
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6">
-      <AboutPanel />
+      <ContactPanel />
     </div>
   );
 }

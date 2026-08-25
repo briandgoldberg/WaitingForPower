@@ -53,6 +53,7 @@ sources that can be re-run and stay current on their own).
 | `vtPucDockets.ts` | Vermont Public Utility Commission (PUC) Certificate of Public Good (CPG, 30 V.S.A. §248) dockets | Yes — server-rendered HTML (Drupal 7), no auth | None (no auth) | Cron daily (11:30 UTC), `/api/cron/ingest-vt-puc`. |
 | `sdPucDockets.ts` | South Dakota Public Utilities Commission (PUC) Energy Conversion and Transmission Facility permit dockets (SDCL 49-41B) | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (12:00 UTC), `/api/cron/ingest-sd-puc`. |
 | `ndPscDockets.ts` | North Dakota Public Service Commission (PSC) Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) | Yes — server-rendered HTML + real order PDFs (parsed via `pdf-parse`), no auth | None (no auth) | Cron daily (12:30 UTC), `/api/cron/ingest-nd-psc`. |
+| `ncNcucDockets.ts` | North Carolina Utilities Commission (NCUC) Electric Generation Certificate (EGC) + Electric Transmission Line Certificate (ETL) dockets | Yes — server-rendered HTML (ASP.NET WebForms behind Cloudflare, non-standard `__VIEWSTATE1` postback counter), no auth | None (no auth) | Cron daily (13:30 UTC), `/api/cron/ingest-nc-ncuc`. |
 
 Every source runs via Vercel Cron (see `vercel.json`) with no manual step
 required. Cadence changed twice: every 3 days at launch, moved to weekly on

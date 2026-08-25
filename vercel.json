@@ -172,6 +172,10 @@
     {
       "path": "/api/cron/ingest-nd-psc",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/ingest-nc-ncuc",
+      "schedule": "30 13 * * *"
     }
   ]
 }

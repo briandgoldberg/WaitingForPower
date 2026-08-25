@@ -582,6 +582,12 @@ export function MethodologyPanel() {
             </a>{" "}
             — Public Service Commission
           </li>
+          <li>
+            <a href="https://starw1.ncuc.gov/NCUC/page/Dockets/portal.aspx" target="_blank" rel="noreferrer" className="underline">
+              North Carolina
+            </a>{" "}
+            — Utilities Commission
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
           Not exactly geocoded: state-docket sources publish a county, not exact coordinates, so
@@ -751,9 +757,12 @@ export function MethodologyPanel() {
           <li>
             <strong>North Dakota PSC</strong> — checked daily at 12:30 UTC.
           </li>
+          <li>
+            <strong>North Carolina Utilities Commission</strong> — checked daily at 13:30 UTC.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          Thirty-nine sources run daily, every source staggered 30 minutes apart across the
+          Forty sources run daily, every source staggered 30 minutes apart across the
           clock (13:00 UTC through 12:30 UTC the next day) so no two ingestion runs overlap; the
           four monthly/quarterly/annual sources above run on the same staggered schedule but only
           once a week. Every ingestion run upserts by a stable per-source

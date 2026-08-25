@@ -642,7 +642,8 @@ per-data-source version of this list.
     research leads already confirmed viable in parallel (North Carolina
     works too but needs a stateful session/postback-counter dance and
     Cloudflare-aware headers, real extra engineering weight; Pennsylvania,
-    Georgia, Minnesota, Michigan, Kansas, Iowa, and Montana stay deferred — PA has no caption
+    Georgia, Minnesota, Michigan, Kansas, Iowa, Montana, and Mississippi stay
+    deferred — PA has no caption
     field in search results, GA's has one but it's server-side broken and
     always returns the full unfiltered set, Minnesota's entire eDockets/
     eFiling platform sits behind a live Cloudflare Turnstile CAPTCHA or an
@@ -680,9 +681,21 @@ per-data-source version of this list.
     exactly one in-scope project and no case-numbering, search, or
     historical archive of any kind to calibrate a status heuristic
     against — thinner and less verifiable than this series' existing
-    thinnest shipped source), are real next options — each needs the same
-    "confirm before guessing" treatment this project holds itself to, one
-    state (and one scope/status decision) at a time, not assumed to
+    thinnest shipped source — and Mississippi's real docket system
+    (`ctsportal.psc.ms.gov`, the same underlying "Valence" platform
+    laPscDockets.ts already ingests successfully) is currently down with a
+    live, reproducible backend bug: every Docket-related endpoint returns
+    HTTP 500 with a TLS handshake failure between MPSC's own app server and
+    its internal REST API dependency, confirmed against 4 different real
+    docket IDs and reproduced across several minutes of retries, while a
+    sibling non-docket search on the same server returns a clean 200 — an
+    ops-side outage on MPSC's own infrastructure, not a structural wall,
+    worth a quick recheck in a few weeks rather than ruled out permanently
+    (Mississippi's own fallback community portal is Salesforce Aura-only,
+    the same class of blocker as Kansas/Michigan, so isn't a usable
+    workaround in the meantime)), are real next options — each needs the
+    same "confirm before guessing" treatment this project holds itself to,
+    one state (and one scope/status decision) at a time, not assumed to
     generalize.
 
 ## Architecture

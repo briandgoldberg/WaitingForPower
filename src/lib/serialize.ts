@@ -3,7 +3,7 @@ import { daysWaiting, yearsWaiting } from "@/lib/calc/dates";
 import { estimateInvestmentWaiting } from "@/lib/calc/investmentWaiting";
 import type { ProjectDTO } from "@/lib/types";
 import type { CauseSlug } from "@/lib/data/causeCategories";
-import type { FuelType, ProjectStage, ProjectType, VerificationStatus } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES, type FuelType, type ProjectStage, type ProjectType, type VerificationStatus } from "@/lib/data/taxonomies";
 
 export type ProjectWithRelations = Project & {
   causes: ProjectCause[];
@@ -12,8 +12,20 @@ export type ProjectWithRelations = Project & {
 };
 
 export function serializeProject(p: ProjectWithRelations): ProjectDTO {
-  const days = daysWaiting(p.applicationFiledDate);
-  const years = yearsWaiting(p.applicationFiledDate);
+  // A resolved project (granted, cancelled, under construction, or
+  // complete) is no longer "waiting" on anything — `now - filedDate` would
+  // otherwise keep growing forever even years after resolution, which is
+  // exactly the misleading number this guards against. No real resolution
+  // date is tracked anywhere in this schema (see RESOLVED_STAGES' own
+  // comment), so rather than guess one, daysWaiting/yearsWaiting are simply
+  // not computed for a resolved project — every UI surface that displays
+  // them (ProjectList, Map popup, project detail page) already treats null
+  // as "—", and the "length of delay" quick-filter naturally excludes
+  // resolved projects too, which is correct: that filter means "how long
+  // has this been waiting," not applicable once resolved.
+  const isResolved = RESOLVED_STAGES.includes(p.currentStage as ProjectStage);
+  const days = isResolved ? null : daysWaiting(p.applicationFiledDate);
+  const years = isResolved ? null : yearsWaiting(p.applicationFiledDate);
   const investment = estimateInvestmentWaiting({
     fuelType: p.fuelType,
     capacityValue: p.capacityValue,

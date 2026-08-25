@@ -50,7 +50,8 @@
     "ingest:me-dep": "tsx src/lib/ingest/meDepSiteLawPermits.ts",
     "ingest:ri-efsb": "tsx src/lib/ingest/riEfsbDockets.ts",
     "ingest:vt-puc": "tsx src/lib/ingest/vtPucDockets.ts",
-    "ingest:sd-puc": "tsx src/lib/ingest/sdPucDockets.ts"
+    "ingest:sd-puc": "tsx src/lib/ingest/sdPucDockets.ts",
+    "ingest:nd-psc": "tsx src/lib/ingest/ndPscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
@@ -58,6 +59,7 @@
     "maplibre-gl": "^4.7.1",
     "mcp-handler": "^2.1.1",
     "next": "16.3.0",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.20.0",

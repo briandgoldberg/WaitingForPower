@@ -168,6 +168,10 @@
     {
       "path": "/api/cron/ingest-sd-puc",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-nd-psc",
+      "schedule": "30 12 * * 1"
     }
   ]
 }

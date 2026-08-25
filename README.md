@@ -88,6 +88,7 @@ per-source table, open questions, and how each is scheduled:
 | Rhode Island EFSB major-energy-facility dockets | `src/lib/ingest/riEfsbDockets.ts` | Cron weekly (11:00 UTC Mondays), `/api/cron/ingest-ri-efsb`. Thirty-fifth state — a sixth confirmed instance of the "PUC isn't the real siting authority" pattern this series already found in WA/OR/MA/CT/NH: Rhode Island's license requirement (R.I. Gen. Laws §42-98-4) runs through the Energy Facility Siting Board, a separate three-member body, not the PUC that a first-pass search hints at. | Server-rendered HTML (Drupal/Acquia CMS), no auth |
 | Vermont PUC Certificate of Public Good dockets | `src/lib/ingest/vtPucDockets.ts` | Cron weekly (11:30 UTC Mondays), `/api/cron/ingest-vt-puc`. Thirty-sixth state — unlike the WA/OR/MA/CT/NH/RI split found elsewhere in this series, Vermont's PUC genuinely is the real siting authority: 30 V.S.A. §248's Certificate of Public Good is the construction gate for generation, transmission, and storage alike, confirmed directly against the statute text. | Server-rendered HTML (Drupal 7), no auth |
 | South Dakota PUC Energy Conversion/Transmission Facility permit dockets | `src/lib/ingest/sdPucDockets.ts` | Cron weekly (12:00 UTC Mondays), `/api/cron/ingest-sd-puc`. Thirty-seventh state — a real, confirmed bug in SD PUC's own site was found and routed around here: the per-docket status badge goes stale after a real grant (a 2021 wind-farm permit still showed "Pending" as of 2026-08-25 despite a 2023 grant order and ongoing construction reports), so this module scans each candidate's own "Orders:" list for real grant/deny/withdraw language instead of trusting that badge. | Server-rendered HTML, no auth |
+| North Dakota PSC Energy Conversion/Transmission Facility siting applications | `src/lib/ingest/ndPscDockets.ts` | Cron weekly (12:30 UTC Mondays), `/api/cron/ingest-nd-psc`. Thirty-eighth state — the same "Date Closed field lies" bug found in South Dakota and Louisiana was confirmed here too (a real 2024-granted certificate transfer still shows a blank Date Closed), but with no free-text order summary available anywhere in the HTML at all — resolving it required a first for this series: fetching each candidate's real Commission Order PDF and parsing its actual text (via the new `pdf-parse` dependency) for grant/deny/dismiss language, confirmed live against both a certificate-transfer grant and a fresh new-facility grant. | Server-rendered HTML + real order PDFs, no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all thirty-one
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -219,7 +220,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: thirty-seven states down, 13 to go, each with
+10. **State PUC/PSC dockets: thirty-eight states down, 12 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -234,10 +235,10 @@ per-data-source version of this list.
     `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`,
     `nePrbDockets.ts`, `laPscDockets.ts`, `alPscDockets.ts`,
     `arPscDockets.ts`, `dePscDockets.ts`, `meDepSiteLawPermits.ts`,
-    `riEfsbDockets.ts`, `vtPucDockets.ts`, and `sdPucDockets.ts` are all
-    plain-HTTP-fetch sources, not scraping projects — no headless browser
-    needed for any of them, same shape as this site's other sources — but
-    none was "just add a module":
+    `riEfsbDockets.ts`, `vtPucDockets.ts`, `sdPucDockets.ts`, and
+    `ndPscDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    projects — no headless browser needed for any of them, same shape as
+    this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -705,20 +706,31 @@ per-data-source version of this list.
     workaround in the meantime)), are real next options — each needs the
     same "confirm before guessing" treatment this project holds itself to,
     one state (and one scope/status decision) at a time, not assumed to
-    generalize. Two more real dead ends confirmed 2026-08-25, ruled out for
-    structural reasons rather than access ones: **Georgia** has a genuinely
-    nice real JSON docket API (psc.ga.gov), but its full ~3,000-docket
-    electric-industry population showed Georgia doesn't have a per-project
-    certificate docket at all — generation additions get bundled into
-    Georgia Power's periodic, multi-year Integrated Resource Plan filings,
-    and the individual "Construction Monitoring" dockets found (Vogtle
-    3&4, Bowen CC, Wansley CC) are post-approval compliance dockets, not
-    the permitting decision itself, so there's no clean "one docket = one
-    pending project" unit here the way every other state in this series
-    has. **Minnesota**'s eDockets returned a real 200 with full HTML once,
-    then a bare 403 immediately after on an identical request — looks like
-    WAF/bot-detection rather than a stable public interface; worth a
-    recheck later rather than ruled out permanently.
+    generalize. Re-confirmed 2026-08-25: Georgia's search bug is real (a
+    live `title=`/`description=` query against its docket-filter API is
+    silently ignored server-side, always returning the same unfiltered
+    ~3,000-row electric-industry population regardless of the search term)
+    — and even setting that bug aside, a full scan of that unfiltered
+    population found Georgia has no per-project certificate docket at all
+    to search for in the first place: generation additions get bundled
+    into Georgia Power's periodic, multi-year Integrated Resource Plan
+    filings, and the individual "Construction Monitoring" dockets found
+    (Vogtle 3&4, Bowen CC, Wansley CC) are post-approval compliance
+    dockets, not the permitting decision itself — no clean "one docket =
+    one pending project" unit exists here the way it does in every other
+    state in this series, a second, independent reason Georgia stays
+    deferred beyond the search bug alone. Two more real dead ends,
+    confirmed the same day: **Wyoming**'s Industrial Siting Division (the
+    real, confirmed siting authority — W.S. 35-12-101 et seq., DEQ, not
+    the PSC) publishes no browsable list of pending applications
+    anywhere on its site at all — no PDF public notices, no search form,
+    no structured docket page — checked across every real page on the
+    site (permitting, ISD public notices, Siting Council, the site's
+    document search, its general public portal); a genuine "no queryable
+    system exists" blocker, not an access problem. **Hawaii**'s PUC
+    docket search (hpuc.my.site.com/cdms) is Salesforce Experience Cloud
+    (Aura), the same blocker class as Kansas/Michigan/Mississippi's
+    fallback above, plus a live reCAPTCHA on top.
 
 ## Architecture
 

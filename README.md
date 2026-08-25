@@ -85,6 +85,7 @@ per-source table, open questions, and how each is scheduled:
 | Arkansas PSC CECPN/CCN dockets | `src/lib/ingest/arPscDockets.ts` | Cron weekly (09:30 UTC Mondays), `/api/cron/ingest-ar-psc`. Thirty-second state — Arkansas has no dedicated per-type case code; every matter (CECPN, CCN, rate cases, complaints, rulemakings, etc.) shares one flat docket-number sequence, with only the "-U" ("Utility") suffix ever carrying a real construction-certificate application, confirmed by sampling a live docket under every other real suffix in use. Also the first state in this series to be re-run live to verify the new Status-filter architecture (see the "Stop hiding resolved projects" commit): 17 real Arkansas dockets now persist at their true stage (11 granted, 1 denied, 5 pending) instead of resolved ones being deleted. | Server-rendered HTML, no auth |
 | Delaware PSC Transmission CPCN + Community Energy Facility dockets | `src/lib/ingest/dePscDockets.ts` | Cron weekly (10:00 UTC Mondays), `/api/cron/ingest-de-psc`. Thirty-third state — Delaware's CPCN authority is split across two different statutes; this module deliberately tracks the project-specific one (26 Del. C. §203F, for renewable-interconnection facilities ≥30 MW) plus the non-CPCN "Preliminary Certificate to Operate" gate for Community Solar facilities up to 4 MW, and excludes the entity-level electric-supplier CPCN the same way this series excludes every other state's utility-licensing docket. | Server-rendered HTML (ASP.NET WebForms, cookie-based), no auth |
 | Maine DEP Site Law permits | `src/lib/ingest/meDepSiteLawPermits.ts` | Cron weekly (10:30 UTC Mondays), `/api/cron/ingest-me-dep`. Thirty-fourth state — Maine's real construction gate for most large energy projects isn't the PUC's CPCN (35-A M.R.S. §3132, which only covers standalone transmission lines) but DEP's Site Location of Development Act permit, following the same PUC-vs-siting-agency split this series already found in WA/OR/MA/CT/NH. | Real ArcGIS REST endpoint, no auth |
+| Rhode Island EFSB major-energy-facility dockets | `src/lib/ingest/riEfsbDockets.ts` | Cron weekly (11:00 UTC Mondays), `/api/cron/ingest-ri-efsb`. Thirty-fifth state — a sixth confirmed instance of the "PUC isn't the real siting authority" pattern this series already found in WA/OR/MA/CT/NH: Rhode Island's license requirement (R.I. Gen. Laws §42-98-4) runs through the Energy Facility Siting Board, a separate three-member body, not the PUC that a first-pass search hints at. | Server-rendered HTML (Drupal/Acquia CMS), no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all thirty-one
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -216,7 +217,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: thirty-four states down, 16 to go, each with
+10. **State PUC/PSC dockets: thirty-five states down, 15 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -230,10 +231,10 @@ per-data-source version of this list.
     `ctCscDockets.ts`, `wvPscDockets.ts`, `tnTpucDockets.ts`,
     `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`,
     `nePrbDockets.ts`, `laPscDockets.ts`, `alPscDockets.ts`,
-    `arPscDockets.ts`, `dePscDockets.ts`, and `meDepSiteLawPermits.ts`
-    are all plain-HTTP-fetch sources, not scraping projects — no
-    headless browser needed for any of them, same shape as this site's
-    other sources — but none was "just add a module":
+    `arPscDockets.ts`, `dePscDockets.ts`, `meDepSiteLawPermits.ts`, and
+    `riEfsbDockets.ts` are all plain-HTTP-fetch sources, not scraping
+    projects — no headless browser needed for any of them, same shape as
+    this site's other sources — but none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in

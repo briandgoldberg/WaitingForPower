@@ -166,32 +166,27 @@
 //     grant/deny verb specifically because of this real, live false-positive
 //     — confirmed it does NOT trigger on this text.
 //
-// VANISHED-CANDIDATE FIX: a real structural bug found and fixed before
-// shipping (this project's own standard verification step — the same
-// class of bug ctCscDockets.ts's header documents, here triggered a
-// different way). Every search this module runs is scoped
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): a real structural bug
+// found and fixed before shipping (this project's own standard
+// verification step). Every search this module runs is scoped
 // chkActiveCriteria=1 (Active only) — so once WV PSC's OWN Active flag
 // flips a case to Closed, that case simply vanishes from every future
 // search entirely; this module's own Order-activity defense-in-depth
 // check (see STATUS above) only ever runs on candidates that DO still
 // appear in the Active search, so it can never catch a case whose Active
-// flag has already flipped. Left unfixed, this would mean: a project this
-// module previously tracked (stage=local_review) that WV later marks
-// Closed would simply disappear from every subsequent run's candidate
-// list, and — since common.ts's upsertNormalizedProject only ever deletes
-// a project it's *passed* with a RESOLVED_STAGES stage, never diffing
-// "everything previously tracked, minus what showed up this run" — the
-// stale row would freeze in the DB forever. Fixed: after building this
-// run's active-candidate list, every wv-psc matchKey this project
-// previously tracked (queried directly from the DB by matchKey prefix
-// "wv-psc:") that is NOT present among this run's active candidates is
-// pushed through as a minimal resolved stub (buildVanishedStub) with
-// currentStage="cancelled", so upsertNormalizedProjects deletes it. Known
-// gap, not currently applicable: a WV project merged into a shared
-// matchKey via manualOverrides.csv (none exist as of this writing)
-// wouldn't match the "wv-psc:" prefix check and so wouldn't be caught by
-// this cleanup path — acceptable since no such row currently exists, but
-// worth revisiting if one ever is added.
+// flag has already flipped. Originally fixed by diffing this run's active
+// candidates against previously-tracked "wv-psc:" matchKeys and pushing a
+// resolved stub (guessing currentStage="cancelled") for anything that
+// vanished, so common.ts would delete the stale row. That fix is now
+// itself superseded: common.ts no longer deletes resolved-stage projects
+// at all (they're kept and surfaced through the frontend's Status
+// filter), so guessing "cancelled" for a vanished case would mean
+// permanently mislabeling it — possibly wrongly, since a vanished case is
+// just as likely to have been granted as cancelled — in a bucket real
+// users can now see. This module therefore no longer touches a vanished
+// case's DB row at all; it's simply left at its last-known real stage
+// until/unless a future enhancement teaches this module to look up a
+// truly-vanished case's real outcome directly, rather than guess it.
 //
 // FUEL/PROJECT TYPE & CAPACITY: extracted from the Case Description
 // (Case Name, i.e. the applicant, is also checked — see next paragraph).
@@ -255,7 +250,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const BASE_URL = "https://www.psc.state.wv.us";
 const SEARCH_URL = `${BASE_URL}/scripts/WebDocket/viewCaseForWebList.cfm`;
@@ -614,27 +608,6 @@ function normalizeCase(record: CaseListRecord, docketLabel: string, resolution: 
   };
 }
 
-// See module header VANISHED-CANDIDATE FIX. Minimal stub: since matchKey
-// resolves directly to an existing DB row here (this matchKey was created
-// by an earlier run of this same source), upsertNormalizedProject deletes
-// it via the RESOLVED_STAGES path before ever reading most of these
-// fields, so only matchKey/currentStage need to be meaningful.
-function buildVanishedStub(matchKey: string, caseNumber: string): NormalizedProject {
-  return {
-    matchKey,
-    name: `West Virginia PSC Case ${caseNumber} (no longer active)`,
-    projectType: "transmission",
-    fuelType: "other",
-    state: "WV",
-    currentStatus: `West Virginia PSC Case ${caseNumber}: no longer listed as Active by WV PSC's own case search`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `West Virginia PSC Case ${caseNumber} no longer appears in WV PSC's own "Active" case search.`,
-    sources: [],
-    externalIds: { wvPsc: caseNumber },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -677,28 +650,15 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     await sleep(REQUEST_DELAY_MS);
   }
 
-  // See module header VANISHED-CANDIDATE FIX: WV's own case search is
-  // scoped to Active-only, so a case whose Active flag has already flipped
-  // to Closed simply vanishes from `allCandidates` above rather than being
-  // caught by this module's own Order-activity resolution check. Any
-  // matchKey this source previously tracked that isn't present among this
-  // run's active candidates (regardless of maxCandidates/content-filter
-  // status — the trigger is absence from WV's own Active list, not this
-  // module's own filtering) is pushed through as a resolved stub so
-  // upsertNormalizedProjects deletes the stale row.
-  const stillActiveMatchKeys = new Set(
-    allCandidates.map(({ record }) => resolveMatchKey("wv-psc", record.caseNumber)),
-  );
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "wv-psc:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && !stillActiveMatchKeys.has(matchKey)) {
-      const caseNumber = matchKey.slice("wv-psc:".length);
-      toUpsert.push(buildVanishedStub(matchKey, caseNumber));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a case whose
+  // Active flag flips to Closed simply vanishes from `allCandidates`
+  // above without this module ever learning its real resolution. Rather
+  // than guess a specific resolved stage for it (which would now be
+  // permanently visible and possibly wrong, since resolved-stage projects
+  // are no longer deleted — see common.ts), this module deliberately does
+  // nothing for a vanished case: its DB row is simply left at its
+  // last-known real stage until/unless a future enhancement teaches this
+  // module to look up a truly-vanished case's real outcome directly.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

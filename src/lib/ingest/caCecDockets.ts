@@ -195,22 +195,22 @@
 // budget with room to spare — MAX_CANDIDATES is set well above the current
 // real population, not capped down to it.
 //
-// VANISHED-CANDIDATE FIX: a preventive fix applied before shipping, carried
-// over from a real structural bug found and fixed live in ctCscDockets.ts
-// and wvPscDockets.ts (see their headers) — every source in this series
-// whose own candidate query is scoped to "currently open/active status"
-// only (rather than the full historical population) has the same latent
-// gap: common.ts's upsertNormalizedProject only ever deletes a project
-// it's *passed in* with a RESOLVED_STAGES stage, never diffing "everything
-// previously tracked, minus what showed up this run." Here, `?field_
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): `?field_
 // project_status_value=Under_Review`/`Suspended_Proceedings` IS the
 // candidate query — once CEC's own listing marks a project "Denied",
 // "Compliance - Construction", or any other resolved status, it simply
 // stops appearing in `allCandidates` on every future run, never reaching
-// this module's own docket-log resolution check at all. Fixed the same way
-// as ctCscDockets.ts/wvPscDockets.ts: previously-tracked ca-cec matchKeys
-// are diffed against each run's listed-candidate set and pushed through as
-// a resolved stub for anything that vanished (see buildVanishedStub).
+// this module's own docket-log resolution check at all. Originally fixed
+// by pushing a resolved stub (guessing currentStage="cancelled") for any
+// previously-tracked ca-cec matchKey no longer in this run's listed set,
+// so common.ts would delete it. That fix is now itself superseded:
+// common.ts no longer deletes resolved-stage projects (they're kept and
+// surfaced through the frontend's Status filter), so guessing "cancelled"
+// for a project that dropped off the listing would mean permanently
+// mislabeling it — it's at least as likely to have been approved
+// ("Compliance - Construction" is itself an approved status) — in a
+// bucket real users can now see. A project that drops off the listing is
+// therefore left untouched, not guessed into a resolved stage.
 //
 // Wired to Vercel Cron weekly, 06:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ca-cec/route.ts). Real timing measured
@@ -222,7 +222,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const SITE_BASE_URL = "https://www.energy.ca.gov";
 const EFILING_BASE_URL = "https://efiling.energy.ca.gov";
@@ -559,27 +558,6 @@ function normalizeCandidate(
   };
 }
 
-// See module header VANISHED-CANDIDATE FIX. Minimal stub: since matchKey
-// resolves directly to an existing DB row here (this matchKey was created
-// by an earlier run of this same source), upsertNormalizedProject deletes
-// it via the RESOLVED_STAGES path before ever reading most of these
-// fields, so only matchKey/currentStage need to be meaningful.
-function buildVanishedStub(matchKey: string, docketNumber: string): NormalizedProject {
-  return {
-    matchKey,
-    name: `CEC Docket ${docketNumber} (no longer Under Review/Suspended)`,
-    projectType: "generation",
-    fuelType: "other",
-    state: "CA",
-    currentStatus: `CEC Docket ${docketNumber}: no longer listed as Under Review or Suspended Proceedings`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `CEC Docket ${docketNumber} no longer appears in CEC's own Under Review / Suspended Proceedings listing.`,
-    sources: [],
-    externalIds: { caCec: docketNumber },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -594,7 +572,6 @@ export async function ingestCaCecDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
-  const stillListedMatchKeys = new Set<string>();
 
   for (const candidate of candidates) {
     try {
@@ -604,7 +581,6 @@ export async function ingestCaCecDockets(maxCandidates = MAX_CANDIDATES): Promis
         errors.push({ matchKey: candidate.href, message: "No Docket Number found on detail page" });
         continue;
       }
-      stillListedMatchKeys.add(resolveMatchKey("ca-cec", detail.docketNumber));
       const filings = await fetchDocketFilings(detail.docketNumber);
       const resolution = checkDocketResolution(filings);
       const normalized = normalizeCandidate(candidate, detail, resolution);
@@ -615,24 +591,10 @@ export async function ingestCaCecDockets(maxCandidates = MAX_CANDIDATES): Promis
     await sleep(REQUEST_DELAY_MS);
   }
 
-  // See module header VANISHED-CANDIDATE FIX: the listing query itself is
-  // scoped to Project Status Under_Review/Suspended_Proceedings only, so a
-  // project CEC marks resolved (Denied, Compliance - Construction, etc.)
-  // simply vanishes from `allCandidates` above rather than being caught by
-  // this module's own docket-log resolution check. Any matchKey this
-  // source previously tracked that isn't present among this run's listed
-  // candidates is pushed through as a resolved stub so
-  // upsertNormalizedProjects deletes the stale row.
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "ca-cec:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && !stillListedMatchKeys.has(matchKey)) {
-      const docketNumber = matchKey.slice("ca-cec:".length);
-      toUpsert.push(buildVanishedStub(matchKey, docketNumber));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a project CEC
+  // marks resolved (or reclassified out of the listing query entirely) is
+  // deliberately left untouched now, not guessed into a resolved stage —
+  // see the header for why.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

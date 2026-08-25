@@ -1,6 +1,13 @@
+import {
+  PROJECT_STAGE_BY_VALUE,
+  STATUS_BUCKETS,
+  statusBucketForStage,
+  type FuelType,
+  type ProjectStage,
+  type ProjectType,
+  type StatusBucket,
+} from "@/lib/data/taxonomies";
 import type { ProjectDTO } from "@/lib/types";
-import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
-import { PROJECT_STAGE_BY_VALUE } from "@/lib/data/taxonomies";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 
 // Not a stored field — this site doesn't have one canonical "source" column
@@ -36,6 +43,11 @@ export const SOURCE_OPTIONS: { value: SourceKey; label: string }[] = [
 ];
 
 export interface FilterState {
+  // Single-select, always set (never null) — unlike every other filter
+  // below, there's no "no filter" state for Status; "in_permitting" IS
+  // the default/no-op value, matching this site's original always-waiting
+  // project set exactly. See DEFAULT_FILTERS.
+  status: StatusBucket;
   minYearsWaiting: number | null; // e.g. 1, 3, 5 quick presets, or null = no minimum
   fuelTypes: FuelType[];
   projectTypes: ProjectType[];
@@ -52,6 +64,7 @@ export interface FilterState {
 }
 
 export const DEFAULT_FILTERS: FilterState = {
+  status: "in_permitting",
   minYearsWaiting: null,
   fuelTypes: [],
   projectTypes: [],
@@ -64,6 +77,7 @@ export const DEFAULT_FILTERS: FilterState = {
 
 export function hasActiveFilters(f: FilterState): boolean {
   return (
+    f.status !== DEFAULT_FILTERS.status ||
     f.minYearsWaiting != null ||
     f.fuelTypes.length > 0 ||
     f.projectTypes.length > 0 ||
@@ -76,6 +90,7 @@ export function hasActiveFilters(f: FilterState): boolean {
 }
 
 export function matchesFilters(p: ProjectDTO, f: FilterState): boolean {
+  if (statusBucketForStage(p.currentStage) !== f.status) return false;
   if (f.minYearsWaiting != null) {
     if (p.yearsWaiting == null || p.yearsWaiting < f.minYearsWaiting) return false;
   }
@@ -97,6 +112,13 @@ export interface FilterChip {
 
 export function buildChips(f: FilterState): FilterChip[] {
   const chips: FilterChip[] = [];
+  if (f.status !== DEFAULT_FILTERS.status) {
+    chips.push({
+      key: "status",
+      label: STATUS_BUCKETS.find((s) => s.value === f.status)?.label ?? f.status,
+      onRemove: (state) => ({ ...state, status: DEFAULT_FILTERS.status }),
+    });
+  }
   if (f.minYearsWaiting != null) {
     chips.push({
       key: "minYears",

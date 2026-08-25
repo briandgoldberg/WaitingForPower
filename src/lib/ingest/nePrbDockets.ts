@@ -225,32 +225,28 @@
 // approach) rather than splitting a matched phrase on whitespace, which
 // would have broken these four names apart.
 //
-// VANISHED-CANDIDATE FIX: applicable and applied. This module's candidate
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): this module's candidate
 // pool is scoped to a rolling LOOKBACK_MONTHS window of Minutes (see
 // FETCHING) — so a genuinely still-open case (real, confirmed possible: see
 // PRB-4063-M's real ~3.5-month span above) that a PREVIOUS run tracked
 // could, in principle, age out of a LATER run's window before it's ever
-// resolved, silently vanishing from that run's candidate list the same way
-// wvPscDockets.ts's own Active-only case search can silently drop a case —
-// see that file's header for why upsertNormalizedProject (common.ts) alone
-// can't handle this on its own (it only deletes a project it's *passed*
-// with a RESOLVED_STAGES stage, never diffing "everything previously
-// tracked, minus what showed up this run"). Fixed the same way: after
-// building this run's full candidate map (every PRB-NNNN[-suffix] mention
-// found within the window, including out-of-scope -M ones, since those
-// could never have created a tracked "ne-prb:" row in the first place),
-// every "ne-prb:" matchKey previously tracked in the DB that is NOT among
-// this run's mentioned case numbers is pushed through as a minimal resolved
-// stub (buildVanishedStub) with currentStage="cancelled", so
-// upsertNormalizedProjects deletes the stale row. Given LOOKBACK_MONTHS is
-// set generously (24 months) against a real confirmed maximum span of ~3.5
-// months, this is a defensive/forward-looking fix, not something expected
-// to trigger often in practice. Separately, and unlike ctCscDockets.ts's
-// pure "vanished" scenario: a case that resolves WHILE STILL inside the
-// lookback window is not a vanished-candidate case at all — it's simply
+// resolved. Originally fixed by pushing a resolved stub (guessing
+// currentStage="cancelled") for any previously-tracked "ne-prb:" matchKey
+// no longer among the window's mentioned case numbers, so common.ts would
+// delete it. That fix is now itself superseded: common.ts no longer
+// deletes resolved-stage projects (they're kept and surfaced through the
+// frontend's Status filter), so guessing "cancelled" for an aged-out case
+// would mean permanently mislabeling it — possibly wrongly, since most
+// real PRB outcomes found in this module's own calibration were grants —
+// in a bucket real users can now see. A case that ages out of the window
+// is therefore left untouched, not guessed into a resolved stage. Given
+// LOOKBACK_MONTHS is set generously (24 months) against a real confirmed
+// maximum span of ~3.5 months, this is expected to be a rare, mostly
+// theoretical gap in practice. A case that resolves WHILE STILL inside
+// the lookback window is unaffected by this change at all: it's simply
 // re-normalized every run, and pickResolutionMention naturally finds its
-// resolving paragraph and returns a RESOLVED_STAGES stage for it, so
-// common.ts's own ordinary delete path handles it without any extra code.
+// resolving paragraph and returns a real resolved stage for it directly
+// from the main loop.
 //
 // Real per-run timing measured 2026-08-24 against the live population
 // (LOOKBACK_MONTHS=24: ~3 archive-listing page fetches plus ~24 individual
@@ -282,7 +278,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const BASE_URL = "https://powerreview.nebraska.gov";
 const ARCHIVE_URL = `${BASE_URL}/minutes-archive`;
@@ -811,28 +806,6 @@ function normalizeCase(
   };
 }
 
-// See module header VANISHED-CANDIDATE FIX. Minimal stub: since matchKey
-// resolves directly to an existing DB row here (this matchKey was created
-// by an earlier run of this same source), upsertNormalizedProject deletes
-// it via the RESOLVED_STAGES path before ever reading most of these
-// fields, so only matchKey/currentStage need to be meaningful.
-function buildVanishedStub(matchKey: string, sourceId: string): NormalizedProject {
-  const caseDisplay = `PRB-${sourceId}`;
-  return {
-    matchKey,
-    name: `${caseDisplay} (no longer found in recent NE PRB minutes)`,
-    projectType: "transmission",
-    fuelType: "other",
-    state: "NE",
-    currentStatus: `Nebraska PRB ${caseDisplay}: no longer mentioned in the Board's minutes within the last ${LOOKBACK_MONTHS} months`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `Nebraska PRB ${caseDisplay} no longer appears in the Board's own meeting minutes within this module's lookback window.`,
-    sources: [],
-    externalIds: { nePrb: sourceId },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -886,26 +859,9 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
     }
   }
 
-  // See module header VANISHED-CANDIDATE FIX. Uses the FULL mention set
-  // (allEntries, including out-of-scope -M ones) as the "not vanished"
-  // signal — a -M case could never have created a tracked "ne-prb:" row to
-  // begin with, so including it here is harmless, but excluding it would
-  // incorrectly treat a case whose suffix classification changed (e.g. a
-  // real data-entry correction) as vanished rather than simply
-  // out-of-scope.
-  const stillPresentMatchKeys = new Set(
-    allEntries.map(([, mentions]) => resolveMatchKey("ne-prb", `${mentions[0].caseNumber}${mentions[0].suffix ?? ""}`)),
-  );
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "ne-prb:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && !stillPresentMatchKeys.has(matchKey)) {
-      const sourceId = matchKey.slice("ne-prb:".length);
-      toUpsert.push(buildVanishedStub(matchKey, sourceId));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a case that
+  // ages out of LOOKBACK_MONTHS is deliberately left untouched now, not
+  // guessed into a resolved stage — see the header for why.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

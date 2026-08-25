@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { FUEL_TYPES, PROJECT_TYPES, TRACKED_PROJECT_STAGES } from "@/lib/data/taxonomies";
+import { FUEL_TYPES, PROJECT_TYPES, STATUS_BUCKETS, TRACKED_PROJECT_STAGES } from "@/lib/data/taxonomies";
 import { SOURCE_OPTIONS } from "@/lib/filters";
 import type { FilterState, SourceKey } from "@/lib/filters";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
@@ -87,6 +87,20 @@ export function FilterPanel({
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
+      <Section title="Status">
+        <select
+          value={filters.status}
+          onChange={(e) => onChange({ ...filters, status: e.target.value as FilterState["status"] })}
+          className="w-full rounded-md border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-sm"
+        >
+          {STATUS_BUCKETS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </Section>
+
       <Section title="State">
         <select
           value={filters.state ?? ""}

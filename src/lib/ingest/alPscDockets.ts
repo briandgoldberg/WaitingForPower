@@ -191,44 +191,30 @@
 // county extraction. Confirmed live against Docket 33513's real caption
 // ("...LOCATED IN AUTAUGA COUNTY, ALABAMA").
 //
-// VANISHED-CANDIDATE FIX: the classic shape this series has documented in
-// ctCscDockets.ts/wvPscDockets.ts/tnTpucDockets.ts/caCecDockets.ts — where a
-// candidate QUERY is scoped to an "Active"/"Pending" status filter the
-// source itself applies, so a docket that resolves between runs vanishes
-// from the query before this module ever observes its new status — does
-// NOT apply here: `discoverCandidates` always re-scans the full
-// LOOKBACK_YEARS window by FILED DATE (never by status), so a
-// previously-tracked docket that has since resolved is found again on
-// every subsequent run and its resolution is freshly re-derived from its
-// Documents tab every time.
-// BUT a DIFFERENT, real path to the exact same "stale row frozen forever"
-// outcome was found live during this module's own development (this
-// project's mandatory full live-DB-verification step is what caught it,
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): the classic shape this
+// series documented (a candidate QUERY scoped to an "Active"/"Pending"
+// status filter, so a resolved docket vanishes from the query before its
+// new status is ever observed) does not apply here — `discoverCandidates`
+// always re-scans the full LOOKBACK_YEARS window by FILED DATE, not
+// status, so a previously-tracked docket is found again every run
+// regardless of its outcome. A DIFFERENT real path to the same "stale row
+// frozen forever" outcome was found live during this module's own
+// development (this project's mandatory full live-DB-verification step,
 // not a hypothetical): the first working version's content classification
-// was too loose (see SCOPING's REQUEST_RE discussion — it initially
-// upserted two real false positives, an informal rate-mechanism meeting
-// and a generic EV-charging-jurisdiction rulemaking, as "local_review"
-// candidates). Once REQUEST_RE/PROCEDURAL_EXCLUDE_RE were tightened to
-// correctly reject them, the main loop below simply `continue`s past a
-// content-rejected candidate without ever pushing a RESOLVED_STAGES stub —
-// and upsertNormalizedProject only ever deletes a project it's *passed* —
-// so those two already-upserted rows would have frozen in the DB forever.
-// Fixed the same way as this series' other vanished-candidate fixes, just
-// triggered by a content decision instead of a status filter: every al-psc
-// matchKey previously tracked in the DB that this run reached a confident
-// decision about (pushed through OR positively rejected by content
-// filtering — `decidedMatchKeys`) but that didn't end up in `toUpsert` gets
-// a resolved stub pushed through so upsertNormalizedProjects deletes it.
-// (Confirmed live: after adding this fix, re-running against the DB left
-// by the pre-fix version correctly reduced the al-psc row count from 2
-// false positives back to 0 real open candidates — see dry-run JSON
-// reported alongside this module.) A matchKey outside both
-// `decidedMatchKeys` and `toUpsert` (a docket whose filed date has aged
-// out of LOOKBACK_YEARS, or whose per-candidate fetch errored this run) is
-// deliberately left untouched — the same slow, practically-irrelevant
-// lookback-drift gap mdPscDockets.ts's own LOOKBACK_YEARS caveat
-// documents, and the same "never delete on a transient error" safeguard
-// wvPscDockets.ts's own fix preserves.
+// was too loose (see SCOPING's REQUEST_RE discussion) and upserted two
+// real false positives before REQUEST_RE/PROCEDURAL_EXCLUDE_RE were
+// tightened to correctly reject them — at which point they'd have frozen
+// in the DB with no code path ever revisiting them. Originally fixed by
+// pushing a resolved stub (guessing currentStage="cancelled") for any
+// previously-tracked matchKey this run positively rejected by content
+// filtering, so common.ts would delete it. That fix is now itself
+// superseded: common.ts no longer deletes resolved-stage projects (they're
+// kept and surfaced through the frontend's Status filter), so guessing
+// "cancelled" would mean permanently mislabeling a docket that might
+// actually be granted, in a bucket real users can now see. A docket that
+// fails this run's content classification is therefore left untouched —
+// not guessed into a resolved stage — the same call wvPscDockets.ts's
+// header documents for its own superseded fix.
 //
 // Wired to Vercel Cron weekly, 09:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-al-psc/route.ts). Real full-population timing
@@ -243,7 +229,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const BASE_URL = "https://www.pscpublicaccess.alabama.gov/pscpublicaccess";
 const PORTAL_URL = `${BASE_URL}/page/psc-searches/portal.aspx`;
@@ -867,28 +852,6 @@ function normalizeCandidate(detail: DocketDetail, resolution: Resolution): Norma
   };
 }
 
-// See VANISHED-CANDIDATE FIX (revised) below. Minimal stub: matchKey
-// resolves to an existing DB row created by an earlier run of this same
-// source, so upsertNormalizedProject deletes it via the RESOLVED_STAGES
-// path before reading most of these fields — only matchKey/currentStage
-// need to be meaningful, same convention wvPscDockets.ts's own
-// buildVanishedStub documents.
-function buildVanishedStub(matchKey: string, docketNumber: string): NormalizedProject {
-  return {
-    matchKey,
-    name: `Alabama PSC Docket ${docketNumber} (no longer a tracked candidate)`,
-    projectType: "generation",
-    fuelType: "other",
-    state: "AL",
-    currentStatus: `Alabama PSC Docket ${docketNumber}: no longer confirmed as an open electric CPCN application`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `Alabama PSC Docket ${docketNumber} no longer matches this source's own electric-CPCN-application criteria (resolved, reclassified, or aged out of the lookback window).`,
-    sources: [],
-    externalIds: { alPsc: docketNumber },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -925,15 +888,8 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
-  // See VANISHED-CANDIDATE FIX (revised): matchKeys this run made a
-  // confident decision about (pushed through OR positively confirmed NOT a
-  // real electric CPCN application) are safe to reconcile against the DB
-  // below; a matchKey that merely errored is left alone so a transient
-  // failure never masquerades as "no longer a candidate".
-  const decidedMatchKeys = new Set<string>();
 
   for (const candidate of candidates.slice(0, maxCandidates)) {
-    const matchKey = resolveMatchKey("al-psc", candidate.docketNumber);
     try {
       const detail = await fetchDocketDetail(candidate.docketId);
       const combinedText = `${detail.description} ${detail.synopsis}`;
@@ -944,13 +900,7 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
         !ELECTRIC_RE.test(combinedText)
       ) {
         // Not a real electric generation/storage/transmission CPCN
-        // application — see module header SCOPING. Still counts as
-        // "decided" so a stale DB row from an earlier, looser filtering
-        // pass gets cleaned up (see VANISHED-CANDIDATE FIX below — this is
-        // the real, live-confirmed way that happened during development:
-        // two false positives were tightened out by REQUEST_RE/
-        // PROCEDURAL_EXCLUDE_RE after already being upserted once).
-        decidedMatchKeys.add(matchKey);
+        // application — see module header SCOPING.
         continue;
       }
       realApplicationCandidates += 1;
@@ -958,44 +908,16 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       const docs = await fetchDocketDocuments(cookie, candidate.docketId);
       const resolution = detectResolution(docs);
       toUpsert.push(normalizeCandidate(detail, resolution));
-      decidedMatchKeys.add(matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.docketNumber, message: String(err) });
     }
     await sleep(REQUEST_DELAY_MS);
   }
 
-  // VANISHED-CANDIDATE FIX (revised from this series' usual shape): this
-  // module's own candidate discovery is NOT scoped to an "Active"/"Pending"
-  // status filter the way ctCscDockets.ts/wvPscDockets.ts/tnTpucDockets.ts/
-  // caCecDockets.ts are (see module header VANISHED-CANDIDATE FIX for why
-  // that specific bug class doesn't apply to a filed-date-scoped re-scan) —
-  // but a DIFFERENT, real path to the same "stale row frozen forever"
-  // outcome was found live during this module's own development: a
-  // previously-upserted docket can later fail this module's own CONTENT
-  // classification (REQUEST_RE/PROCEDURAL_EXCLUDE_RE/ELECTRIC_RE/
-  // NON_ELECTRIC_RE), at which point the main loop above simply `continue`s
-  // past it without ever pushing a RESOLVED_STAGES stub — and
-  // upsertNormalizedProject only ever deletes a project it's *passed*, so
-  // that row would otherwise freeze in the DB forever. Fixed the same way
-  // as this series' other vanished-candidate fixes: any al-psc matchKey
-  // previously tracked in the DB that this run made a confident decision
-  // about (`decidedMatchKeys`) but did NOT end up in `toUpsert` is exactly
-  // the "this docket is no longer a real open candidate" case and gets a
-  // resolved stub pushed through. A matchKey outside BOTH `decidedMatchKeys`
-  // and `toUpsert` (i.e. aged out of the LOOKBACK_YEARS window, or the
-  // per-candidate fetch errored) is left untouched, not cleaned up.
-  const upsertedMatchKeys = new Set(toUpsert.map((p) => p.matchKey));
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "al-psc:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && decidedMatchKeys.has(matchKey) && !upsertedMatchKeys.has(matchKey)) {
-      const docketNumber = matchKey.slice("al-psc:".length);
-      toUpsert.push(buildVanishedStub(matchKey, docketNumber));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a docket that
+  // fails this run's content classification after a previous run upserted
+  // it real is deliberately left untouched now, not guessed into a
+  // resolved stage — see the header for why.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

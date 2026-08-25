@@ -117,16 +117,20 @@ function slugify(name: string, matchKey: string): string {
  * project self-heal exactly once, the next time its own source naturally
  * re-ingests it, without a separate backfill migration script.
  *
- * RESOLVED_STAGES ENFORCEMENT: if `p.currentStage` is one of
- * RESOLVED_STAGES (approved/under construction/cancelled/completed — see
- * taxonomies.ts), this site doesn't track it. Rather than silently
- * declining to create it (which would leave a stale row behind for a
- * project a *previous* ingestion run had tracked as still-waiting, now
- * that it's cleared/cancelled/finished), this deletes any existing row
- * (matched the same matchKey-then-slug-fallback way as above) and returns
- * null without creating a new one — so a project that transitions out of
- * "waiting" between ingestion runs disappears from the site rather than
- * freezing in its last-known waiting state.
+ * RESOLVED_STAGES: if `p.currentStage` is one of RESOLVED_STAGES
+ * (approved/under construction/cancelled/completed — see taxonomies.ts),
+ * this project is still written like any other, never deleted or skipped.
+ * Historically (before 2026-08-25) this function deleted any existing row
+ * once a project's stage transitioned into RESOLVED_STAGES, on the theory
+ * that this site only tracked projects still waiting on a regulatory yes.
+ * Product direction changed: the site now keeps every project regardless
+ * of outcome, surfaced through the frontend's Status filter (see
+ * statusBucketForStage in taxonomies.ts and src/lib/filters.ts) — "In
+ * Permitting" by default (matching the old always-waiting behavior
+ * exactly, so this is not a behavior change for anyone not using the new
+ * filter), plus "Cancelled / Suspended" and "Permits Complete" as
+ * explicit opt-in views. A resolved-stage project therefore just updates
+ * (or creates) normally below, same as any other stage.
  */
 export async function upsertNormalizedProject(p: NormalizedProject) {
   // Slug is only computed once, at creation, from whichever source's
@@ -139,11 +143,6 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
   const existing =
     (await prisma.project.findUnique({ where: { matchKey: p.matchKey } })) ??
     (await prisma.project.findUnique({ where: { slug } }));
-
-  if (RESOLVED_STAGES.includes(p.currentStage)) {
-    if (existing) await prisma.project.delete({ where: { id: existing.id } });
-    return null;
-  }
 
   const fields = {
     name: p.name,
@@ -220,6 +219,16 @@ export async function upsertNormalizedProject(p: NormalizedProject) {
  * route, src/app/api/cron/ingest-eia/route.ts). Running a bounded number of
  * projects concurrently instead cuts that to seconds, without opening so
  * many connections at once that the database chokes.
+ *
+ * `removedResolved` is a legacy field name kept for interface stability
+ * across every ingestion module's own `IngestSummary` type and console
+ * logging (dozens of call sites) rather than mechanically renamed — since
+ * RESOLVED_STAGES projects are no longer deleted (see
+ * upsertNormalizedProject), it no longer counts something disjoint from
+ * `upserted`; it's now a *subset* count of how many of this run's
+ * successful writes carried a resolved stage (approved/under
+ * construction/cancelled/completed), for the same "how many resolved
+ * this run" signal each module's own CLI summary line already reports.
  */
 export async function upsertNormalizedProjects(
   projects: NormalizedProject[],
@@ -235,14 +244,8 @@ export async function upsertNormalizedProjects(
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
       if (result.status === "fulfilled") {
-        // null means RESOLVED_STAGES caught this one — see
-        // upsertNormalizedProject: it was deleted (or never existed), not
-        // created/updated, so it shouldn't count toward "upserted".
-        if (result.value === null) {
-          removedResolved += 1;
-        } else {
-          upserted += 1;
-        }
+        upserted += 1;
+        if (RESOLVED_STAGES.includes(batch[j].currentStage)) removedResolved += 1;
       } else {
         errors.push({ matchKey: batch[j].matchKey, message: String(result.reason) });
       }

@@ -191,24 +191,21 @@
 // Buren" — matched as a specific higher-priority two-word case before the
 // generic single-word fallback.
 //
-// VANISHED-CANDIDATE FIX: a preventive fix applied before shipping,
-// carried over from a real structural bug found and fixed live in
-// ctCscDockets.ts and wvPscDockets.ts (see their headers) — every source
-// in this series whose own candidate list is scoped to "currently active/
-// open" only (rather than the full historical population) has the same
-// latent gap: common.ts's upsertNormalizedProject only ever deletes a
-// project it's *passed in* with a RESOLVED_STAGES stage, never diffing
-// "everything previously tracked, minus what showed up this run," so a
-// project that quietly drops off the source's own "active" definition
-// (here: TPUC moves a docket to its separate Inactive archive after 6
-// months of no filing activity — see FETCHING above) would otherwise
-// freeze in the DB forever rather than being cleaned up. Fixed the same
-// way as those two modules: previously-tracked tn-tpuc matchKeys are
-// diffed against each run's active-docket list and pushed through as a
-// resolved stub for anything that vanished (see buildVanishedStub). Purely
-// preventive here since this source's real live population is currently
-// zero (see SCOPING) — nothing exists yet to have gone stale — but applied
-// for consistency rather than waiting to hit the same bug a third time.
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): TPUC moves a docket to
+// its separate Inactive archive after 6 months of no filing activity (see
+// FETCHING above), so a tracked docket that goes idle vanishes from
+// `docketNumbers` entirely. Originally, per this series' standard fix,
+// previously-tracked tn-tpuc matchKeys were diffed against each run's
+// active-docket list and pushed through as a resolved stub (guessing
+// currentStage="cancelled") for anything that vanished, so common.ts
+// would delete it. That fix is now itself superseded: common.ts no
+// longer deletes resolved-stage projects (they're kept and surfaced
+// through the frontend's Status filter), so guessing "cancelled" for a
+// docket that moved to Inactive would mean permanently mislabeling it —
+// possibly wrongly — in a bucket real users can now see. A docket that
+// goes idle is therefore left untouched, not guessed into a resolved
+// stage. This source's real live population is currently zero (see
+// SCOPING), so nothing exists yet for this gap to actually affect.
 //
 // Wired to Vercel Cron weekly, 06:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-tn-tpuc/route.ts). Real timing measured
@@ -221,7 +218,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const BASE_URL = "https://tpucdockets.tn.gov";
 const ACTIVE_INDEX_URL = `${BASE_URL}/indexes/TPUCActiveDocketIndex.htm`;
@@ -569,27 +565,6 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
   };
 }
 
-// See module header VANISHED-CANDIDATE FIX. Minimal stub: since matchKey
-// resolves directly to an existing DB row here (this matchKey was created
-// by an earlier run of this same source), upsertNormalizedProject deletes
-// it via the RESOLVED_STAGES path before ever reading most of these
-// fields, so only matchKey/currentStage need to be meaningful.
-function buildVanishedStub(matchKey: string, docketNumber: string): NormalizedProject {
-  return {
-    matchKey,
-    name: `Tennessee TPUC Docket No. ${docketNumber} (no longer active)`,
-    projectType: "transmission",
-    fuelType: "other",
-    state: "TN",
-    currentStatus: `Tennessee TPUC Docket No. ${docketNumber}: no longer listed on TPUC's own Active Docket Index`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `Tennessee TPUC Docket No. ${docketNumber} no longer appears on TPUC's own Active Docket Index (moved to the Inactive archive after 6 months of no filing activity).`,
-    sources: [],
-    externalIds: { tnTpuc: docketNumber },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -618,33 +593,9 @@ export async function ingestTnTpucDockets(maxCandidates = MAX_CANDIDATES): Promi
     await sleep(REQUEST_DELAY_MS);
   }
 
-  // See module header VANISHED-CANDIDATE FIX: TPUC's own Active Docket
-  // Index only lists dockets with filing activity in the past 6 months —
-  // a docket that resolves and then goes idle moves to a separate
-  // Inactive archive and vanishes from `docketNumbers` above entirely,
-  // never reaching isElectricCcnCandidate/resolveDocket again. Any matchKey
-  // this source previously tracked that isn't present among this run's
-  // full active-docket list (not just the electric-CCN-filtered subset —
-  // the trigger is absence from TPUC's own Active index, not this module's
-  // own content filter) is pushed through as a resolved stub so
-  // upsertNormalizedProjects deletes the stale row. Currently a purely
-  // preventive fix (this source's real live population is zero — see
-  // module header SCOPING — so there is nothing to actually go stale
-  // today), applied for the same reason ctCscDockets.ts's and
-  // wvPscDockets.ts's headers document finding this exact bug class live.
-  const stillActiveMatchKeys = new Set(
-    docketNumbers.map((docketNumber) => resolveMatchKey("tn-tpuc", docketNumber)),
-  );
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "tn-tpuc:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && !stillActiveMatchKeys.has(matchKey)) {
-      const docketNumber = matchKey.slice("tn-tpuc:".length);
-      toUpsert.push(buildVanishedStub(matchKey, docketNumber));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a docket that
+  // moves to TPUC's Inactive archive is deliberately left untouched now,
+  // not guessed into a resolved stage — see the header for why.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

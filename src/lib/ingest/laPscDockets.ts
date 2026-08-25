@@ -183,28 +183,25 @@
 //       DENY_RE/DISMISS_RE/GRANT_RE below all correctly fail to match this
 //       text, leaving the docket correctly classified as still pending.
 //
-// VANISHED-CANDIDATE FIX: applies here, confirmed by the same reasoning
-// wvPscDockets.ts's header documents. This module's own candidate query is
-// scoped to a moving `[today - LOOKBACK_YEARS, today]` docket-search date
-// window (see LOOKBACK_YEARS) — a real docket this module previously
-// tracked as still-pending (local_review) that never receives a resolving
-// Order simply ages out of that window on some future run, `LOOKBACK_YEARS`
-// later, without ever being pushed through with a RESOLVED_STAGES stage.
-// Left unfixed, upsertNormalizedProject (common.ts) would never revisit or
-// delete that stale row, since it only ever deletes a project it's *passed*
-// with a resolved stage. Fixed the same way as wvPscDockets.ts: after
-// building this run's set of still-real-and-still-open candidate matchKeys,
-// every "la-psc:" matchKey previously tracked in the DB that is NOT in that
-// set is pushed through as a minimal resolved stub (buildVanishedStub) with
-// currentStage="cancelled", so upsertNormalizedProjects deletes it. This
-// also transparently covers the (unlikely, given LPSC's own 90/120/180-day
-// certificate-decision targets, but real and observed — Southern Spirit ran
-// ~18 months) case of a docket resolving via Order between runs: the
-// resolved docket is simply pushed through with currentStage=
-// approved_awaiting_construction/cancelled directly from the main loop
-// (RESOLVED_STAGES also deletes it), same as every other module in this
-// series — the vanished-candidate path exists specifically for the
-// window-aging scenario the main loop can never see.
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): this module's own
+// candidate query is scoped to a moving `[today - LOOKBACK_YEARS, today]`
+// docket-search date window (see LOOKBACK_YEARS) — a real docket this
+// module previously tracked as still-pending (local_review) that never
+// receives a resolving Order simply ages out of that window on some
+// future run without ever being pushed through with a resolved stage.
+// Originally fixed by pushing a resolved stub (guessing
+// currentStage="cancelled") for any previously-tracked "la-psc:" matchKey
+// no longer in this run's still-open set, so common.ts would delete it.
+// That fix is now itself superseded: common.ts no longer deletes
+// resolved-stage projects (they're kept and surfaced through the
+// frontend's Status filter), so guessing "cancelled" for an aged-out
+// docket would mean permanently mislabeling it — possibly wrongly, since
+// LPSC grants far more often than it denies/dismisses — in a bucket real
+// users can now see. A docket that ages out of the lookback window is
+// therefore left untouched, not guessed into a resolved stage. A docket
+// that resolves via a real Order WITHIN the window is unaffected by this
+// change at all: it's still pushed through with its real resolved stage
+// directly from the main loop, same as every other module in this series.
 //
 // FUEL/PROJECT TYPE & CAPACITY: extracted from each docket's own Synopsis
 // text (no separate detail-page or PDF fetch — the Synopsis already has
@@ -299,7 +296,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const BASE_URL = "https://lpscpubvalence.lpsc.louisiana.gov";
 const DOCKET_SEARCH_URL = `${BASE_URL}/portal/PSC/DocketSearch`;
@@ -727,27 +723,6 @@ function normalizeDocket(record: DocketListRecord, detail: DocketDetail, resolut
   };
 }
 
-// See module header VANISHED-CANDIDATE FIX. Minimal stub: since matchKey
-// resolves directly to an existing DB row here (this matchKey was created
-// by an earlier run of this same source), upsertNormalizedProject deletes
-// it via the RESOLVED_STAGES path before ever reading most of these fields,
-// so only matchKey/currentStage need to be meaningful.
-function buildVanishedStub(matchKey: string, docketNumber: string): NormalizedProject {
-  return {
-    matchKey,
-    name: `Louisiana PSC Docket ${docketNumber} (no longer tracked)`,
-    projectType: "generation",
-    fuelType: "other",
-    state: "LA",
-    currentStatus: `Louisiana PSC Docket ${docketNumber}: no longer within this module's tracked docket window`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `Louisiana PSC Docket ${docketNumber} is no longer within this module's tracked lookback window and was not confirmed resolved before aging out — removed defensively. See the ingestion module header's VANISHED-CANDIDATE FIX note.`,
-    sources: [],
-    externalIds: { laPsc: docketNumber },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -767,12 +742,6 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
-  // Tracks every matchKey this run confirms as a real, still-open (not yet
-  // resolved via Order) candidate — used by the vanished-candidate fix
-  // below. Resolved-this-run candidates are intentionally NOT added here:
-  // they're already pushed through with a RESOLVED_STAGES stage in the main
-  // loop, which upsertNormalizedProjects deletes on its own.
-  const stillOpenMatchKeys = new Set<string>();
 
   for (const record of allCandidates.slice(0, maxCandidates)) {
     const matchKey = resolveMatchKey("la-psc", record.docketNumber);
@@ -794,31 +763,15 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       const resolution = detectResolution(orders);
       const normalized = normalizeDocket(record, detail, resolution);
       toUpsert.push(normalized);
-      if (resolution === null) stillOpenMatchKeys.add(matchKey);
     } catch (err) {
       errors.push({ matchKey, message: String(err) });
     }
   }
 
-  // See module header VANISHED-CANDIDATE FIX: this module's own candidate
-  // query is scoped to a moving `[today - LOOKBACK_YEARS, today]` window, so
-  // a docket this module previously tracked as still-open can age out of
-  // that window on a future run without ever receiving a resolving Order.
-  // Any "la-psc:" matchKey previously tracked in the DB that isn't in
-  // `stillOpenMatchKeys` from this run (regardless of maxCandidates
-  // truncation or content-filter status — the trigger is simply absence
-  // from this run's confirmed-still-open set) is pushed through as a
-  // resolved stub so upsertNormalizedProjects deletes the stale row.
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "la-psc:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && !stillOpenMatchKeys.has(matchKey)) {
-      const docketNumber = matchKey.slice("la-psc:".length);
-      toUpsert.push(buildVanishedStub(matchKey, docketNumber));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a docket that
+  // ages out of the LOOKBACK_YEARS window without ever receiving a
+  // resolving Order is deliberately left untouched now, not guessed into
+  // a resolved stage — see the header for why.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

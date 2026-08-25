@@ -126,21 +126,21 @@
 // separately checked live and confirmed to return zero real cases, so are
 // not separately guarded against — nothing to calibrate them from).
 //
-// VANISHED-CANDIDATE FIX: the same real structural bug class this project's
-// other modules found (see wvPscDockets.ts's header for the canonical
-// writeup) applies here for the identical reason — every run's candidate
+// VANISHED-CANDIDATE FIX (superseded 2026-08-25): every run's candidate
 // pool is built from IPUC's own `closed=0` (open) case list, so once IPUC
 // flips a tracked case's own closed flag to 1, that case simply vanishes
 // from every future run's fetch entirely, and this module's own defense-in-
 // depth Status check (see STATUS above) never runs on it because it's never
-// fetched again. Fixed the same way as wvPscDockets.ts: after building this
-// run's full open-case-number set (all real open Electric cases, not just
-// the CPCN-scoped subset — mirrors wvPscDockets.ts's own choice to use the
-// full pre-content-filter search result set, since a matchKey that was never
-// upserted in the first place has no stale row to clean up regardless), any
-// "id-puc:" matchKey previously tracked in the DB that isn't in that set is
-// pushed through as a minimal resolved stub (buildVanishedStub) with
-// currentStage="cancelled" so upsertNormalizedProjects deletes the stale row.
+// fetched again. Originally fixed by pushing a resolved stub (guessing
+// currentStage="cancelled") for any previously-tracked "id-puc:" matchKey
+// no longer in this run's full open-case set, so common.ts would delete it.
+// That fix is now itself superseded: common.ts no longer deletes
+// resolved-stage projects (they're kept and surfaced through the
+// frontend's Status filter), so guessing "cancelled" for a closed case
+// would mean permanently mislabeling it — possibly wrongly, since it could
+// just as easily have been granted — in a bucket real users can now see.
+// A case whose closed flag has flipped is therefore left untouched, not
+// guessed into a resolved stage.
 //
 // FUEL/PROJECT TYPE & CAPACITY: extracted from the case Description, same
 // keyword-over-prose approach as every other module in this series. Idaho's
@@ -199,7 +199,6 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
-import { prisma } from "@/lib/db";
 
 const BASE_URL = "https://puc.idaho.gov";
 // util=1 confirmed live to mean "Electric" (the site's own Electric-utility
@@ -479,27 +478,6 @@ function normalizeCase(row: OpenCaseRow, detail: CaseDetail): NormalizedProject 
   };
 }
 
-// See module header VANISHED-CANDIDATE FIX. Minimal stub: since matchKey
-// resolves directly to an existing DB row here (this matchKey was created by
-// an earlier run of this same source), upsertNormalizedProject deletes it
-// via the RESOLVED_STAGES path before ever reading most of these fields, so
-// only matchKey/currentStage need to be meaningful.
-function buildVanishedStub(matchKey: string, caseNumber: string): NormalizedProject {
-  return {
-    matchKey,
-    name: `Idaho PUC Case ${caseNumber} (no longer open)`,
-    projectType: "transmission",
-    fuelType: "other",
-    state: "ID",
-    currentStatus: `Idaho PUC Case ${caseNumber}: no longer listed as open by IPUC's own case search`,
-    currentStage: "cancelled",
-    causeSlugs: ["local_state_opposition"],
-    causeDetail: `Idaho PUC Case ${caseNumber} no longer appears in IPUC's own open-case search.`,
-    sources: [],
-    externalIds: { idPuc: caseNumber },
-  };
-}
-
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
@@ -528,28 +506,9 @@ export async function ingestIdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
     await sleep(REQUEST_DELAY_MS);
   }
 
-  // See module header VANISHED-CANDIDATE FIX: IPUC's own case search is
-  // scoped to closed=0 (open only), so a case whose closed flag has already
-  // flipped simply vanishes from `allOpenCases` above rather than being
-  // caught by this module's own Status-field defense-in-depth check. Any
-  // matchKey this source previously tracked that isn't present among this
-  // run's full open-case set (all real open Electric cases, not just the
-  // CPCN-scoped subset — mirrors wvPscDockets.ts's own choice, see header)
-  // is pushed through as a resolved stub so upsertNormalizedProjects deletes
-  // the stale row.
-  const stillOpenMatchKeys = new Set(
-    allOpenCases.map((row) => resolveMatchKey("id-puc", row.caseNumber)),
-  );
-  const previouslyTracked = await prisma.project.findMany({
-    where: { matchKey: { startsWith: "id-puc:" } },
-    select: { matchKey: true },
-  });
-  for (const { matchKey } of previouslyTracked) {
-    if (matchKey && !stillOpenMatchKeys.has(matchKey)) {
-      const caseNumber = matchKey.slice("id-puc:".length);
-      toUpsert.push(buildVanishedStub(matchKey, caseNumber));
-    }
-  }
+  // See module header VANISHED-CANDIDATE FIX (superseded): a case whose
+  // closed flag has already flipped is deliberately left untouched now,
+  // not guessed into a resolved stage — see the header for why.
 
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
 

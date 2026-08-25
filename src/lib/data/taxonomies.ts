@@ -98,18 +98,19 @@ export const PROJECT_STAGES: { value: ProjectStage; label: string }[] = [
   { value: "completed", label: "Completed" },
 ];
 
-// This site tracks projects still waiting on a regulatory yes — a project
-// that has already cleared approval, started construction, been
-// cancelled, or finished is no longer "waiting" by definition (see
-// README's framing). Per explicit product decision, these four stages are
-// excluded from the site entirely rather than just deprioritized: no
-// ingestion module may create a project in one of these stages, and
-// upsertNormalizedProject (src/lib/ingest/common.ts) deletes any
-// previously-tracked project whose stage transitions into one of these on
-// a later ingestion run, rather than leaving a stale "still waiting" row
-// behind. See PROJECT_STAGES above for their labels — kept defined (not
-// deleted from the type) since they're still meaningful values a source
-// can report, just not ones this site displays.
+// Originally (through 2026-08-25) this site tracked ONLY projects still
+// waiting on a regulatory yes — RESOLVED_STAGES marked the four stages
+// that meant a project was no longer "waiting" (cleared approval, started
+// construction, cancelled, or finished), and upsertNormalizedProject
+// (src/lib/ingest/common.ts) deleted any previously-tracked project whose
+// stage transitioned into one of these. Product direction changed: the
+// site now keeps every project regardless of outcome (common.ts no longer
+// deletes on RESOLVED_STAGES), surfaced through the frontend's Status
+// filter (see StatusBucket/statusBucketForStage below) instead of hidden
+// from the dataset entirely. RESOLVED_STAGES itself is unchanged in
+// meaning — "this stage means the project is no longer waiting" — just no
+// longer used to delete; it's now the input to statusBucketForStage's
+// Cancelled/Suspended vs. Permits Complete split.
 export const RESOLVED_STAGES: ProjectStage[] = [
   "approved_awaiting_construction",
   "under_construction",
@@ -117,12 +118,52 @@ export const RESOLVED_STAGES: ProjectStage[] = [
   "completed",
 ];
 
-// PROJECT_STAGES filtered to the stages a project can actually have on
-// this site — for filter-pill UI, so users never see a filter option that
-// always returns zero results.
+// PROJECT_STAGES filtered to the "still waiting" stages — for the Stage
+// filter-pill UI, which only ever offers sub-stage granularity within the
+// default "In Permitting" status bucket (see StatusBucket below); a
+// resolved-stage project is reached via the Status filter instead, not
+// the Stage pills.
 export const TRACKED_PROJECT_STAGES = PROJECT_STAGES.filter(
   (s) => !RESOLVED_STAGES.includes(s.value),
 );
+
+// The three broad buckets the frontend's top-level Status filter offers —
+// coarser than the individual ProjectStage values above, and the thing
+// most users actually want to ask ("is this still in permitting, did it
+// die, or did it get through?"). "in_permitting" is every non-resolved
+// stage (unchanged from this site's original "waiting" definition, so
+// it's the default filter value — see DEFAULT_FILTERS in
+// src/lib/filters.ts — and reproduces the exact same project set/count
+// this site always showed, before resolved-stage projects started being
+// kept at all).
+export type StatusBucket = "in_permitting" | "cancelled_suspended" | "permits_complete";
+
+export const STATUS_BUCKETS: { value: StatusBucket; label: string }[] = [
+  { value: "in_permitting", label: "In Permitting" },
+  { value: "cancelled_suspended", label: "Cancelled / Suspended" },
+  { value: "permits_complete", label: "Permits Complete" },
+];
+
+// No ingestion module in this project currently distinguishes a genuine
+// "suspended" outcome from "cancelled" — there's no separate
+// ProjectStage for it (a handful of module headers document a source's
+// own "Suspended Proceedings"-style status, but none of those currently
+// map to a RESOLVED_STAGES value). "cancelled" is the only real stage
+// behind the "Cancelled / Suspended" bucket today; kept as its own array
+// (not just RESOLVED_STAGES minus the Permits Complete stages) so a
+// future "suspended" ProjectStage has one obvious place to wire in.
+const CANCELLED_SUSPENDED_STAGES: ProjectStage[] = ["cancelled"];
+const PERMITS_COMPLETE_STAGES: ProjectStage[] = [
+  "approved_awaiting_construction",
+  "under_construction",
+  "completed",
+];
+
+export function statusBucketForStage(stage: ProjectStage): StatusBucket {
+  if (CANCELLED_SUSPENDED_STAGES.includes(stage)) return "cancelled_suspended";
+  if (PERMITS_COMPLETE_STAGES.includes(stage)) return "permits_complete";
+  return "in_permitting";
+}
 
 export const PROJECT_STAGE_BY_VALUE: Record<ProjectStage, string> = Object.fromEntries(
   PROJECT_STAGES.map(({ value, label }) => [value, label]),

@@ -58,9 +58,7 @@ export default async function HomePage() {
             Know what&rsquo;s changing at America&rsquo;s energy projects.
           </h1>
           <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
-            Real-time intelligence on U.S. energy permitting — every new filing, stage advance,
-            approval, and cancellation, as it&rsquo;s detected. This is the same feed a custom
-            data feed, API, or notification subscription is built from.
+            Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
           </p>
         </div>
 
@@ -68,7 +66,13 @@ export default async function HomePage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
             Recent changes
           </h2>
-          <Link href="/contact" className="text-xs underline text-[var(--accent)]">
+          {/* Inline style, not the text-[var(--accent)] utility — see
+              globals.css's `a { color: inherit }` rule, which sits outside
+              Tailwind's layered utilities and silently wins over any
+              text-color class applied to a link. Confirmed live: every
+              text-[var(--accent)] link on the site was rendering as the
+              default foreground color, not accent, until this. */}
+          <Link href="/contact" className="text-xs underline" style={{ color: "var(--accent)" }}>
             Get a custom feed →
           </Link>
         </div>
@@ -82,7 +86,8 @@ export default async function HomePage() {
           </p>
           <Link
             href="/projects"
-            className="text-sm font-medium px-3 py-1.5 rounded-md bg-[var(--accent)] text-white hover:opacity-90"
+            className="text-sm font-medium px-3 py-1.5 rounded-md border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+            style={{ color: "var(--accent)" }}
           >
             Explore the map & full list →
           </Link>

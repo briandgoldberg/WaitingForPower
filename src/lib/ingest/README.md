@@ -54,12 +54,13 @@ sources that can be re-run and stay current on their own).
 | `sdPucDockets.ts` | South Dakota Public Utilities Commission (PUC) Energy Conversion and Transmission Facility permit dockets (SDCL 49-41B) | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (12:00 UTC), `/api/cron/ingest-sd-puc`. |
 | `ndPscDockets.ts` | North Dakota Public Service Commission (PSC) Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) | Yes — server-rendered HTML + real order PDFs (parsed via `pdf-parse`), no auth | None (no auth) | Cron daily (12:30 UTC), `/api/cron/ingest-nd-psc`. |
 | `ncNcucDockets.ts` | North Carolina Utilities Commission (NCUC) Electric Generation Certificate (EGC) + Electric Transmission Line Certificate (ETL) dockets | Yes — server-rendered HTML (ASP.NET WebForms behind Cloudflare, non-standard `__VIEWSTATE1` postback counter), no auth | None (no auth) | Cron daily (13:30 UTC), `/api/cron/ingest-nc-ncuc`. |
+| `wyIscDockets.ts` | Wyoming DEQ Industrial Siting Council (ISC) permit dockets | Yes — a public Google Drive folder, listed via Drive's legacy unauthenticated `embeddedfolderview` HTML endpoint (the state's own embedded file-browser widget is broken site-wide; the folder's own "click here" fallback link is what this module actually uses), no auth | None (no auth) | Cron daily (14:30 UTC), `/api/cron/ingest-wy-isc`. |
 
 Every source runs via Vercel Cron (see `vercel.json`) with no manual step
 required. Cadence changed twice: every 3 days at launch, moved to weekly on
 2026-08-23 to cut Vercel invocation volume on a Hobby plan, and moved again
 2026-08-25 (after upgrading off Hobby) to match each source's own real
-publish cadence instead of one uniform schedule — the 39 state PUC/PSC/
+publish cadence instead of one uniform schedule — the 40 state PUC/PSC/
 siting-authority dockets plus the Permitting Dashboard's live API now run
 **daily**, since same-day filings are exactly what the homepage changes
 feed (see `src/lib/changes.ts`) is built to surface; `eia860mPlanned.ts`,

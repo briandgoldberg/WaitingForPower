@@ -52,7 +52,8 @@
     "ingest:vt-puc": "tsx src/lib/ingest/vtPucDockets.ts",
     "ingest:sd-puc": "tsx src/lib/ingest/sdPucDockets.ts",
     "ingest:nd-psc": "tsx src/lib/ingest/ndPscDockets.ts",
-    "ingest:nc-ncuc": "tsx src/lib/ingest/ncNcucDockets.ts"
+    "ingest:nc-ncuc": "tsx src/lib/ingest/ncNcucDockets.ts",
+    "ingest:wy-isc": "tsx src/lib/ingest/wyIscDockets.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

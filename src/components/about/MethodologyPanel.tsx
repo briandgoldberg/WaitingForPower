@@ -588,6 +588,12 @@ export function MethodologyPanel() {
             </a>{" "}
             — Utilities Commission
           </li>
+          <li>
+            <a href="https://deq.wyoming.gov/industrial-siting-2/permitting/" target="_blank" rel="noreferrer" className="underline">
+              Wyoming
+            </a>{" "}
+            — DEQ Industrial Siting Council
+          </li>
         </ul>
         <p className="text-xs text-[var(--muted)] mt-2">
           Not exactly geocoded: state-docket sources publish a county, not exact coordinates, so
@@ -609,7 +615,7 @@ export function MethodologyPanel() {
         <p className="text-sm mb-3">
           Every source above runs on an automated job (Vercel Cron) — there is no manual,
           hand-curated data on this site. Cadence is matched to how often each source actually
-          publishes: the 39 state PUC/PSC/siting-authority dockets and the Federal Permitting
+          publishes: the 40 state PUC/PSC/siting-authority dockets and the Federal Permitting
           Dashboard&rsquo;s live API are checked daily, since same-day filings are exactly what
           the homepage changes feed is built to surface. The four sources whose underlying data
           only republishes monthly, quarterly, or annually (EIA-860M, LBNL Queued Up, ORNL
@@ -760,9 +766,12 @@ export function MethodologyPanel() {
           <li>
             <strong>North Carolina Utilities Commission</strong> — checked daily at 13:30 UTC.
           </li>
+          <li>
+            <strong>Wyoming DEQ Industrial Siting Council</strong> — checked daily at 14:30 UTC.
+          </li>
         </ul>
         <p className="text-sm mt-3">
-          Forty sources run daily, every source staggered 30 minutes apart across the
+          Forty-one sources run daily, every source staggered 30 minutes apart across the
           clock (13:00 UTC through 12:30 UTC the next day) so no two ingestion runs overlap; the
           four monthly/quarterly/annual sources above run on the same staggered schedule but only
           once a week. Every ingestion run upserts by a stable per-source

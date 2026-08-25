@@ -4,11 +4,9 @@ import { useState } from "react";
 
 const TOPICS = [
   { value: "data-access", label: "Data feeds, API access, or custom data" },
-  { value: "partnership", label: "Partnership or campaign collaboration" },
-  { value: "press", label: "Press or media inquiry" },
+  { value: "partnership", label: "Partnership, press, or media" },
   { value: "data", label: "Add a project or data source" },
-  { value: "feedback", label: "Feedback or suggestion" },
-  { value: "bug", label: "Report a technical issue" },
+  { value: "feedback", label: "Feedback or a technical issue" },
   { value: "other", label: "Something else" },
 ] as const;
 
@@ -22,10 +20,10 @@ function isTopicValue(value: string | undefined): value is TopicValue {
 // src/app/contact/page.tsx) — used by the homepage changes feed's "Get a
 // custom feed" link to land directly on the data-access radio pre-selected,
 // rather than making someone re-select it. Falls back to the plain-visit
-// default ("bug") for any missing/unrecognized value rather than trusting
-// arbitrary query-string input.
+// default ("feedback") for any missing/unrecognized value rather than
+// trusting arbitrary query-string input.
 export function ContactPanel({ initialTopic }: { initialTopic?: string } = {}) {
-  const [topic, setTopic] = useState<TopicValue>(isTopicValue(initialTopic) ? initialTopic : "bug");
+  const [topic, setTopic] = useState<TopicValue>(isTopicValue(initialTopic) ? initialTopic : "feedback");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");

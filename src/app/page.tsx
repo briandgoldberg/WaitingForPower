@@ -55,7 +55,7 @@ export default async function HomePage() {
       <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Know what&rsquo;s changing in America&rsquo;s energy permitting.
+            Track America&rsquo;s energy permitting in real time.
           </h1>
           <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
             Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.

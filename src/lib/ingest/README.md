@@ -10,62 +10,64 @@ sources that can be re-run and stay current on their own).
 | Module | Source | Live API? | Auth needed | Scheduled? |
 |---|---|---|---|---|
 | `eia860mPlanned.ts` | EIA-860M "Planned" generator inventory | Yes — monthly Excel workbook, auto-discovered | Free API key not required for this module (see `eia.ts` below for the one that does) | Cron weekly (13:00 UTC Sundays), `/api/cron/ingest-eia` |
-| `permittingDashboard.ts` | Federal Permitting Dashboard (FAST-41) | Yes — public Socrata endpoint | None found needed | Cron weekly (14:00 UTC Sundays), `/api/cron/ingest-permitting-dashboard` |
+| `permittingDashboard.ts` | Federal Permitting Dashboard (FAST-41) | Yes — public Socrata endpoint | None found needed | Cron daily (14:00 UTC), `/api/cron/ingest-permitting-dashboard` |
 | `lbnlQueuedUp.ts` | LBNL Queued Up | Yes — annual Excel workbook, scraped off the landing page | None (no auth, just a browser-like User-Agent — see file header) | Cron weekly (15:00 UTC Sundays), `/api/cron/ingest-lbnl`, even though LBNL itself only republishes ~annually — see file header for why checking this still makes sense |
 | `ornlHydropowerRelicensing.ts` | ORNL HydroSource hydropower relicensing/license-surrender dataset | Yes — annual Excel workbook, edition-year page auto-discovered then scraped, same two-step pattern as LBNL | None (no auth, just a browser-like User-Agent) | Cron weekly (16:00 UTC Sundays), `/api/cron/ingest-ornl-hydro`, same "cheap periodic check of an annual source" rationale as LBNL |
 | `eiaPipelineProjects.ts` | EIA "Natural Gas Pipeline Projects" tracker | Yes — quarterly Excel workbook, scraped off the landing page (naming convention itself isn't consistent — see file header) | None (no auth) | Cron weekly (17:00 UTC Sundays), `/api/cron/ingest-eia-pipelines` |
 | `eia.ts` | EIA API v2 `operating-generator-capacity` | Yes | Free API key | **Superseded, do not run** — see file header. This route only covers already-operating plants; `eia860mPlanned.ts` replaced it. |
-| `vaSccDockets.ts` | Virginia State Corporation Commission (SCC) CPCN dockets | Yes — public Breeze/OData JSON API, no auth | None (no auth) | Cron weekly (18:00 UTC Sundays), `/api/cron/ingest-va-scc`. |
-| `txPuctDockets.ts` | Texas Public Utility Commission (PUCT) CCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (18:30 UTC Sundays), `/api/cron/ingest-tx-puct`. |
-| `coPucDockets.ts` | Colorado Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (Oracle PL/SQL web gateway), no auth | None (no auth) | Cron weekly (19:00 UTC Sundays), `/api/cron/ingest-co-puc`. |
-| `ohOpsbCases.ts` | Ohio Power Siting Board (OPSB) cases | Yes — single JSON endpoint, no auth | None (no auth) | Cron weekly (19:30 UTC Sundays), `/api/cron/ingest-oh-opsb`. |
-| `scPscDockets.ts` | South Carolina Public Service Commission (PSC) siting-certificate dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (20:00 UTC Sundays), `/api/cron/ingest-sc-psc`. |
-| `azAccLineSiting.ts` | Arizona Corporation Commission (ACC) Line Siting Committee dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (20:30 UTC Sundays), `/api/cron/ingest-az-acc`. |
-| `waEfsecFacilities.ts` | Washington Energy Facility Site Evaluation Council (EFSEC) facility site-certifications | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (21:00 UTC Sundays), `/api/cron/ingest-wa-efsec`. |
-| `nmPrcDockets.ts` | New Mexico Public Regulation Commission (PRC) CCN dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (21:30 UTC Sundays), `/api/cron/ingest-nm-prc`. |
-| `ilIccDockets.ts` | Illinois Commerce Commission (ICC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (22:00 UTC Sundays), `/api/cron/ingest-il-icc`. |
-| `flPscDockets.ts` | Florida PSC determination-of-need dockets + DEP siting applications | Yes — real JSON API (PSC) + server-rendered HTML (DEP), no auth | None (no auth) | Cron weekly (22:30 UTC Sundays), `/api/cron/ingest-fl-psc`. |
-| `nyDpsDockets.ts` | New York DPS Article VII (transmission) + Article VIII/94-c (renewable siting) dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (23:00 UTC Sundays), `/api/cron/ingest-ny-dps`. |
-| `nvPucnDockets.ts` | Nevada PUCN Utility Environmental Protection Act (UEPA) permit dockets | Yes — legacy ASP.NET WebForms + real JSON API (OnBase), no auth | None (no auth) | Cron weekly (23:30 UTC Sundays), `/api/cron/ingest-nv-pucn`. |
-| `orEfscFacilities.ts` | Oregon Energy Facility Siting Council (EFSC) facility site-certifications | Yes — real JSON API (SharePoint REST), no auth | None (no auth) | Cron weekly (00:00 UTC Mondays), `/api/cron/ingest-or-efsc`. |
-| `maEfsbDockets.ts` | Massachusetts Energy Facilities Siting Board (EFSB) dockets | Yes — real JSON API, no auth | None (no auth) | Cron weekly (00:30 UTC Mondays), `/api/cron/ingest-ma-efsb`. |
-| `okOccDockets.ts` | Oklahoma Corporation Commission (OCC) High Voltage Transmission Certificate of Authority dockets | Yes — real JSON API (Laserfiche WebLink), no auth | None (no auth) | Cron weekly (01:00 UTC Mondays), `/api/cron/ingest-ok-occ`. |
-| `utPscDockets.ts` | Utah Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (01:30 UTC Mondays), `/api/cron/ingest-ut-psc`. |
-| `wiPscDockets.ts` | Wisconsin PSC CPCN / Certificate of Authority dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron weekly (02:00 UTC Mondays), `/api/cron/ingest-wi-psc`. |
-| `kyPscDockets.ts` | Kentucky PSC CPCN / Certificate of Construction dockets | Yes — server-rendered HTML (ASP.NET MVC), no auth | None (no auth) | Cron weekly (02:30 UTC Mondays), `/api/cron/ingest-ky-psc`. |
-| `moPscDockets.ts` | Missouri PSC Certificate of Convenience and Necessity dockets | Yes — real JSON API (ASP.NET Core MVC, antiforgery-protected), no auth | None (no auth) | Cron weekly (03:00 UTC Mondays), `/api/cron/ingest-mo-psc`. |
-| `inIurcDockets.ts` | Indiana Utility Regulatory Commission (IURC) CPCN dockets | Yes — real JSON API (separate companion Azure App Service), no auth | None (no auth) | Cron weekly (03:30 UTC Mondays), `/api/cron/ingest-in-iurc`. |
-| `njBpuDockets.ts` | New Jersey Board of Public Utilities (BPU) 40:55D-19 determination + CSI siting-waiver dockets | Yes — server-rendered HTML (ASP.NET WebForms, Imperva-fronted), no auth | None (no auth) | Cron weekly (04:00 UTC Mondays), `/api/cron/ingest-nj-bpu`. |
-| `mdPscDockets.ts` | Maryland Public Service Commission (PSC) Certificate of Public Convenience and Necessity (CPCN) dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-less viewstate-only postback), no auth | None (no auth) | Cron weekly (04:30 UTC Mondays), `/api/cron/ingest-md-psc`. |
-| `ctCscDockets.ts` | Connecticut Siting Council (CSC) Certificate of Environmental Compatibility and Public Need dockets/petitions | Yes — server-rendered HTML (hand-authored CMS, no search/API), no auth | None (no auth) | Cron weekly (05:00 UTC Mondays), `/api/cron/ingest-ct-csc`. |
-| `wvPscDockets.ts` | West Virginia Public Service Commission (PSC) CPCN + Siting Certificate dockets | Yes — server-rendered HTML (decades-old ColdFusion), no auth | None (no auth) | Cron weekly (05:30 UTC Mondays), `/api/cron/ingest-wv-psc`. |
-| `tnTpucDockets.ts` | Tennessee Public Utility Commission (TPUC) CCN dockets | Yes — server-rendered static HTML (S3/CloudFront), no auth | None (no auth) | Cron weekly (06:00 UTC Mondays), `/api/cron/ingest-tn-tpuc`. |
-| `caCecDockets.ts` | California Energy Commission (CEC) power plant siting dockets (AFC + Opt-In) | Yes — server-rendered HTML (Drupal + ASP.NET WebForms), no auth | None (no auth) | Cron weekly (06:30 UTC Mondays), `/api/cron/ingest-ca-cec`. |
-| `nhSecDockets.ts` | New Hampshire Site Evaluation Committee (SEC) dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron weekly (07:00 UTC Mondays), `/api/cron/ingest-nh-sec`. |
-| `idPucDockets.ts` | Idaho Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (ASP.NET-ish CMS), no auth | None (no auth) | Cron weekly (07:30 UTC Mondays), `/api/cron/ingest-id-puc`. |
-| `nePrbDockets.ts` | Nebraska Power Review Board (PRB) generation/transmission/storage applications | Yes — server-rendered HTML (Drupal, prose-only meeting minutes, no search tool), no auth | None (no auth) | Cron weekly (08:00 UTC Mondays), `/api/cron/ingest-ne-prb`. |
-| `laPscDockets.ts` | Louisiana Public Service Commission (LPSC) generation/storage/transmission certification dockets | Yes — real JSON API (ASP.NET MVC + Kendo UI), no auth | None (no auth) | Cron weekly (08:30 UTC Mondays), `/api/cron/ingest-la-psc`. |
-| `alPscDockets.ts` | Alabama Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML (stateful ASP.NET WebForms via session cookie, no ViewState), no auth | None (no auth) | Cron weekly (09:00 UTC Mondays), `/api/cron/ingest-al-psc`. |
-| `arPscDockets.ts` | Arkansas Public Service Commission (APSC) Certificate of Environmental Compatibility and Public Need (CECPN) + Certificate of Convenience and Necessity (CCN) dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (09:30 UTC Mondays), `/api/cron/ingest-ar-psc`. |
-| `dePscDockets.ts` | Delaware PSC Transmission CPCN (26 Del. C. §203F) + Community Energy Facility siting dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-based), no auth | None (no auth) | Cron weekly (10:00 UTC Mondays), `/api/cron/ingest-de-psc`. |
-| `meDepSiteLawPermits.ts` | Maine DEP Land Bureau Site Location of Development Act ("Site Law") permits | Yes — real ArcGIS REST endpoint, no auth | None (no auth) | Cron weekly (10:30 UTC Mondays), `/api/cron/ingest-me-dep`. |
-| `riEfsbDockets.ts` | Rhode Island Energy Facility Siting Board (EFSB) major-energy-facility license dockets | Yes — server-rendered HTML (Drupal/Acquia CMS), no auth | None (no auth) | Cron weekly (11:00 UTC Mondays), `/api/cron/ingest-ri-efsb`. |
-| `vtPucDockets.ts` | Vermont Public Utility Commission (PUC) Certificate of Public Good (CPG, 30 V.S.A. §248) dockets | Yes — server-rendered HTML (Drupal 7), no auth | None (no auth) | Cron weekly (11:30 UTC Mondays), `/api/cron/ingest-vt-puc`. |
-| `sdPucDockets.ts` | South Dakota Public Utilities Commission (PUC) Energy Conversion and Transmission Facility permit dockets (SDCL 49-41B) | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly (12:00 UTC Mondays), `/api/cron/ingest-sd-puc`. |
-| `ndPscDockets.ts` | North Dakota Public Service Commission (PSC) Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) | Yes — server-rendered HTML + real order PDFs (parsed via `pdf-parse`), no auth | None (no auth) | Cron weekly (12:30 UTC Mondays), `/api/cron/ingest-nd-psc`. |
+| `vaSccDockets.ts` | Virginia State Corporation Commission (SCC) CPCN dockets | Yes — public Breeze/OData JSON API, no auth | None (no auth) | Cron daily (18:00 UTC), `/api/cron/ingest-va-scc`. |
+| `txPuctDockets.ts` | Texas Public Utility Commission (PUCT) CCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (18:30 UTC), `/api/cron/ingest-tx-puct`. |
+| `coPucDockets.ts` | Colorado Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (Oracle PL/SQL web gateway), no auth | None (no auth) | Cron daily (19:00 UTC), `/api/cron/ingest-co-puc`. |
+| `ohOpsbCases.ts` | Ohio Power Siting Board (OPSB) cases | Yes — single JSON endpoint, no auth | None (no auth) | Cron daily (19:30 UTC), `/api/cron/ingest-oh-opsb`. |
+| `scPscDockets.ts` | South Carolina Public Service Commission (PSC) siting-certificate dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (20:00 UTC), `/api/cron/ingest-sc-psc`. |
+| `azAccLineSiting.ts` | Arizona Corporation Commission (ACC) Line Siting Committee dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (20:30 UTC), `/api/cron/ingest-az-acc`. |
+| `waEfsecFacilities.ts` | Washington Energy Facility Site Evaluation Council (EFSEC) facility site-certifications | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (21:00 UTC), `/api/cron/ingest-wa-efsec`. |
+| `nmPrcDockets.ts` | New Mexico Public Regulation Commission (PRC) CCN dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (21:30 UTC), `/api/cron/ingest-nm-prc`. |
+| `ilIccDockets.ts` | Illinois Commerce Commission (ICC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (22:00 UTC), `/api/cron/ingest-il-icc`. |
+| `flPscDockets.ts` | Florida PSC determination-of-need dockets + DEP siting applications | Yes — real JSON API (PSC) + server-rendered HTML (DEP), no auth | None (no auth) | Cron daily (22:30 UTC), `/api/cron/ingest-fl-psc`. |
+| `nyDpsDockets.ts` | New York DPS Article VII (transmission) + Article VIII/94-c (renewable siting) dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (23:00 UTC), `/api/cron/ingest-ny-dps`. |
+| `nvPucnDockets.ts` | Nevada PUCN Utility Environmental Protection Act (UEPA) permit dockets | Yes — legacy ASP.NET WebForms + real JSON API (OnBase), no auth | None (no auth) | Cron daily (23:30 UTC), `/api/cron/ingest-nv-pucn`. |
+| `orEfscFacilities.ts` | Oregon Energy Facility Siting Council (EFSC) facility site-certifications | Yes — real JSON API (SharePoint REST), no auth | None (no auth) | Cron daily (00:00 UTC), `/api/cron/ingest-or-efsc`. |
+| `maEfsbDockets.ts` | Massachusetts Energy Facilities Siting Board (EFSB) dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (00:30 UTC), `/api/cron/ingest-ma-efsb`. |
+| `okOccDockets.ts` | Oklahoma Corporation Commission (OCC) High Voltage Transmission Certificate of Authority dockets | Yes — real JSON API (Laserfiche WebLink), no auth | None (no auth) | Cron daily (01:00 UTC), `/api/cron/ingest-ok-occ`. |
+| `utPscDockets.ts` | Utah Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (01:30 UTC), `/api/cron/ingest-ut-psc`. |
+| `wiPscDockets.ts` | Wisconsin PSC CPCN / Certificate of Authority dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron daily (02:00 UTC), `/api/cron/ingest-wi-psc`. |
+| `kyPscDockets.ts` | Kentucky PSC CPCN / Certificate of Construction dockets | Yes — server-rendered HTML (ASP.NET MVC), no auth | None (no auth) | Cron daily (02:30 UTC), `/api/cron/ingest-ky-psc`. |
+| `moPscDockets.ts` | Missouri PSC Certificate of Convenience and Necessity dockets | Yes — real JSON API (ASP.NET Core MVC, antiforgery-protected), no auth | None (no auth) | Cron daily (03:00 UTC), `/api/cron/ingest-mo-psc`. |
+| `inIurcDockets.ts` | Indiana Utility Regulatory Commission (IURC) CPCN dockets | Yes — real JSON API (separate companion Azure App Service), no auth | None (no auth) | Cron daily (03:30 UTC), `/api/cron/ingest-in-iurc`. |
+| `njBpuDockets.ts` | New Jersey Board of Public Utilities (BPU) 40:55D-19 determination + CSI siting-waiver dockets | Yes — server-rendered HTML (ASP.NET WebForms, Imperva-fronted), no auth | None (no auth) | Cron daily (04:00 UTC), `/api/cron/ingest-nj-bpu`. |
+| `mdPscDockets.ts` | Maryland Public Service Commission (PSC) Certificate of Public Convenience and Necessity (CPCN) dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-less viewstate-only postback), no auth | None (no auth) | Cron daily (04:30 UTC), `/api/cron/ingest-md-psc`. |
+| `ctCscDockets.ts` | Connecticut Siting Council (CSC) Certificate of Environmental Compatibility and Public Need dockets/petitions | Yes — server-rendered HTML (hand-authored CMS, no search/API), no auth | None (no auth) | Cron daily (05:00 UTC), `/api/cron/ingest-ct-csc`. |
+| `wvPscDockets.ts` | West Virginia Public Service Commission (PSC) CPCN + Siting Certificate dockets | Yes — server-rendered HTML (decades-old ColdFusion), no auth | None (no auth) | Cron daily (05:30 UTC), `/api/cron/ingest-wv-psc`. |
+| `tnTpucDockets.ts` | Tennessee Public Utility Commission (TPUC) CCN dockets | Yes — server-rendered static HTML (S3/CloudFront), no auth | None (no auth) | Cron daily (06:00 UTC), `/api/cron/ingest-tn-tpuc`. |
+| `caCecDockets.ts` | California Energy Commission (CEC) power plant siting dockets (AFC + Opt-In) | Yes — server-rendered HTML (Drupal + ASP.NET WebForms), no auth | None (no auth) | Cron daily (06:30 UTC), `/api/cron/ingest-ca-cec`. |
+| `nhSecDockets.ts` | New Hampshire Site Evaluation Committee (SEC) dockets | Yes — server-rendered HTML (ASP.NET WebForms), no auth | None (no auth) | Cron daily (07:00 UTC), `/api/cron/ingest-nh-sec`. |
+| `idPucDockets.ts` | Idaho Public Utilities Commission (PUC) CPCN dockets | Yes — server-rendered HTML (ASP.NET-ish CMS), no auth | None (no auth) | Cron daily (07:30 UTC), `/api/cron/ingest-id-puc`. |
+| `nePrbDockets.ts` | Nebraska Power Review Board (PRB) generation/transmission/storage applications | Yes — server-rendered HTML (Drupal, prose-only meeting minutes, no search tool), no auth | None (no auth) | Cron daily (08:00 UTC), `/api/cron/ingest-ne-prb`. |
+| `laPscDockets.ts` | Louisiana Public Service Commission (LPSC) generation/storage/transmission certification dockets | Yes — real JSON API (ASP.NET MVC + Kendo UI), no auth | None (no auth) | Cron daily (08:30 UTC), `/api/cron/ingest-la-psc`. |
+| `alPscDockets.ts` | Alabama Public Service Commission (PSC) CPCN dockets | Yes — server-rendered HTML (stateful ASP.NET WebForms via session cookie, no ViewState), no auth | None (no auth) | Cron daily (09:00 UTC), `/api/cron/ingest-al-psc`. |
+| `arPscDockets.ts` | Arkansas Public Service Commission (APSC) Certificate of Environmental Compatibility and Public Need (CECPN) + Certificate of Convenience and Necessity (CCN) dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (09:30 UTC), `/api/cron/ingest-ar-psc`. |
+| `dePscDockets.ts` | Delaware PSC Transmission CPCN (26 Del. C. §203F) + Community Energy Facility siting dockets | Yes — server-rendered HTML (ASP.NET WebForms, cookie-based), no auth | None (no auth) | Cron daily (10:00 UTC), `/api/cron/ingest-de-psc`. |
+| `meDepSiteLawPermits.ts` | Maine DEP Land Bureau Site Location of Development Act ("Site Law") permits | Yes — real ArcGIS REST endpoint, no auth | None (no auth) | Cron daily (10:30 UTC), `/api/cron/ingest-me-dep`. |
+| `riEfsbDockets.ts` | Rhode Island Energy Facility Siting Board (EFSB) major-energy-facility license dockets | Yes — server-rendered HTML (Drupal/Acquia CMS), no auth | None (no auth) | Cron daily (11:00 UTC), `/api/cron/ingest-ri-efsb`. |
+| `vtPucDockets.ts` | Vermont Public Utility Commission (PUC) Certificate of Public Good (CPG, 30 V.S.A. §248) dockets | Yes — server-rendered HTML (Drupal 7), no auth | None (no auth) | Cron daily (11:30 UTC), `/api/cron/ingest-vt-puc`. |
+| `sdPucDockets.ts` | South Dakota Public Utilities Commission (PUC) Energy Conversion and Transmission Facility permit dockets (SDCL 49-41B) | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (12:00 UTC), `/api/cron/ingest-sd-puc`. |
+| `ndPscDockets.ts` | North Dakota Public Service Commission (PSC) Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) | Yes — server-rendered HTML + real order PDFs (parsed via `pdf-parse`), no auth | None (no auth) | Cron daily (12:30 UTC), `/api/cron/ingest-nd-psc`. |
 
-All five workbook/API sources above `vaSccDockets.ts` run via Vercel Cron (see `vercel.json`) with no
-manual step required — checking weekly bounds this site's staleness
-to ~1 week behind whatever each source most recently published, it doesn't
-mean the source itself changes that often (EIA-860M republishes monthly, the
-EIA pipeline tracker ~quarterly, LBNL and ORNL annually; only the Permitting
-Dashboard's live API is closer to real-time). Weekly, not the every-3-days
-this site originally shipped with — changed 2026-08-23 to cut Vercel
-invocation volume; five sources running every 3 days was seven runs/source/
-week for no real freshness gain given how infrequently most of these
-sources actually republish. Every ingestion run upserts by
-a stable per-source ID, so re-running a source updates existing projects in place
-rather than duplicating them.
+Every source runs via Vercel Cron (see `vercel.json`) with no manual step
+required. Cadence changed twice: every 3 days at launch, moved to weekly on
+2026-08-23 to cut Vercel invocation volume on a Hobby plan, and moved again
+2026-08-25 (after upgrading off Hobby) to match each source's own real
+publish cadence instead of one uniform schedule — the 39 state PUC/PSC/
+siting-authority dockets plus the Permitting Dashboard's live API now run
+**daily**, since same-day filings are exactly what the homepage changes
+feed (see `src/lib/changes.ts`) is built to surface; `eia860mPlanned.ts`,
+`lbnlQueuedUp.ts`, `ornlHydropowerRelicensing.ts`, and
+`eiaPipelineProjects.ts` stay **weekly** since their underlying sources
+only republish monthly, quarterly, or annually — checking them daily would
+just spend invocations for no freshness gain. Every ingestion run upserts
+by a stable per-source ID, so re-running a source updates existing
+projects in place rather than duplicating them.
 
 Run a module directly with `npx tsx src/lib/ingest/<module>.ts` (or the
 `npm run ingest:eia` / `npm run ingest:permitting-dashboard` / `npm run

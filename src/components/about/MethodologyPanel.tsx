@@ -193,13 +193,14 @@ export function MethodologyPanel() {
           ))}
         </ul>
         <p className="text-sm mt-3 pt-3 border-t border-[var(--border)]">
-          Not shown: a project whose regulatory approval has already been granted, one that&rsquo;s
-          under construction, one that was cancelled/withdrawn, or one that&rsquo;s already
-          operating. This site tracks projects still waiting on a yes — a project that has cleared
-          that hurdle (for better or worse) is deliberately excluded rather than kept around in a
-          stale &ldquo;still waiting&rdquo; state. This is enforced at the data layer: when a
-          source reports a tracked project has moved into one of those states, it&rsquo;s removed
-          from the site on the next ingestion run, not just hidden.
+          The stages above are shown under the <strong>In Permitting</strong> Status filter only —
+          the site&rsquo;s default view, and the one this project count/capacity/investment math
+          is scoped to. A project whose regulatory approval has already been granted, one
+          that&rsquo;s under construction or already complete, or one that was cancelled/withdrawn
+          is kept, not deleted — switch Status to <strong>Permits Complete</strong> or{" "}
+          <strong>Cancelled / Suspended</strong> to see those. (Before 2026-08-25, this site
+          deleted a project once it resolved; that changed so resolved outcomes stay visible
+          instead of disappearing.)
         </p>
       </section>
 
@@ -207,7 +208,8 @@ export function MethodologyPanel() {
         <h2 className="text-lg font-semibold mb-2">Data &amp; sourcing</h2>
         <p className="text-sm mb-4">
           Every project on this site comes from one of the public data sources below, refreshed on
-          a weekly automated schedule — not a one-off, hand-picked list. Each source links out to
+          an automated schedule (daily for most, weekly for a few — see below) — not a one-off,
+          hand-picked list. Each source links out to
           the original public filing or reporting, not just this site&rsquo;s own summary. We
           intentionally stick to sources we can keep current automatically; see the repo&rsquo;s
           README if you&rsquo;re curious why.
@@ -599,13 +601,14 @@ export function MethodologyPanel() {
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-lg font-semibold mb-2">How current is this data?</h2>
         <p className="text-sm mb-3">
-          Every source above runs on an automated job (Vercel Cron), checked weekly — there
-          is no manual, hand-curated data on this site. A periodic check doesn&rsquo;t mean each
-          source itself publishes that often; it means this site never lags more than about a
-          week behind whatever the source most recently published. (Checked every 3 days until
-          2026-08-23, moved to weekly to cut Vercel invocation volume — most of these sources
-          republish far less often than either schedule checks, so the practical staleness
-          difference is small.)
+          Every source above runs on an automated job (Vercel Cron) — there is no manual,
+          hand-curated data on this site. Cadence is matched to how often each source actually
+          publishes: the 39 state PUC/PSC/siting-authority dockets and the Federal Permitting
+          Dashboard&rsquo;s live API are checked daily, since same-day filings are exactly what
+          the homepage changes feed is built to surface. The four sources whose underlying data
+          only republishes monthly, quarterly, or annually (EIA-860M, LBNL Queued Up, ORNL
+          HydroSource, EIA&rsquo;s pipeline tracker) stay weekly — checking them more often
+          wouldn&rsquo;t catch anything new, just spend invocations for no benefit.
         </p>
         <ul className="text-sm flex flex-col gap-2">
           <li>
@@ -614,10 +617,9 @@ export function MethodologyPanel() {
             EIA&rsquo;s end; most checks simply find the same file already ingested and no-op.
           </li>
           <li>
-            <strong>Federal Permitting Dashboard</strong> — checked weekly at 14:00 UTC
-            against a live queryable API, not a periodic file, so this is the closest of the five
-            to real-time: whatever the Permitting Council&rsquo;s data reflects is picked up
-            within about a week.
+            <strong>Federal Permitting Dashboard</strong> — checked daily at 14:00 UTC
+            against a live queryable API, not a periodic file, so whatever the Permitting
+            Council&rsquo;s data reflects is picked up within a day.
           </li>
           <li>
             <strong>LBNL Queued Up</strong> — checked weekly at 15:00 UTC. LBNL republishes
@@ -636,124 +638,125 @@ export function MethodologyPanel() {
             annual sources above.
           </li>
           <li>
-            <strong>Virginia SCC</strong> — checked weekly at 18:00 UTC.
+            <strong>Virginia SCC</strong> — checked daily at 18:00 UTC.
           </li>
           <li>
-            <strong>Texas PUCT</strong> — checked weekly at 18:30 UTC.
+            <strong>Texas PUCT</strong> — checked daily at 18:30 UTC.
           </li>
           <li>
-            <strong>Colorado PUC</strong> — checked weekly at 19:00 UTC.
+            <strong>Colorado PUC</strong> — checked daily at 19:00 UTC.
           </li>
           <li>
-            <strong>Ohio Power Siting Board</strong> — checked weekly at 19:30 UTC.
+            <strong>Ohio Power Siting Board</strong> — checked daily at 19:30 UTC.
           </li>
           <li>
-            <strong>South Carolina PSC</strong> — checked weekly at 20:00 UTC.
+            <strong>South Carolina PSC</strong> — checked daily at 20:00 UTC.
           </li>
           <li>
-            <strong>Arizona Corporation Commission</strong> — checked weekly at 20:30 UTC.
+            <strong>Arizona Corporation Commission</strong> — checked daily at 20:30 UTC.
           </li>
           <li>
-            <strong>Washington EFSEC</strong> — checked weekly at 21:00 UTC.
+            <strong>Washington EFSEC</strong> — checked daily at 21:00 UTC.
           </li>
           <li>
-            <strong>New Mexico PRC</strong> — checked weekly at 21:30 UTC.
+            <strong>New Mexico PRC</strong> — checked daily at 21:30 UTC.
           </li>
           <li>
-            <strong>Illinois Commerce Commission</strong> — checked weekly at 22:00 UTC.
+            <strong>Illinois Commerce Commission</strong> — checked daily at 22:00 UTC.
           </li>
           <li>
-            <strong>Florida PSC + DEP</strong> — checked weekly at 22:30 UTC.
+            <strong>Florida PSC + DEP</strong> — checked daily at 22:30 UTC.
           </li>
           <li>
-            <strong>New York DPS</strong> — checked weekly at 23:00 UTC.
+            <strong>New York DPS</strong> — checked daily at 23:00 UTC.
           </li>
           <li>
-            <strong>Nevada PUCN</strong> — checked weekly at 23:30 UTC.
+            <strong>Nevada PUCN</strong> — checked daily at 23:30 UTC.
           </li>
           <li>
-            <strong>Oregon EFSC</strong> — checked weekly at 00:00 UTC Mondays.
+            <strong>Oregon EFSC</strong> — checked daily at 00:00 UTC.
           </li>
           <li>
-            <strong>Massachusetts EFSB</strong> — checked weekly at 00:30 UTC Mondays.
+            <strong>Massachusetts EFSB</strong> — checked daily at 00:30 UTC.
           </li>
           <li>
-            <strong>Oklahoma OCC</strong> — checked weekly at 01:00 UTC Mondays.
+            <strong>Oklahoma OCC</strong> — checked daily at 01:00 UTC.
           </li>
           <li>
-            <strong>Utah PSC</strong> — checked weekly at 01:30 UTC Mondays.
+            <strong>Utah PSC</strong> — checked daily at 01:30 UTC.
           </li>
           <li>
-            <strong>Wisconsin PSC</strong> — checked weekly at 02:00 UTC Mondays.
+            <strong>Wisconsin PSC</strong> — checked daily at 02:00 UTC.
           </li>
           <li>
-            <strong>Kentucky PSC</strong> — checked weekly at 02:30 UTC Mondays.
+            <strong>Kentucky PSC</strong> — checked daily at 02:30 UTC.
           </li>
           <li>
-            <strong>Missouri PSC</strong> — checked weekly at 03:00 UTC Mondays.
+            <strong>Missouri PSC</strong> — checked daily at 03:00 UTC.
           </li>
           <li>
-            <strong>Indiana IURC</strong> — checked weekly at 03:30 UTC Mondays.
+            <strong>Indiana IURC</strong> — checked daily at 03:30 UTC.
           </li>
           <li>
-            <strong>New Jersey BPU</strong> — checked weekly at 04:00 UTC Mondays.
+            <strong>New Jersey BPU</strong> — checked daily at 04:00 UTC.
           </li>
           <li>
-            <strong>Maryland PSC</strong> — checked weekly at 04:30 UTC Mondays.
+            <strong>Maryland PSC</strong> — checked daily at 04:30 UTC.
           </li>
           <li>
-            <strong>Connecticut CSC</strong> — checked weekly at 05:00 UTC Mondays.
+            <strong>Connecticut CSC</strong> — checked daily at 05:00 UTC.
           </li>
           <li>
-            <strong>West Virginia PSC</strong> — checked weekly at 05:30 UTC Mondays.
+            <strong>West Virginia PSC</strong> — checked daily at 05:30 UTC.
           </li>
           <li>
-            <strong>Tennessee TPUC</strong> — checked weekly at 06:00 UTC Mondays.
+            <strong>Tennessee TPUC</strong> — checked daily at 06:00 UTC.
           </li>
           <li>
-            <strong>California CEC</strong> — checked weekly at 06:30 UTC Mondays.
+            <strong>California CEC</strong> — checked daily at 06:30 UTC.
           </li>
           <li>
-            <strong>New Hampshire SEC</strong> — checked weekly at 07:00 UTC Mondays.
+            <strong>New Hampshire SEC</strong> — checked daily at 07:00 UTC.
           </li>
           <li>
-            <strong>Idaho PUC</strong> — checked weekly at 07:30 UTC Mondays.
+            <strong>Idaho PUC</strong> — checked daily at 07:30 UTC.
           </li>
           <li>
-            <strong>Nebraska PRB</strong> — checked weekly at 08:00 UTC Mondays.
+            <strong>Nebraska PRB</strong> — checked daily at 08:00 UTC.
           </li>
           <li>
-            <strong>Louisiana PSC</strong> — checked weekly at 08:30 UTC Mondays.
+            <strong>Louisiana PSC</strong> — checked daily at 08:30 UTC.
           </li>
           <li>
-            <strong>Alabama PSC</strong> — checked weekly at 09:00 UTC Mondays.
+            <strong>Alabama PSC</strong> — checked daily at 09:00 UTC.
           </li>
           <li>
-            <strong>Arkansas PSC</strong> — checked weekly at 09:30 UTC Mondays.
+            <strong>Arkansas PSC</strong> — checked daily at 09:30 UTC.
           </li>
           <li>
-            <strong>Delaware PSC</strong> — checked weekly at 10:00 UTC Mondays.
+            <strong>Delaware PSC</strong> — checked daily at 10:00 UTC.
           </li>
           <li>
-            <strong>Maine DEP</strong> — checked weekly at 10:30 UTC Mondays.
+            <strong>Maine DEP</strong> — checked daily at 10:30 UTC.
           </li>
           <li>
-            <strong>Rhode Island EFSB</strong> — checked weekly at 11:00 UTC Mondays.
+            <strong>Rhode Island EFSB</strong> — checked daily at 11:00 UTC.
           </li>
           <li>
-            <strong>Vermont PUC</strong> — checked weekly at 11:30 UTC Mondays.
+            <strong>Vermont PUC</strong> — checked daily at 11:30 UTC.
           </li>
           <li>
-            <strong>South Dakota PUC</strong> — checked weekly at 12:00 UTC Mondays.
+            <strong>South Dakota PUC</strong> — checked daily at 12:00 UTC.
           </li>
           <li>
-            <strong>North Dakota PSC</strong> — checked weekly at 12:30 UTC Mondays.
+            <strong>North Dakota PSC</strong> — checked daily at 12:30 UTC.
           </li>
         </ul>
         <p className="text-sm mt-3">
-          All forty-three sources run staggered by the hour (13:00 UTC Sunday through 12:30 UTC
-          Monday) so
-          no two ingestion runs overlap. Every ingestion run upserts by a stable per-source
+          Thirty-nine sources run daily, every source staggered 30 minutes apart across the
+          clock (13:00 UTC through 12:30 UTC the next day) so no two ingestion runs overlap; the
+          four monthly/quarterly/annual sources above run on the same staggered schedule but only
+          once a week. Every ingestion run upserts by a stable per-source
           identity, so re-running a source (on schedule or by hand) updates existing projects in
           place rather than duplicating them — including across two different sources that track
           the same physical project once a human has confirmed it and declared a shared identity

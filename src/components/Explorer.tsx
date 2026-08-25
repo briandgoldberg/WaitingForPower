@@ -46,7 +46,7 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
           Know what&rsquo;s happening at America&rsquo;s energy projects.
         </h1>
         <p className="text-sm text-[var(--muted)] mt-0.5 max-w-3xl">
-          America&rsquo;s premier data source for power projects in permitting — turning new
+          America&rsquo;s premier data source for power projects in permitting. We turn new
           filings into project intelligence.
         </p>
       </div>

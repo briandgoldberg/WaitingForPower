@@ -45,7 +45,7 @@ export function ContactPanel() {
   if (status === "sent") {
     return (
       <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-center">
-        <h2 className="text-2xl font-bold tracking-tight mb-2">Thanks — got it.</h2>
+        <h2 className="text-2xl font-bold tracking-tight mb-2">Thanks, got it.</h2>
         <p className="text-sm text-[var(--muted)]">We&rsquo;ll get back to you soon.</p>
       </div>
     );
@@ -57,7 +57,7 @@ export function ContactPanel() {
         <h1 className="text-2xl font-bold tracking-tight">Contact Us</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
           Interested in a data feed, API access, or a custom dataset? That&rsquo;s exactly what
-          we&rsquo;re building toward — tell us what you need. Also happy to hear feedback, bug
+          we&rsquo;re building toward, so tell us what you need. Also happy to hear feedback, bug
           reports, or partnership ideas.
         </p>
       </div>

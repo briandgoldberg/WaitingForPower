@@ -7,14 +7,14 @@ export default function PoliciesPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">What we&rsquo;re advocating for</h1>
         <p className="text-sm text-[var(--muted)] mt-2 max-w-2xl">
-          Six bipartisan asks, one per bottleneck. No silver bullets — real trade-offs included.
+          Six bipartisan asks, one per bottleneck. No silver bullets, real trade-offs included.
         </p>
         <p className="text-xs text-[var(--muted)] mt-2 max-w-2xl">
           Inspired by{" "}
           <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
             Citizens&rsquo; Climate Lobby
           </a>
-          &rsquo;s approach to durable, market-based climate policy — here are some potential
+          &rsquo;s approach to durable, market-based climate policy, these are some potential
           bipartisan policies to speed up permitting, in this site&rsquo;s own words.
         </p>
       </div>

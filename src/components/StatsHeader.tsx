@@ -20,7 +20,7 @@ export function StatsHeader({
 
   const items = [
     {
-      label: "Projects tracked",
+      label: "Projects",
       value: stats.totalProjects.toLocaleString("en-US"),
       help: (
         <>

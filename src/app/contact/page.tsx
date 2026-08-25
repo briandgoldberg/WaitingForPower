@@ -4,7 +4,7 @@ import { ContactPanel } from "@/components/about/ContactPanel";
 export const metadata: Metadata = {
   title: "Contact — WaitingForPower",
   description:
-    "Get in touch with WaitingForPower — data feeds, API access, custom datasets, partnerships, press, feedback, and bugs.",
+    "Get in touch with WaitingForPower about data feeds, API access, custom datasets, partnerships, press, feedback, and bugs.",
 };
 
 export default function ContactPage() {

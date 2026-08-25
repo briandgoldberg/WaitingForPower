@@ -1,6 +1,6 @@
 import type { AggregateStats } from "@/lib/types";
 import type { ProjectDTO } from "@/lib/types";
-import { ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES, ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
 
 // Aggregate stats deliberately exclude `isAggregateExample` projects —
 // e.g. a regional/ISO-wide statistic standing in for many individual
@@ -11,14 +11,26 @@ import { ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
 export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
   const realProjects = projects.filter((p) => !p.isAggregateExample);
 
-  const totalCapacityMw = realProjects.reduce((sum, p) => {
+  // "Waiting" MW/dollar totals only mean something for a project still
+  // actually waiting on a decision — a resolved project's capacity isn't
+  // "waiting," it's built, cancelled, or cleared for construction. This
+  // matters because these totals are computed from whatever the Status
+  // filter currently shows, not just the default "In Permitting" bucket —
+  // without this, switching to "Permits Complete" or "Cancelled/Suspended"
+  // summed those projects' capacity into "Capacity waiting" too, which is
+  // exactly backwards. `totalProjects` below is NOT filtered this way — the
+  // "Projects" stat should still reflect the real count of whatever bucket
+  // is showing.
+  const stillWaitingProjects = realProjects.filter((p) => !RESOLVED_STAGES.includes(p.currentStage));
+
+  const totalCapacityMw = stillWaitingProjects.reduce((sum, p) => {
     if (p.capacityUnit !== "MW" || p.capacityValue == null) return sum;
     return sum + p.capacityValue;
   }, 0);
 
   let totalInvestmentWaitingUsd = 0;
   let investmentWaitingCoverageCount = 0;
-  for (const p of realProjects) {
+  for (const p of stillWaitingProjects) {
     if (p.investmentWaiting.applicable && p.investmentWaiting.estimatedUsd != null) {
       totalInvestmentWaitingUsd += p.investmentWaiting.estimatedUsd;
       investmentWaitingCoverageCount += 1;
@@ -27,7 +39,7 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
 
   let totalCleanCapacityMw = 0;
   let cleanCapacityProjectCount = 0;
-  for (const p of realProjects) {
+  for (const p of stillWaitingProjects) {
     if (ZERO_CARBON_FUELS.includes(p.fuelType) && p.capacityUnit === "MW" && p.capacityValue != null) {
       totalCleanCapacityMw += p.capacityValue;
       cleanCapacityProjectCount += 1;

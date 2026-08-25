@@ -51,7 +51,7 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
         </p>
       </div>
 
-      <StatsHeader stats={stats} exampleProject={exampleProject} />
+      <StatsHeader stats={stats} exampleProject={exampleProject} status={filters.status} />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">

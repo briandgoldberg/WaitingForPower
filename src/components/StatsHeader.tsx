@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { AggregateStats, ProjectDTO } from "@/lib/types";
+import { STATUS_BUCKETS, type StatusBucket } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { HelpTooltip } from "@/components/HelpTooltip";
 
@@ -9,14 +10,43 @@ function ExampleNote({ children }: { children: React.ReactNode }) {
   return <p className="mt-2 pt-2 border-t border-[var(--border)] text-[var(--muted)]">{children}</p>;
 }
 
+// Every stat this component normally shows answers "how much is waiting" —
+// MW, dollars, project count. That question doesn't apply once the Status
+// filter is set to Cancelled/Suspended or Permits Complete: those projects
+// aren't waiting on anything anymore, so a 4-tile "waiting" grid full of
+// resolved-project totals (or worse, N/A placeholders in every tile) would
+// be actively misleading. This renders a single, differently-framed card
+// instead — just the real project count for that status, no capacity/
+// investment figures at all.
+function ResolvedStatusCard({ stats, status }: { stats: AggregateStats; status: StatusBucket }) {
+  const label = STATUS_BUCKETS.find((s) => s.value === status)?.label ?? status;
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
+      <div className="text-lg font-bold">{stats.totalProjects.toLocaleString("en-US")}</div>
+      <div className="text-xs text-[var(--muted)] mt-0.5">{label} projects</div>
+      <p className="text-[11px] text-[var(--muted)] mt-2">
+        These projects are no longer waiting on a decision, so capacity and investment &ldquo;waiting&rdquo;
+        figures don&rsquo;t apply here — switch to{" "}
+        <span className="font-medium">In Permitting</span> for those stats.
+      </p>
+    </div>
+  );
+}
+
 export function StatsHeader({
   stats,
   exampleProject,
+  status,
 }: {
   stats: AggregateStats;
   exampleProject: ProjectDTO | null;
+  status: StatusBucket;
 }) {
   const ex = exampleProject;
+
+  if (status !== "in_permitting") {
+    return <ResolvedStatusCard stats={stats} status={status} />;
+  }
 
   const items = [
     {

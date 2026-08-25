@@ -156,3 +156,71 @@ export function stateCentroid(state: string | null): [number, number] | null {
   if (codes.length !== 1) return null;
   return STATE_CENTROIDS[codes[0]] ?? null;
 }
+
+// County-level centroid fallback, one tier more precise than stateCentroid
+// above — for the many state PUC/PSC docket sources across this project's
+// ingest/ series that publish a county name in free caption text but no
+// FIPS code, lat/lon, or street address (e.g. arPscDockets.ts's `county`
+// field). countyCentroidsByName.json is generated from the same U.S. Census
+// Bureau 2025 Gazetteer county file as countyCentroids.json (confirmed by
+// cross-checking several FIPS/name pairs resolve to the same coordinates),
+// but re-keyed by "<USPS state>|<normalized county name>" instead of FIPS,
+// since these sources never have a FIPS code to look up in the first place
+// — see countyCentroids.json's own comment (in lbnlQueuedUp.ts) for why
+// that one is FIPS-keyed instead. Normalization strips the trailing
+// "County"/"Parish"/"Borough"/"Census Area"/"Municipality"/etc. type word,
+// uppercases, and strips punctuation, so callers can pass a county name in
+// whatever casing/spelling their source's caption text used (e.g. "St.
+// Francis", "ST FRANCIS", and "st francis county" all normalize the same
+// way). Six real name collisions nationwide (independent cities that share
+// a base name with a same-state county, e.g. Virginia's Fairfax/Franklin/
+// Richmond/Roanoke, plus Baltimore MD and St. Louis MO) are resolved in the
+// generated data by keeping the county/parish/borough entry, not the city
+// one — a deliberate, documented choice, not an accident of file order.
+// Same coarse-approximation caveat as stateCentroid: a real county center,
+// not the project's actual site.
+import countyCentroidsByNameData from "@/lib/data/countyCentroidsByName.json";
+const COUNTY_CENTROIDS_BY_NAME = countyCentroidsByNameData as unknown as Record<string, [number, number]>;
+
+const COUNTY_SUFFIX_WORDS = new Set([
+  "COUNTY",
+  "PARISH",
+  "BOROUGH",
+  "MUNICIPALITY",
+  "MUNICIPIO",
+  "REGION",
+  "AREA",
+  "CITY",
+]);
+
+function normalizeCountyName(raw: string): string {
+  let words = raw.toUpperCase().trim().split(/\s+/);
+  if (words.length >= 2 && words[words.length - 1] === "AREA" && words[words.length - 2] === "CENSUS") {
+    words = words.slice(0, -2);
+  } else if (
+    words.length >= 3 &&
+    words[words.length - 1] === "BOROUGH" &&
+    words[words.length - 2] === "AND" &&
+    words[words.length - 3] === "CITY"
+  ) {
+    words = words.slice(0, -3);
+  } else if (words.length >= 2 && COUNTY_SUFFIX_WORDS.has(words[words.length - 1])) {
+    words = words.slice(0, -1);
+  }
+  return words
+    .join(" ")
+    .replace(/[^A-Z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function countyCentroid(state: string | null, county: string | null): [number, number] | null {
+  const codes = splitStateCodes(state);
+  if (codes.length !== 1 || !county) return null;
+  const key = `${codes[0]}|${normalizeCountyName(county)}`;
+  const hit = COUNTY_CENTROIDS_BY_NAME[key];
+  // Stored as [lat, lon] (Census Gazetteer column order); this module's
+  // other centroid functions return [lon, lat], matching Map.tsx's usage —
+  // flip here rather than in the generated data file.
+  return hit ? [hit[1], hit[0]] : null;
+}

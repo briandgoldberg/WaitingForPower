@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import type { ProjectDTO } from "@/lib/types";
 import { formatCapacity, FUEL_TYPE_BY_VALUE } from "@/lib/data/taxonomies";
-import { multiStateCentroid, stateCentroid } from "@/lib/data/usStates";
+import { countyCentroid, multiStateCentroid, stateCentroid } from "@/lib/data/usStates";
 
 // Free, no-API-key vector basemap (CARTO's Positron style — light and
 // minimal, so the colored fuel-type markers read clearly against it instead
@@ -42,10 +42,11 @@ function capacityRadius(p: ProjectDTO): number {
   return 4;
 }
 
-type ApproxReason = "multi-state" | "state-only" | null;
+type ApproxReason = "multi-state" | "county-only" | "state-only" | null;
 
 const APPROX_MESSAGE: Record<Exclude<ApproxReason, null>, string> = {
   "multi-state": "Approximate location — this project spans multiple states; pin is centered between them.",
+  "county-only": "Approximate location — no site-level location is published for this project; pin is centered on the county.",
   "state-only": "Approximate location — no site-level location is published for this project; pin is centered on the state.",
 };
 
@@ -155,10 +156,11 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
 
         if (lon == null || lat == null) {
           const multiState = multiStateCentroid(p.state);
-          const centroid = multiState ?? stateCentroid(p.state);
+          const county = multiState ? null : countyCentroid(p.state, p.county);
+          const centroid = multiState ?? county ?? stateCentroid(p.state);
           if (!centroid) continue;
           [lon, lat] = centroid;
-          approx = multiState ? "multi-state" : "state-only";
+          approx = multiState ? "multi-state" : county ? "county-only" : "state-only";
         }
 
         const size = capacityRadius(p) * 2;

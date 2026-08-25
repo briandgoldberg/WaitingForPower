@@ -87,6 +87,7 @@ per-source table, open questions, and how each is scheduled:
 | Maine DEP Site Law permits | `src/lib/ingest/meDepSiteLawPermits.ts` | Cron weekly (10:30 UTC Mondays), `/api/cron/ingest-me-dep`. Thirty-fourth state — Maine's real construction gate for most large energy projects isn't the PUC's CPCN (35-A M.R.S. §3132, which only covers standalone transmission lines) but DEP's Site Location of Development Act permit, following the same PUC-vs-siting-agency split this series already found in WA/OR/MA/CT/NH. | Real ArcGIS REST endpoint, no auth |
 | Rhode Island EFSB major-energy-facility dockets | `src/lib/ingest/riEfsbDockets.ts` | Cron weekly (11:00 UTC Mondays), `/api/cron/ingest-ri-efsb`. Thirty-fifth state — a sixth confirmed instance of the "PUC isn't the real siting authority" pattern this series already found in WA/OR/MA/CT/NH: Rhode Island's license requirement (R.I. Gen. Laws §42-98-4) runs through the Energy Facility Siting Board, a separate three-member body, not the PUC that a first-pass search hints at. | Server-rendered HTML (Drupal/Acquia CMS), no auth |
 | Vermont PUC Certificate of Public Good dockets | `src/lib/ingest/vtPucDockets.ts` | Cron weekly (11:30 UTC Mondays), `/api/cron/ingest-vt-puc`. Thirty-sixth state — unlike the WA/OR/MA/CT/NH/RI split found elsewhere in this series, Vermont's PUC genuinely is the real siting authority: 30 V.S.A. §248's Certificate of Public Good is the construction gate for generation, transmission, and storage alike, confirmed directly against the statute text. | Server-rendered HTML (Drupal 7), no auth |
+| South Dakota PUC Energy Conversion/Transmission Facility permit dockets | `src/lib/ingest/sdPucDockets.ts` | Cron weekly (12:00 UTC Mondays), `/api/cron/ingest-sd-puc`. Thirty-seventh state — a real, confirmed bug in SD PUC's own site was found and routed around here: the per-docket status badge goes stale after a real grant (a 2021 wind-farm permit still showed "Pending" as of 2026-08-25 despite a 2023 grant order and ongoing construction reports), so this module scans each candidate's own "Orders:" list for real grant/deny/withdraw language instead of trusting that badge. | Server-rendered HTML, no auth |
 
 Every source above — the five original federal/national workbook/API sources plus all thirty-one
 state docket modules — runs on Vercel Cron (`vercel.json`) with no manual step, staggered by the hour so
@@ -218,7 +219,7 @@ per-data-source version of this list.
    failure mode than the "writes won't persist" issue originally flagged
    here. Fixed by moving to a hosted Postgres instance (Prisma Postgres via
    Vercel's Storage integration) used by both local dev and production.
-10. **State PUC/PSC dockets: thirty-six states down, 14 to go, each with
+10. **State PUC/PSC dockets: thirty-seven states down, 13 to go, each with
     its own hard problem.** Confirmed 2026-08-24: no national aggregator
     exists for state utility-commission dockets — each state runs its own
     system, and FERC eLibrary covers the federal side alone. `vaSccDockets.ts`,
@@ -233,10 +234,10 @@ per-data-source version of this list.
     `caCecDockets.ts`, `nhSecDockets.ts`, `idPucDockets.ts`,
     `nePrbDockets.ts`, `laPscDockets.ts`, `alPscDockets.ts`,
     `arPscDockets.ts`, `dePscDockets.ts`, `meDepSiteLawPermits.ts`,
-    `riEfsbDockets.ts`, and `vtPucDockets.ts` are all plain-HTTP-fetch
-    sources, not scraping projects — no headless browser needed for any
-    of them, same shape as this site's other sources — but none was
-    "just add a module":
+    `riEfsbDockets.ts`, `vtPucDockets.ts`, and `sdPucDockets.ts` are all
+    plain-HTTP-fetch sources, not scraping projects — no headless browser
+    needed for any of them, same shape as this site's other sources — but
+    none was "just add a module":
     - **Virginia** has a real, structured `Status` field, but its search
       scope (caption contains the exact phrase "Certificate of Public
       Convenience and Necessity") is precise and narrow: only 46 cases in
@@ -704,7 +705,20 @@ per-data-source version of this list.
     workaround in the meantime)), are real next options — each needs the
     same "confirm before guessing" treatment this project holds itself to,
     one state (and one scope/status decision) at a time, not assumed to
-    generalize.
+    generalize. Two more real dead ends confirmed 2026-08-25, ruled out for
+    structural reasons rather than access ones: **Georgia** has a genuinely
+    nice real JSON docket API (psc.ga.gov), but its full ~3,000-docket
+    electric-industry population showed Georgia doesn't have a per-project
+    certificate docket at all — generation additions get bundled into
+    Georgia Power's periodic, multi-year Integrated Resource Plan filings,
+    and the individual "Construction Monitoring" dockets found (Vogtle
+    3&4, Bowen CC, Wansley CC) are post-approval compliance dockets, not
+    the permitting decision itself, so there's no clean "one docket = one
+    pending project" unit here the way every other state in this series
+    has. **Minnesota**'s eDockets returned a real 200 with full HTML once,
+    then a bare 403 immediately after on an identical request — looks like
+    WAF/bot-detection rather than a stable public interface; worth a
+    recheck later rather than ruled out permanently.
 
 ## Architecture
 

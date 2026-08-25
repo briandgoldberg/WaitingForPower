@@ -164,6 +164,10 @@
     {
       "path": "/api/cron/ingest-vt-puc",
       "schedule": "30 11 * * 1"
+    },
+    {
+      "path": "/api/cron/ingest-sd-puc",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

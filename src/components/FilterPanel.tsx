@@ -17,10 +17,10 @@ import { HelpTooltip } from "@/components/HelpTooltip";
 // dropping out of a source's active search is normal and doesn't trigger
 // this bucket (see Project.noLongerReported in schema.prisma).
 const STATUS_BUCKET_HELP: Record<StatusBucket, string> = {
-  in_permitting: "Still waiting on a permitting decision — the default view, and the only bucket \"years waiting\" applies to.",
-  cancelled_suspended: "The project was denied, withdrawn, or otherwise cancelled.",
-  permits_complete: "Permitting is done — approved and awaiting construction, under construction, or complete.",
-  no_longer_reported: "The project was previously In Permitting, but its source stopped listing it as active in a later check. We don't know why — it may have quietly resolved, or the source's own search may just no longer surface it. This never applies to an already-resolved project; sources routinely stop listing those on their own \"active\" lists, which is expected, not a signal.",
+  in_permitting: "Still waiting on a permitting decision. The default view.",
+  cancelled_suspended: "Denied, withdrawn, or otherwise cancelled.",
+  permits_complete: "Permitting is done: approved, under construction, or complete.",
+  no_longer_reported: "Was previously In Permitting, but its source stopped listing it as active. We don't know why. Never applies to an already-resolved project.",
 };
 
 function toggle<T>(arr: T[], value: T): T[] {
@@ -104,7 +104,6 @@ export function FilterPanel({
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
       <Section title="Status">
         <div className="flex items-center gap-1 mb-1.5">
-          <span className="text-[11px] text-[var(--muted)]">{STATUS_BUCKET_HELP[filters.status]}</span>
           <HelpTooltip label="Status">
             <ul className="flex flex-col gap-2">
               {STATUS_BUCKETS.map((s) => (

@@ -19,11 +19,11 @@ function isTopicValue(value: string | undefined): value is TopicValue {
 // `initialTopic` comes from /contact's own `?topic=` query param (see
 // src/app/contact/page.tsx) — used by the homepage changes feed's "Get a
 // custom feed" link to land directly on the data-access radio pre-selected,
-// rather than making someone re-select it. Falls back to the plain-visit
-// default ("feedback") for any missing/unrecognized value rather than
-// trusting arbitrary query-string input.
+// rather than making someone re-select it. Falls back to the first topic
+// in the list for any missing/unrecognized value rather than trusting
+// arbitrary query-string input.
 export function ContactPanel({ initialTopic }: { initialTopic?: string } = {}) {
-  const [topic, setTopic] = useState<TopicValue>(isTopicValue(initialTopic) ? initialTopic : "feedback");
+  const [topic, setTopic] = useState<TopicValue>(isTopicValue(initialTopic) ? initialTopic : TOPICS[0].value);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");

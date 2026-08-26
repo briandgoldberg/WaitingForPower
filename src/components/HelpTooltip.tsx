@@ -36,7 +36,7 @@ export function HelpTooltip({ label, children }: { label: string; children: Reac
       {open && (
         <div
           role="tooltip"
-          className="absolute z-30 top-full mt-2 left-1/2 -translate-x-1/2 w-64 sm:w-72 max-w-[85vw] rounded-lg border border-[var(--border)] bg-[var(--panel)] shadow-lg p-3 text-xs leading-relaxed text-left font-normal normal-case"
+          className="absolute z-30 top-full mt-2 left-0 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--border)] bg-[var(--panel)] shadow-lg p-3 text-xs leading-relaxed text-left font-normal normal-case"
         >
           {children}
         </div>

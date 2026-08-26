@@ -62,21 +62,26 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
             Recent changes
           </h2>
-          {/* color set via inline style, not text-white — see globals.css's
-              `a { color: inherit }` rule, which sits outside Tailwind's
-              layered utilities and wins over ANY class-based text color on
-              a link, confirmed earlier tonight for text-[var(--accent)]. */}
-          <Link
-            href="/contact?topic=data-access"
-            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent)] hover:opacity-90 whitespace-nowrap"
-            style={{ color: "white" }}
-          >
-            Get a custom feed →
-          </Link>
+          {/* color set via inline style, not text-white/text-[var(--accent)]
+              — see globals.css's `a { color: inherit }` rule, which sits
+              outside Tailwind's layered utilities and wins over ANY
+              class-based text color on a link, confirmed earlier tonight. */}
+          <div className="flex items-center gap-3 whitespace-nowrap">
+            <Link href="/projects" className="text-xs font-medium underline" style={{ color: "var(--accent)" }}>
+              View all projects →
+            </Link>
+            <Link
+              href="/contact?topic=data-access"
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent)] hover:opacity-90"
+              style={{ color: "white" }}
+            >
+              Get a custom feed →
+            </Link>
+          </div>
         </div>
 
         <ChangesFeed initialChanges={changes} initialHasMore={hasMore} />

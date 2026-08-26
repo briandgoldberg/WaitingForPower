@@ -93,8 +93,8 @@ function ChangeCard({ change }: { change: ProjectChangeDTO }) {
     >
       <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: fuel?.color ?? "#6b7280" }} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <span className="font-medium text-sm truncate">{change.project.name}</span>
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-medium text-sm truncate min-w-0 flex-1">{change.project.name}</span>
           <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${badge.className}`}>
             {badge.label}
           </span>

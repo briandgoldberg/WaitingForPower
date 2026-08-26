@@ -33,6 +33,8 @@ function badgeFor(changeTypes: string[], newStage: string | null): Badge {
       return { label: "Advanced", className: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300" };
     case "new_filing":
       return { label: "New Filing", className: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300" };
+    case "fact_revised":
+      return { label: "Capacity Update", className: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300" };
     default:
       return { label: "Updated", className: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300" };
   }

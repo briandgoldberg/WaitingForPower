@@ -73,14 +73,14 @@ export default async function HomePage() {
           <div className="flex items-center gap-2 whitespace-nowrap">
             <Link
               href="/projects"
-              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+              className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors"
               style={{ color: "var(--accent)" }}
             >
               View all projects →
             </Link>
             <Link
               href="/contact?topic=data-access"
-              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[var(--accent)] hover:opacity-90"
+              className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent hover:bg-accent/90 shadow-sm transition-colors"
               style={{ color: "white" }}
             >
               Get a custom feed →

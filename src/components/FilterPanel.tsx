@@ -4,25 +4,9 @@ import { useMemo } from "react";
 import { FUEL_TYPES, PROJECT_TYPES, STATUS_BUCKETS, TRACKED_PROJECT_STAGES } from "@/lib/data/taxonomies";
 import { SOURCE_OPTIONS } from "@/lib/filters";
 import type { FilterState, SourceKey } from "@/lib/filters";
-import type { FuelType, ProjectStage, ProjectType, StatusBucket } from "@/lib/data/taxonomies";
+import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 import type { ProjectDTO } from "@/lib/types";
-import { HelpTooltip } from "@/components/HelpTooltip";
-
-// One explanation per Status bucket — surfaced as a single tooltip next to
-// the Status select so the (non-obvious) meaning of each option is
-// available before switching, not just after. "No Longer Being Reported"
-// specifically needs the caveat that it only ever applies to a project
-// that was previously In Permitting — an already-resolved project
-// dropping out of a source's active search is normal and doesn't trigger
-// this bucket (see Project.noLongerReported in schema.prisma).
-const STATUS_BUCKET_HELP: Record<StatusBucket, string> = {
-  in_permitting: "Still waiting on a permitting decision. The default view.",
-  cancelled_suspended: "Denied, withdrawn, or otherwise cancelled.",
-  permits_complete: "Permitting is done: approved, under construction, or complete.",
-  no_longer_reported: "Was previously In Permitting, but its source stopped listing it as active. We don't know why. Never applies to an already-resolved project.",
-};
-
 function toggle<T>(arr: T[], value: T): T[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
 }
@@ -103,17 +87,6 @@ export function FilterPanel({
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
       <Section title="Status">
-        <div className="flex items-center gap-1 mb-1.5">
-          <HelpTooltip label="Status">
-            <ul className="flex flex-col gap-2">
-              {STATUS_BUCKETS.map((s) => (
-                <li key={s.value}>
-                  <strong>{s.label}</strong> — {STATUS_BUCKET_HELP[s.value]}
-                </li>
-              ))}
-            </ul>
-          </HelpTooltip>
-        </div>
         <select
           value={filters.status}
           onChange={(e) => onChange({ ...filters, status: e.target.value as FilterState["status"] })}

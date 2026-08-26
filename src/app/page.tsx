@@ -70,8 +70,12 @@ export default async function HomePage() {
               — see globals.css's `a { color: inherit }` rule, which sits
               outside Tailwind's layered utilities and wins over ANY
               class-based text color on a link, confirmed earlier tonight. */}
-          <div className="flex items-center gap-3 whitespace-nowrap">
-            <Link href="/projects" className="text-xs font-medium underline" style={{ color: "var(--accent)" }}>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <Link
+              href="/projects"
+              className="text-xs font-semibold px-3 py-1.5 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+              style={{ color: "var(--accent)" }}
+            >
               View all projects →
             </Link>
             <Link
@@ -86,19 +90,10 @@ export default async function HomePage() {
 
         <ChangesFeed initialChanges={changes} initialHasMore={hasMore} />
 
-        <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm">
-            <strong>{totalWaiting.toLocaleString("en-US")} projects</strong> currently waiting on
-            a permitting decision, across every U.S. state we track.
-          </p>
-          <Link
-            href="/projects"
-            className="text-sm font-medium px-3 py-1.5 rounded-md border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
-            style={{ color: "var(--accent)" }}
-          >
-            Explore the map & full list →
-          </Link>
-        </div>
+        <p className="mt-2 text-sm text-[var(--muted)] text-center">
+          <strong className="text-[var(--foreground)]">{totalWaiting.toLocaleString("en-US")} projects</strong>{" "}
+          currently waiting on a permitting decision, across every U.S. state we track.
+        </p>
       </div>
     </>
   );

@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { getRecentChanges } from "@/lib/changes";
 import { ChangesFeed } from "@/components/ChangesFeed";
-import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 
 export const dynamic = "force-dynamic";
 
@@ -38,12 +36,7 @@ const DATASET_JSON_LD = {
 };
 
 export default async function HomePage() {
-  const [{ changes, hasMore }, totalWaiting] = await Promise.all([
-    getRecentChanges(50),
-    prisma.project.count({
-      where: { currentStage: { notIn: RESOLVED_STAGES }, isAggregateExample: false },
-    }),
-  ]);
+  const { changes, hasMore } = await getRecentChanges(50);
 
   return (
     <>
@@ -89,11 +82,6 @@ export default async function HomePage() {
         </div>
 
         <ChangesFeed initialChanges={changes} initialHasMore={hasMore} />
-
-        <p className="mt-2 text-sm text-[var(--muted)] text-center">
-          <strong className="text-[var(--foreground)]">{totalWaiting.toLocaleString("en-US")} projects</strong>{" "}
-          currently waiting on a permitting decision, across every U.S. state we track.
-        </p>
       </div>
     </>
   );

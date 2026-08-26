@@ -82,13 +82,13 @@ export type ProjectStage =
 // statusToStage in src/lib/ingest/eia860mPlanned.ts. (L) is EIA's own
 // "Category L" ("Regulatory approvals pending. Not under construction");
 // kept namewise-parallel to EIA's letter so it's traceable back to the
-// source, and labeled with "Category L" in the UI since that's how EIA and
-// this site's users refer to it.
+// source, even though the UI label itself just says "Regulatory approvals
+// pending" for brevity.
 export const PROJECT_STAGES: { value: ProjectStage; label: string }[] = [
   { value: "interconnection_study", label: "Interconnection study" },
   { value: "environmental_review", label: "Environmental review" },
   { value: "planned_pre_filing", label: "Planned, approvals not yet initiated" },
-  { value: "regulatory_approvals_pending", label: "Regulatory approvals pending (Category L)" },
+  { value: "regulatory_approvals_pending", label: "Regulatory approvals pending" },
   { value: "agency_permitting", label: "Agency permitting" },
   { value: "local_review", label: "Local/state review" },
   { value: "litigation", label: "Litigation" },

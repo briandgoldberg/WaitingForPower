@@ -370,6 +370,22 @@ function sourcePrefixOf(matchKey: string): string {
  * (e.g. tnTpucDockets.ts) — with an empty `projects` array there's nothing
  * to infer a prefix from, and vanished-detection is silently skipped for
  * that run rather than guessed at.
+ *
+ * Callers with a `MAX_CANDIDATES`-style recency cap (most state modules —
+ * see each one's own top-N-by-recency `.slice(...)` before calling
+ * upsertNormalizedProjects) must NOT run this when that cap actually bound
+ * this run (`wasCapped` in the caller below): once a source has more real
+ * active dockets than its own cap, a capped run's candidate set is only
+ * the *most recent* N, not the source's full active list, so anything
+ * older that's still genuinely open would look "not seen this run" and
+ * get wrongly flagged vanished — confirmed live 2026-08-27: NY DPS's
+ * cap of 60 left exactly 39 real, still-open older dockets (99 tracked
+ * total) flagged noLongerReported, none of which had a chance to
+ * "reappear" since every later run hits the same cap and excludes them
+ * again. Skipping vanished-detection entirely on a capped run is safe: it
+ * just leaves those older rows in their last-known state until the source
+ * catches back up under its cap, same as this function already does for a
+ * source with no candidates at all.
  */
 async function markVanished(sourcePrefix: string, seenMatchKeys: Set<string>): Promise<number> {
   const previouslyTracked = await prisma.project.findMany({
@@ -449,7 +465,7 @@ async function markVanished(sourcePrefix: string, seenMatchKeys: Set<string>): P
  */
 export async function upsertNormalizedProjects(
   projects: NormalizedProject[],
-  options: { sourcePrefix?: string; concurrency?: number } = {},
+  options: { sourcePrefix?: string; concurrency?: number; wasCapped?: boolean } = {},
 ): Promise<{ upserted: number; removedResolved: number; vanished: number; errors: { matchKey: string; message: string }[] }> {
   const concurrency = options.concurrency ?? 40;
   let upserted = 0;
@@ -490,7 +506,8 @@ export async function upsertNormalizedProjects(
       .catch(() => {});
   }
 
-  const vanished = sourcePrefix ? await markVanished(sourcePrefix, new Set(projects.map((p) => p.matchKey))) : 0;
+  const vanished =
+    sourcePrefix && !options.wasCapped ? await markVanished(sourcePrefix, new Set(projects.map((p) => p.matchKey))) : 0;
 
   return { upserted, removedResolved, vanished, errors };
 }

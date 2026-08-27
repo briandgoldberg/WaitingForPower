@@ -919,7 +919,12 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // it real is deliberately left untouched now, not guessed into a
   // resolved stage — see the header for why.
 
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
+  // See markVanished's wasCapped doc in common.ts: once this cap actually
+  // truncates the candidate list, it's no longer the source's full active
+  // list, so vanished-detection must be skipped rather than flooding the
+  // feed with false "no longer reported" flags.
+  const wasCapped = candidates.length >= maxCandidates;
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
 
   return {
     candidatesFound: candidates.length,

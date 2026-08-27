@@ -591,7 +591,12 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
     await sleep(REQUEST_DELAY_MS);
   }
 
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
+  // See markVanished's wasCapped doc in common.ts: once this cap actually
+  // truncates the candidate list, it's no longer the source's full active
+  // list, so vanished-detection must be skipped rather than flooding the
+  // feed with false "no longer reported" flags.
+  const wasCapped = candidates.length >= maxCandidates;
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
 
   return {
     candidatesFound: candidates.length,

@@ -487,7 +487,13 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
     await sleep(REQUEST_DELAY_MS);
   }
 
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert);
+  // See MAX_CANDIDATES above and the `wasCapped` doc on markVanished in
+  // common.ts: once NY DPS has more real active dockets than the cap, a
+  // capped run's candidates are only the most-recent N, not the full
+  // active list, so vanished-detection must be skipped rather than
+  // wrongly flagging older-but-still-open dockets as no longer reported.
+  const wasCapped = realApplications.length >= maxCandidates;
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
 
   return {
     candidatesFound: allCandidates.length,

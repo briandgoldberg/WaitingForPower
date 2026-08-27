@@ -76,13 +76,19 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://efiling.azcc.gov";
 const DOCKET_TYPE_LINE_SITING = 1231;
 const CASE_TYPE_SITING_COMMITTEE = 18;
 
 export const MAX_CANDIDATES = 100;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const LOOKBACK_YEARS = 5;
 // Comfortably above the current ~185-docket all-time total for this
@@ -258,12 +264,14 @@ export async function ingestAzAccLineSiting(maxCandidates = MAX_CANDIDATES): Pro
 
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - LOOKBACK_YEARS);
-  const candidates = allCandidates
-    .filter((c) => {
+  const candidates = selectWithRotation(
+    allCandidates.filter((c) => {
       const filed = parseIsoDate(c.filedDate);
       return filed != null && filed >= cutoff;
-    })
-    .slice(0, maxCandidates);
+    }),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

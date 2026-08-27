@@ -60,13 +60,19 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
 
 const BASE_URL = "https://www.dora.state.co.us/pls/efi";
 const SEARCH_URL = `${BASE_URL}/EFI_SEARCH_UI.getProceedingResults`;
 const DETAIL_URL = `${BASE_URL}/EFI.Show_Docket`;
 
 export const MAX_CANDIDATES = 150;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Colorado's total CPCN-title history is small (82 all-time, confirmed
 // 2026-08-23) — a several-year window still comfortably bounds candidate
@@ -309,7 +315,7 @@ export interface IngestSummary {
 }
 
 export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
-  const candidates = (await searchCandidates()).slice(0, maxCandidates);
+  const candidates = selectWithRotation(await searchCandidates(), maxCandidates, ROTATING_RECENT_SLOTS);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

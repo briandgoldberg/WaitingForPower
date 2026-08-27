@@ -234,7 +234,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://www.puc.nh.gov/VirtualFileRoom";
 
@@ -252,6 +252,12 @@ const SEC_ERA_START_YEAR = 2025;
 // a small state, so there's no realistic scenario of this cap silently
 // dropping a genuinely-still-open one.
 export const MAX_CANDIDATES = 50;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 
 function sleep(ms: number): Promise<void> {
@@ -559,9 +565,11 @@ export async function ingestNhSecDockets(maxCandidates = MAX_CANDIDATES): Promis
   const allRows = allRowsPerYear.flat();
   const secRows = allRows.filter((r) => r.docketNumber.startsWith("SEC "));
 
-  const realCandidates = secRows
-    .filter((r) => CONTENT_RE.test(r.description) && !EXCLUDE_RE.test(r.description))
-    .slice(0, maxCandidates);
+  const realCandidates = selectWithRotation(
+    secRows.filter((r) => CONTENT_RE.test(r.description) && !EXCLUDE_RE.test(r.description)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

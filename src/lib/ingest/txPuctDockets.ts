@@ -97,12 +97,18 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
 
 const BASE_URL = "https://interchange.puc.texas.gov";
 const SEARCH_PHRASE = "certificate of convenience and necessity";
 
 export const MAX_CANDIDATES = 150;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Only search dockets with at least one filing in this window — bounds
 // candidate volume; a docket entirely outside this window has had no
@@ -415,7 +421,7 @@ export interface IngestSummary {
 }
 
 export async function ingestTxPuctDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
-  const candidates = (await searchCandidates()).slice(0, maxCandidates);
+  const candidates = selectWithRotation(await searchCandidates(), maxCandidates, ROTATING_RECENT_SLOTS);
 
   let skippedBookFile = 0;
   let skippedComplianceDocket = 0;

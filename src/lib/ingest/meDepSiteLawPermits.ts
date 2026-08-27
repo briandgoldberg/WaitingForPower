@@ -248,7 +248,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const QUERY_URL = "https://gis.maine.gov/mapservices/rest/services/dep/Land_Licensing/MapServer/6/query";
 // Public, human-readable page this data is embedded in (the ArcGIS endpoint
@@ -260,6 +260,12 @@ const TABLE_PAGE_URL = "https://www.maine.gov/dep/gis/datamaps/LAWB_Permits/inde
 // SCOPING) — this module makes no per-candidate HTTP requests at all, so a
 // generous cap costs nothing.
 export const MAX_CANDIDATES = 500;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const PAGE_SIZE = 2000;
 
 // Broad net, confirmed against real data to comfortably contain every real
@@ -544,7 +550,7 @@ export interface IngestSummary {
 export async function ingestMeDepSiteLawPermits(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const allRecords = await fetchAllRecords();
 
-  const realCandidates = dedupeRecords(allRecords.filter(isRealCandidate)).slice(0, maxCandidates);
+  const realCandidates = selectWithRotation(dedupeRecords(allRecords.filter(isRealCandidate)), maxCandidates, ROTATING_RECENT_SLOTS);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

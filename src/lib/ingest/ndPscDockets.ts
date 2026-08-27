@@ -98,7 +98,7 @@ import { PDFParse } from "pdf-parse";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://apps.psc.nd.gov/cases";
 const USER_AGENT = "Mozilla/5.0 (compatible; WaitingForPowerBot/1.0)";
@@ -115,6 +115,12 @@ const CASE_TYPE_CODE = "Siting Application            "; // real value, trailing
 // grows.
 const YEARS_TO_SCAN = 5;
 export const MAX_CANDIDATES = 70;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 200;
 
 function sleep(ms: number): Promise<void> {
@@ -397,7 +403,7 @@ export async function ingestNdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   );
 
   const toUpsert: NormalizedProject[] = [];
-  for (const listing of candidates.slice(0, maxCandidates)) {
+  for (const listing of selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
     try {
       toUpsert.push(await normalizeCandidate(listing));
     } catch (err) {

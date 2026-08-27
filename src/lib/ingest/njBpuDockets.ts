@@ -189,7 +189,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 import zlib from "node:zlib";
 
 const BASE_URL = "https://publicaccess.bpu.state.nj.us";
@@ -199,6 +199,12 @@ const UA =
 // See module header TIMING BUDGET — the real population found live across
 // both tracks is well under this; kept generous rather than tight.
 export const MAX_CANDIDATES = 40;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const LOOKBACK_YEARS = 15;
 // See module header PDF TEXT EXTRACTION. The largest real order PDF found
@@ -728,18 +734,21 @@ export async function ingestNjBpuDockets(maxCandidates = MAX_CANDIDATES): Promis
   const allCandidates = [...track1, ...track2];
 
   const seen = new Set<string>();
-  const realApplications = allCandidates
-    .filter((c) => {
-      if (seen.has(c.search.docket)) return false;
-      seen.add(c.search.docket);
-      return true;
-    })
-    .filter((c) => {
-      const filed = parseMDY(c.search.openDate);
-      return filed == null || filed >= cutoff;
-    })
-    .sort((a, b) => (parseMDY(b.search.openDate)?.getTime() ?? 0) - (parseMDY(a.search.openDate)?.getTime() ?? 0))
-    .slice(0, maxCandidates);
+  const realApplications = selectWithRotation(
+    allCandidates
+      .filter((c) => {
+        if (seen.has(c.search.docket)) return false;
+        seen.add(c.search.docket);
+        return true;
+      })
+      .filter((c) => {
+        const filed = parseMDY(c.search.openDate);
+        return filed == null || filed >= cutoff;
+      })
+      .sort((a, b) => (parseMDY(b.search.openDate)?.getTime() ?? 0) - (parseMDY(a.search.openDate)?.getTime() ?? 0)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

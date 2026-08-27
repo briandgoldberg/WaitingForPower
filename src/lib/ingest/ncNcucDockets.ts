@@ -176,7 +176,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://starw1.ncuc.gov";
 const DOCKETS_URL = `${BASE_URL}/NCUC/page/Dockets/portal.aspx`;
@@ -191,6 +191,12 @@ const FILING_TYPE_EGC = "6cbd0771-a78f-40dd-bc00-bc007f6a00df"; // Electric Gene
 const FILING_TYPE_ETL = "c40f4c26-7a0d-459a-a1ea-14ffe6650e0f"; // Electric Transmission Line Certificate
 
 export const MAX_CANDIDATES = 100;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const LOOKBACK_YEARS = 8;
 
@@ -608,7 +614,7 @@ export interface IngestSummary {
 export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const session = new NcucSession();
   const allCandidates = await searchCandidates(session);
-  const candidates = allCandidates.slice(0, maxCandidates);
+  const candidates = selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

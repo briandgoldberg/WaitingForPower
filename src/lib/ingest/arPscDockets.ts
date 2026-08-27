@@ -348,7 +348,7 @@ import zlib from "node:zlib";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://apps.apsc.arkansas.gov/olsv2";
 const OPEN_DOCKETS_URL = `${BASE_URL}/docket_search.asp`;
@@ -362,6 +362,12 @@ const DOCKET_SHARE_URL = (docket: string) => `${BASE_URL}/docket_search_results.
 // dockets rarely if ever fully close). Set generously above that for
 // years of headroom.
 export const MAX_CANDIDATES = 600;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // See module header STATUS point 3 — a safety valve, not tuned tightly to
 // the busiest real docket found (25-047-U, 11 real order entries).
@@ -854,7 +860,7 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const docket of allDockets.slice(0, maxCandidates)) {
+  for (const docket of selectWithRotation(allDockets, maxCandidates, ROTATING_RECENT_SLOTS)) {
     const matchKey = resolveMatchKey("ar-psc", docket);
     try {
       const detail = await fetchDocketDetail(docket);

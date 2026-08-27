@@ -112,7 +112,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://efsec.wa.gov";
 
@@ -120,6 +120,12 @@ const BASE_URL = "https://efsec.wa.gov";
 // header for why no date-based lookback is needed here (unlike the
 // higher-volume docket-search states, the whole list is cheap to fetch).
 export const MAX_CANDIDATES = 50;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 
 function sleep(ms: number): Promise<void> {
@@ -415,7 +421,11 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   const listHtml = await fetchText(`${BASE_URL}/facilities`);
   const allFacilities = parseFacilityList(listHtml);
 
-  const candidates = allFacilities.filter((f) => f.status === "Application review").slice(0, maxCandidates);
+  const candidates = selectWithRotation(
+    allFacilities.filter((f) => f.status === "Application review"),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

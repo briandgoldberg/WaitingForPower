@@ -168,7 +168,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://public.occ.ok.gov/WebLink";
 const REPO_NAME = "OCC";
@@ -183,6 +183,12 @@ const RELIEF_TYPE_COA = "High Voltage Transmission COA";
 // module header SCALE (only 4 real cases have ever been filed under this
 // relief type since the imaged-document system began in 2022).
 export const MAX_CANDIDATES = 40;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // See module header SCALE for why a case older than this cannot exist.
 const LOOKBACK_YEARS = 6;
@@ -466,15 +472,18 @@ export async function ingestOkOccDockets(maxCandidates = MAX_CANDIDATES): Promis
     byCase.get(caseNumber)!.push(doc);
   }
 
-  const candidates: Candidate[] = [...byCase.entries()]
-    .map(([caseNumber, docs]) => {
-      const dates = docs.map((d) => d.creationDate).filter((d): d is Date => d != null);
-      const earliestDate = dates.length > 0 ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
-      return { caseNumber, earliestDate };
-    })
-    .filter((c) => c.earliestDate == null || c.earliestDate >= cutoff)
-    .sort((a, b) => (b.earliestDate?.getTime() ?? 0) - (a.earliestDate?.getTime() ?? 0))
-    .slice(0, maxCandidates);
+  const candidates: Candidate[] = selectWithRotation(
+    [...byCase.entries()]
+      .map(([caseNumber, docs]) => {
+        const dates = docs.map((d) => d.creationDate).filter((d): d is Date => d != null);
+        const earliestDate = dates.length > 0 ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
+        return { caseNumber, earliestDate };
+      })
+      .filter((c) => c.earliestDate == null || c.earliestDate >= cutoff)
+      .sort((a, b) => (b.earliestDate?.getTime() ?? 0) - (a.earliestDate?.getTime() ?? 0)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

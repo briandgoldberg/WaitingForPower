@@ -161,7 +161,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const SEARCH_API_URL =
   "https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/search/advanced";
@@ -178,6 +178,12 @@ const INDUSTRY_ID = "002a5051-0a08-e611-80f6-1458d04eabe0"; // "Electric"
 // LOOKBACK_YEARS is generous — CPCN cases plus a possible court appeal can
 // legitimately run a few years from petition to final resolution.
 export const MAX_CANDIDATES = 100;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const LOOKBACK_YEARS = 6;
 const MAX_SEARCH_PAGES = 20; // safety cap; real population is ~80 total records, 10/page
@@ -284,10 +290,11 @@ async function searchCpcnCandidates(maxCandidates: number): Promise<SearchResult
     if (all.length >= maxCandidates * 2) break; // generous safety margin before local filtering
   }
 
-  return all
-    .filter((r) => r.docketNumber && r.legalCaseId)
-    .filter((r) => r.petitionDate == null || r.petitionDate >= cutoff)
-    .slice(0, maxCandidates);
+  return selectWithRotation(
+    all.filter((r) => r.docketNumber && r.legalCaseId).filter((r) => r.petitionDate == null || r.petitionDate >= cutoff),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 }
 
 // See module header STATUS.

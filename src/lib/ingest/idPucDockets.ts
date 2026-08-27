@@ -198,7 +198,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://puc.idaho.gov";
 // util=1 confirmed live to mean "Electric" (the site's own Electric-utility
@@ -212,6 +212,12 @@ const DETAIL_URL = (caseId: string) => `${BASE_URL}/case/Details/${caseId}`;
 // docket-search states, so there's no realistic scenario of this cap
 // silently dropping a genuinely-open CPCN candidate.
 export const MAX_CANDIDATES = 50;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Confirmed live 2026-08-24: a single `ps=500` request returns the site's
 // entire open-electric-case population (39 rows) on one page — see module
@@ -489,9 +495,11 @@ export interface IngestSummary {
 export async function ingestIdPucDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const allOpenCases = await fetchOpenCaseList();
 
-  const realCandidates = allOpenCases
-    .filter((row) => CONTENT_RE.test(row.description) && !EXCLUDE_RE.test(row.description))
-    .slice(0, maxCandidates);
+  const realCandidates = selectWithRotation(
+    allOpenCases.filter((row) => CONTENT_RE.test(row.description) && !EXCLUDE_RE.test(row.description)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

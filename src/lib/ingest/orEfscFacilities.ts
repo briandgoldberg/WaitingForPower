@@ -173,7 +173,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const SITE_BASE = "https://www.oregon.gov/energy/facilities";
 const API_BASE = `${SITE_BASE}/_api/web/lists/getbytitle('facilities')/items`;
@@ -183,6 +183,12 @@ const PAGE_BASE = `${SITE_BASE}/Pages`;
 // facilities ever tracked) — see module header FETCHING for why no
 // date-based lookback is needed (the whole list is one cheap request).
 export const MAX_CANDIDATES = 40;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 
 async function fetchJson(url: string): Promise<Record<string, unknown>> {
   // GOTCHA #1 (see module header): this endpoint returns Atom XML by
@@ -460,9 +466,11 @@ export interface IngestSummary {
 export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const allFacilities = await fetchAllFacilities();
 
-  const candidates = allFacilities
-    .filter((f) => isPendingCandidate(f.Status_x0020_details))
-    .slice(0, maxCandidates);
+  const candidates = selectWithRotation(
+    allFacilities.filter((f) => isPendingCandidate(f.Status_x0020_details)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

@@ -161,7 +161,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const CMS_SEARCH_URL = "https://apps.psc.wi.gov/APPS/dockets/default.aspx";
 const ERF_SEARCH_URL = "https://apps.psc.wi.gov/ERF/ERFsearch/content/searchResult.aspx";
@@ -186,6 +186,12 @@ const CMS_USER_AGENT =
 // See module header: 86 real in-scope candidates found live on 2026-08-23,
 // out of 145 total Active CE dockets. Set well above that as headroom.
 export const MAX_CANDIDATES = 150;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Defensive backstop only, not load-bearing for correctness: the real
 // resolved/pending determination comes from the per-docket Final Decision
@@ -507,14 +513,17 @@ export async function ingestWiPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - LOOKBACK_YEARS);
 
-  const realApplications = allCandidates
-    .filter((c) => OPENER_RE.test(c.title) && isInScope(c.title))
-    .filter((c) => {
-      const filed = parseMDY(c.applicationDate);
-      return filed == null || filed >= cutoff;
-    })
-    .sort((a, b) => (parseMDY(b.applicationDate)?.getTime() ?? 0) - (parseMDY(a.applicationDate)?.getTime() ?? 0))
-    .slice(0, maxCandidates);
+  const realApplications = selectWithRotation(
+    allCandidates
+      .filter((c) => OPENER_RE.test(c.title) && isInScope(c.title))
+      .filter((c) => {
+        const filed = parseMDY(c.applicationDate);
+        return filed == null || filed >= cutoff;
+      })
+      .sort((a, b) => (parseMDY(b.applicationDate)?.getTime() ?? 0) - (parseMDY(a.applicationDate)?.getTime() ?? 0)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

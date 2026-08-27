@@ -168,7 +168,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://eeaonline.eea.state.ma.us/dpu/fileroom/api";
 const APP_BASE_URL = "https://eeaonline.eea.state.ma.us/dpu/fileroom";
@@ -181,6 +181,12 @@ const SITING_DPU_TYPE_ID = 9;
 // ~71 dockets all-time, so there's no realistic scenario of this cap
 // silently dropping a genuinely-still-open one.
 export const MAX_CANDIDATES = 50;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // See module header LOOKBACK rationale: pre-~2016 dockets have unreliably
 // sparse digitized Filings records, not just lower relevance.
@@ -434,12 +440,15 @@ export async function ingestMaEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - LOOKBACK_YEARS);
 
-  const realApplications = allDockets
-    .filter((d) => d.Type?.Name === "Siting/DPU")
-    .filter((d) => d.OpenedDate != null && new Date(d.OpenedDate) >= cutoff)
-    .filter((d) => !EXCLUDE_RE.test(stripHtml(d.Description)))
-    .sort((a, b) => new Date(b.OpenedDate ?? 0).getTime() - new Date(a.OpenedDate ?? 0).getTime())
-    .slice(0, maxCandidates);
+  const realApplications = selectWithRotation(
+    allDockets
+      .filter((d) => d.Type?.Name === "Siting/DPU")
+      .filter((d) => d.OpenedDate != null && new Date(d.OpenedDate) >= cutoff)
+      .filter((d) => !EXCLUDE_RE.test(stripHtml(d.Description)))
+      .sort((a, b) => new Date(b.OpenedDate ?? 0).getTime() - new Date(a.OpenedDate ?? 0).getTime()),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

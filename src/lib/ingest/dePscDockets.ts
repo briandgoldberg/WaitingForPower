@@ -239,7 +239,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://delafile.delaware.gov";
 const SEARCH_URL = `${BASE_URL}/AdvancedSearch/AdvancedSearchDocket.aspx`;
@@ -277,6 +277,12 @@ const OPEN_STATUS_IDS: { id: string; label: string }[] = [
 // all three sources, see module header) is small; set generously above that
 // for headroom.
 export const MAX_CANDIDATES = 150;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const MAX_DOC_PAGES = 40;
 
@@ -678,7 +684,7 @@ export async function ingestDePscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const toUpsert: NormalizedProject[] = [];
   let realApplicationCandidates = 0;
 
-  for (const { candidate, source } of allCandidates.slice(0, maxCandidates)) {
+  for (const { candidate, source } of selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
     if (TEST_DOCKET_RE.test(candidate.caption)) {
       // Not a real application — see module header STATUS (Docket 25-1020,
       // PSC staff's own DelaFile system test). Not counted as "decided" for

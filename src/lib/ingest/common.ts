@@ -338,6 +338,53 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
   return project;
 }
 
+/**
+ * Picks which candidates a capped ingestion run actually fetches, for a
+ * source whose real population can exceed its own MAX_CANDIDATES (runtime
+ * budget, not a real limit — see e.g. nyDpsDockets.ts's own header). A
+ * plain top-N-by-recency slice (what every capped module used before this)
+ * means anything past the Nth-most-recent is *never* refetched again once
+ * the source outgrows its cap — not just stale-until-vanished-detection
+ * (fixed separately via `wasCapped`, see markVanished above) but frozen at
+ * its last-known stage forever, since a docket that ages out of the
+ * recency window simply stops being one of this run's candidates at all.
+ *
+ * Splits the budget instead: the newest `recentSlots` are fetched on
+ * *every* run (freshly filed dockets get seen promptly), and the
+ * remaining budget rotates through everything past that cutoff, a
+ * different slice each calendar day (UTC, so this needs no persisted
+ * cursor — just today's date) until the whole backlog has cycled through,
+ * then it wraps around. A docket beyond the recent window is therefore
+ * revisited on a predictable cadence (backlog size ÷ rotating budget,
+ * in days) instead of never.
+ *
+ * `sortedMostRecentFirst` must already be sorted newest-first — this
+ * function doesn't re-sort, since "most recent" means different fields
+ * (filed date, opened date, ...) per source.
+ */
+export function selectWithRotation<T>(sortedMostRecentFirst: T[], totalSlots: number, recentSlots: number): T[] {
+  const recent = sortedMostRecentFirst.slice(0, recentSlots);
+  const rest = sortedMostRecentFirst.slice(recentSlots);
+  const rotatingBudget = Math.max(totalSlots - recent.length, 0);
+  if (rest.length === 0 || rotatingBudget === 0) return recent;
+
+  // Wraps around `rest` (indexing with `% rest.length` per item) rather
+  // than slicing fixed non-overlapping windows — a plain slice leaves the
+  // last window short whenever `rest.length` doesn't divide evenly by
+  // `rotatingBudget` (confirmed by a real test run: a 59-item backlog with
+  // a 20-item rotating budget left the 3rd window at only 19), quietly
+  // wasting part of that day's fetch budget. Wrapping instead always uses
+  // the full budget every day; the wrap point briefly rechecks a few items
+  // twice in one cycle rather than skipping any, which is harmless.
+  const daysSinceEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+  const startIndex = (daysSinceEpoch * rotatingBudget) % rest.length;
+  const rotatingSlice: T[] = [];
+  for (let i = 0; i < Math.min(rotatingBudget, rest.length); i++) {
+    rotatingSlice.push(rest[(startIndex + i) % rest.length]);
+  }
+  return [...recent, ...rotatingSlice];
+}
+
 // The part of a matchKey before its first ":" — `${source}:${sourceId}` by
 // default (see resolveMatchKey in manualOverrides.ts). Used only to scope
 // vanished-detection to "other rows this same source has previously

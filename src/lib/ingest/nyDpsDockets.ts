@@ -126,7 +126,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://documents.dps.ny.gov/public";
 
@@ -135,15 +135,19 @@ const BASE_URL = "https://documents.dps.ny.gov/public";
 // than the other states in this series, not just REQUEST_DELAY_MS) — too
 // close to the 300s cron maxDuration budget for comfort on a slow day.
 // Capped lower instead of trimming REQUEST_DELAY_MS (kept at this series'
-// standard politeness delay). Candidates are sorted most-recent-first
-// before this cap is applied, so a lower cap still prioritizes the
-// currently-relevant ones. Known accepted limitation: a genuinely-still-
-// active older docket that falls outside the top-60-by-recency window on
-// every future weekly run would never get revisited, so its DB row could
-// drift stale (e.g. never get cleaned up if it's later resolved) rather
-// than a correctness bug today — most real "still waiting" NY dockets skew
-// recent in practice, but this isn't airtight for a years-long outlier.
+// standard politeness delay).
 export const MAX_CANDIDATES = 60;
+
+// Revised 2026-08-27 — see selectWithRotation in common.ts: NY DPS's real
+// population (99 as of this date) already exceeds MAX_CANDIDATES, so a
+// plain top-60-by-recency slice would freeze the ~39 oldest still-active
+// dockets forever (confirmed live — see markVanished's wasCapped doc for
+// the false-vanish incident this same growth caused). The newest
+// ROTATING_RECENT_SLOTS are fetched every run; the rest of the budget
+// rotates through the backlog a slice at a time, cycling fully in roughly
+// (real population − ROTATING_RECENT_SLOTS) ÷ (MAX_CANDIDATES −
+// ROTATING_RECENT_SLOTS) days — at today's population, about 3 days.
+const ROTATING_RECENT_SLOTS = 40;
 const REQUEST_DELAY_MS = 250;
 const LOOKBACK_YEARS = 10;
 
@@ -463,7 +467,7 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
   const allCandidates = [...track1, ...track2];
 
   const seen = new Set<number>();
-  const realApplications = allCandidates
+  const realCandidatesSortedByRecency = allCandidates
     .filter((c) => {
       if (seen.has(c.search.matterId)) return false;
       seen.add(c.search.matterId);
@@ -471,8 +475,9 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
     })
     .filter((c) => OPENER_RE.test(c.search.matterTitle) && !EXCLUDE_RE.test(c.search.matterTitle))
     .filter((c) => c.search.startDate == null || c.search.startDate >= cutoff)
-    .sort((a, b) => (b.search.startDate?.getTime() ?? 0) - (a.search.startDate?.getTime() ?? 0))
-    .slice(0, maxCandidates);
+    .sort((a, b) => (b.search.startDate?.getTime() ?? 0) - (a.search.startDate?.getTime() ?? 0));
+
+  const realApplications = selectWithRotation(realCandidatesSortedByRecency, maxCandidates, ROTATING_RECENT_SLOTS);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -487,11 +492,12 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
     await sleep(REQUEST_DELAY_MS);
   }
 
-  // See MAX_CANDIDATES above and the `wasCapped` doc on markVanished in
-  // common.ts: once NY DPS has more real active dockets than the cap, a
-  // capped run's candidates are only the most-recent N, not the full
-  // active list, so vanished-detection must be skipped rather than
-  // wrongly flagging older-but-still-open dockets as no longer reported.
+  // See ROTATING_RECENT_SLOTS above and the `wasCapped` doc on
+  // markVanished in common.ts: even with rotation, any single run's
+  // candidates can still be a subset of the source's full active list, so
+  // vanished-detection must be skipped on a run where that happened,
+  // rather than wrongly flagging dockets outside today's rotation window
+  // as no longer reported.
   const wasCapped = realApplications.length >= maxCandidates;
   const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
 

@@ -109,6 +109,15 @@ const CPCN_PHRASE = "Certificate of Public Convenience and Necessity";
 
 // Bounds a single run's request volume — see module header. 100 candidate
 // cases means up to 1 + 100*3 = 301 requests in one run.
+//
+// NOT rotated (see selectWithRotation in common.ts, used by every other
+// module in this series): this cap is enforced server-side via the search
+// request's own OData $top param (searchCpcnCandidates below), not a
+// client-side slice over an already-fetched full list — there's no larger
+// local pool to rotate through without changing the live request itself.
+// Also low real risk today: module header YIELD (confirmed 2026-08-23)
+// puts VA's entire real population at 46 historical cases, ~1 currently
+// active — nowhere near this cap.
 export const MAX_CANDIDATES = 100;
 // Politeness delay between each candidate's detail-fetch sequence — this
 // is a small state government server, not a bulk-data API meant for this.

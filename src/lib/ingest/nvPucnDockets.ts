@@ -159,7 +159,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const LEGACY_BASE_URL = "https://pucweb1.state.nv.us/puc2/Dktinfo.aspx";
 const ONBASE_API_URL = "https://puc-onbase.nv.gov/api/CustomQuery/KeywordSearch";
@@ -170,6 +170,12 @@ const DOCKETS_QUERY_ID = 125;
 const DOCKET_NUMBER_KEYWORD_ID = "369";
 
 export const MAX_CANDIDATES = 60;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Confirmed gotcha found only by testing (not documented anywhere): the
 // legacy pucweb1.state.nv.us site performs classic ASP.NET browser-
@@ -546,13 +552,14 @@ export async function ingestNvPucnDockets(maxCandidates = MAX_CANDIDATES): Promi
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - LOOKBACK_YEARS);
 
-  const candidates = allCandidates
-    .filter((c) => UEPA_RE.test(c.description) && APPLICATION_RE.test(c.description))
-    .filter((c) => {
+  const candidates = selectWithRotation(
+    allCandidates.filter((c) => UEPA_RE.test(c.description) && APPLICATION_RE.test(c.description)).filter((c) => {
       const filed = parseMDY(c.filedDate);
       return filed != null && filed >= cutoff;
-    })
-    .slice(0, maxCandidates);
+    }),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

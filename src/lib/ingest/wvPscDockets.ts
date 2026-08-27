@@ -249,7 +249,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://www.psc.state.wv.us";
 const SEARCH_URL = `${BASE_URL}/scripts/WebDocket/viewCaseForWebList.cfm`;
@@ -272,6 +272,12 @@ const DOCKET_TYPE_SOURCES: DocketTypeSource[] = [
 // (see module header) leaves enormous margin under the 300s cron budget at
 // this population size.
 export const MAX_CANDIDATES = 50;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const PAGE_SIZE = 25;
 
@@ -633,7 +639,7 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const { record, docketLabel } of allCandidates.slice(0, maxCandidates)) {
+  for (const { record, docketLabel } of selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
     try {
       if (!CONTENT_RE.test(record.description) || !CONSTRUCTION_RE.test(record.description) || EXCLUDE_RE.test(record.description)) {
         // Not a real generation/storage/transmission construction project —

@@ -169,7 +169,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://webpscxb.pscmaryland.com/DMS";
 
@@ -178,6 +178,12 @@ const BASE_URL = "https://webpscxb.pscmaryland.com/DMS";
 // of future filings at Maryland's observed CPCN filing pace (~1-2/week)
 // before this would need lowering.
 export const MAX_CANDIDATES = 220;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // The oldest real still-open case found live is Case 9773 (filed December
 // 2024); every case older than that is either granted or withdrawn (see
@@ -575,10 +581,13 @@ export async function ingestMdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - LOOKBACK_YEARS);
 
-  const candidates = list.rows
-    .filter((r) => r.filedDate == null || r.filedDate >= cutoff)
-    .sort((a, b) => (b.filedDate?.getTime() ?? 0) - (a.filedDate?.getTime() ?? 0))
-    .slice(0, maxCandidates);
+  const candidates = selectWithRotation(
+    list.rows
+      .filter((r) => r.filedDate == null || r.filedDate >= cutoff)
+      .sort((a, b) => (b.filedDate?.getTime() ?? 0) - (a.filedDate?.getTime() ?? 0)),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

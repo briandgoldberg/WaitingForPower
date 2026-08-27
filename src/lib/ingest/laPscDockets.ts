@@ -295,7 +295,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://lpscpubvalence.lpsc.louisiana.gov";
 const DOCKET_SEARCH_URL = `${BASE_URL}/portal/PSC/DocketSearch`;
@@ -309,6 +309,12 @@ const ORDER_SEARCH_URL = `${BASE_URL}/portal/PSC/OrderSearch`;
 // docket-detail-fetch count, not just the ~19/191 real-candidate rate, is
 // what this caps.
 export const MAX_CANDIDATES = 400;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Real confirmed longest-pending real candidate is Southern Spirit
 // Transmission (Docket U-36669, filed 2023-02-16, resolved via Order
@@ -743,7 +749,7 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const record of allCandidates.slice(0, maxCandidates)) {
+  for (const record of selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
     const matchKey = resolveMatchKey("la-psc", record.docketNumber);
     try {
       // One politeness delay per HTTP request actually made this iteration

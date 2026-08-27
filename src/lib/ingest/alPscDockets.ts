@@ -228,7 +228,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://www.pscpublicaccess.alabama.gov/pscpublicaccess";
 const PORTAL_URL = `${BASE_URL}/page/psc-searches/portal.aspx`;
@@ -242,6 +242,12 @@ const FULL_TEXT_PARAM_CONTROL = "~/UserControls/Searches/PSC/PSCDocumentParamFul
 // module header) is small — a handful of real electric CPCN dockets per
 // decade. Set generously above that for headroom.
 export const MAX_CANDIDATES = 60;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // See module header VANISHED-CANDIDATE FIX for why a bounded lookback (not
 // full history) is safe here — every real electric CPCN found in this
@@ -889,7 +895,7 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const candidate of candidates.slice(0, maxCandidates)) {
+  for (const candidate of selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
     try {
       const detail = await fetchDocketDetail(candidate.docketId);
       const combinedText = `${detail.description} ${detail.synopsis}`;

@@ -189,11 +189,17 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://efis.psc.mo.gov";
 
 export const MAX_CANDIDATES = 70;
+// See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
+// candidates are checked every run; the rest of the budget rotates
+// through anything beyond that so a source whose real population exceeds
+// MAX_CANDIDATES eventually revisits everything instead of permanently
+// freezing whatever falls outside a plain top-N-by-recency window.
+const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 // Confirmed live 2026-08-23: 62 real candidates exist within this window
 // (see module header timing note). Real still-pending dockets were found
@@ -570,11 +576,14 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - LOOKBACK_YEARS);
 
-  const realApplications = allCandidates
-    .filter((c) => CONTENT_RE.test(c.styleOfCase) && !EXCLUDE_RE.test(c.styleOfCase))
-    .filter((c) => c.filedDate != null && c.filedDate >= cutoff)
-    .sort((a, b) => (b.filedDate as Date).getTime() - (a.filedDate as Date).getTime())
-    .slice(0, maxCandidates);
+  const realApplications = selectWithRotation(
+    allCandidates
+      .filter((c) => CONTENT_RE.test(c.styleOfCase) && !EXCLUDE_RE.test(c.styleOfCase))
+      .filter((c) => c.filedDate != null && c.filedDate >= cutoff)
+      .sort((a, b) => (b.filedDate as Date).getTime() - (a.filedDate as Date).getTime()),
+    maxCandidates,
+    ROTATING_RECENT_SLOTS,
+  );
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

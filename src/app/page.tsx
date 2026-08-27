@@ -37,6 +37,10 @@ const DATASET_JSON_LD = {
 
 export default async function HomePage() {
   const { changes, hasMore } = await getRecentChanges(50);
+  // Passed down instead of letting ChangesFeed call `new Date()` itself —
+  // see ChangesFeed's `now` prop comment for the hydration mismatch this
+  // fixes.
+  const now = new Date().toISOString();
 
   return (
     <>
@@ -81,7 +85,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <ChangesFeed initialChanges={changes} initialHasMore={hasMore} />
+        <ChangesFeed initialChanges={changes} initialHasMore={hasMore} now={now} />
       </div>
     </>
   );

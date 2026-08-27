@@ -30,7 +30,7 @@ function badgeFor(changeTypes: string[], newStage: string | null): Badge {
     case "reappeared":
       return { label: "Reappeared", className: "bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300" };
     case "advanced":
-      return { label: "Advanced", className: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300" };
+      return { label: "Stage Update", className: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300" };
     case "new_filing":
       return { label: "New Filing", className: "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300" };
     case "fact_revised":
@@ -40,8 +40,16 @@ function badgeFor(changeTypes: string[], newStage: string | null): Badge {
   }
 }
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
+// `now` is passed in rather than read via `Date.now()` here — see the
+// `now` prop on ChangesFeed below for why: this function runs once during
+// SSR and again during client hydration, and if each call computed its own
+// "current" time independently, the two passes would almost always render
+// different text (or, worse, group items under different Today/Yesterday
+// headers — a structural mismatch, not just a text one), which is exactly
+// what triggers React's hydration-mismatch error. Threading one shared
+// timestamp through both passes keeps the first render byte-identical.
+function relativeTime(iso: string, nowMs: number): string {
+  const ms = nowMs - new Date(iso).getTime();
   const hours = ms / (1000 * 60 * 60);
   if (hours < 1) return "just now";
   if (hours < 24) return `${Math.round(hours)}h ago`;
@@ -70,8 +78,7 @@ function dateGroupLabel(iso: string, now: Date): string {
   return date.toLocaleDateString("en-US", sameYear ? { month: "long" } : { month: "long", year: "numeric" });
 }
 
-function groupByDate(changes: ProjectChangeDTO[]): { label: string; items: ProjectChangeDTO[] }[] {
-  const now = new Date();
+function groupByDate(changes: ProjectChangeDTO[], now: Date): { label: string; items: ProjectChangeDTO[] }[] {
   const groups: { label: string; items: ProjectChangeDTO[] }[] = [];
   for (const c of changes) {
     const label = dateGroupLabel(c.createdAt, now);
@@ -85,7 +92,7 @@ function groupByDate(changes: ProjectChangeDTO[]): { label: string; items: Proje
   return groups;
 }
 
-function ChangeCard({ change }: { change: ProjectChangeDTO }) {
+function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number }) {
   const badge = badgeFor(change.changeTypes, change.newStage);
   const fuel = FUEL_TYPE_BY_VALUE[change.project.fuelType];
   return (
@@ -109,7 +116,7 @@ function ChangeCard({ change }: { change: ProjectChangeDTO }) {
           <span aria-hidden>·</span>
           <span>{formatCapacity(change.project.capacityValue, change.project.capacityUnit)}</span>
           <span aria-hidden>·</span>
-          <span>{relativeTime(change.createdAt)}</span>
+          <span>{relativeTime(change.createdAt, nowMs)}</span>
         </div>
       </div>
     </Link>
@@ -125,14 +132,27 @@ function ChangeCard({ change }: { change: ProjectChangeDTO }) {
 export function ChangesFeed({
   initialChanges,
   initialHasMore,
+  now,
 }: {
   initialChanges: ProjectChangeDTO[];
   initialHasMore: boolean;
+  // ISO timestamp captured once by the server component that renders this
+  // (see src/app/page.tsx) at the same moment it fetched `initialChanges`.
+  // Used as-is for this component's first render on both the server and
+  // the client (via useState's lazy initializer, which only runs once) so
+  // "Today"/"Yesterday" grouping and "Xh ago" text are identical between
+  // the SSR HTML and the client's hydration pass — computing `Date.now()`
+  // separately in each would drift (server is UTC; a visitor's browser
+  // usually isn't) and trip a React hydration-mismatch error. A page left
+  // open for a long time will show a "now" that's stuck at load time, same
+  // tradeoff every SSR site with relative timestamps makes.
+  now: string;
 }) {
   const [changes, setChanges] = useState(initialChanges);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [nowDate] = useState(() => new Date(now));
 
   async function loadMore() {
     setLoading(true);
@@ -158,7 +178,7 @@ export function ChangesFeed({
     );
   }
 
-  const groups = groupByDate(changes);
+  const groups = groupByDate(changes, nowDate);
 
   return (
     <div className="flex flex-col gap-4">
@@ -166,7 +186,7 @@ export function ChangesFeed({
         <div key={group.label} className="flex flex-col gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{group.label}</h3>
           {group.items.map((c) => (
-            <ChangeCard key={c.id} change={c} />
+            <ChangeCard key={c.id} change={c} nowMs={nowDate.getTime()} />
           ))}
         </div>
       ))}

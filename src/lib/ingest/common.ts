@@ -427,6 +427,25 @@ async function markVanished(sourcePrefix: string, seenMatchKeys: Set<string>): P
  * effect this now also has — a purely additive behavior change from this
  * function's prior signature, so every existing call site
  * (`upsertNormalizedProjects(toUpsert)`) keeps working unchanged.
+ *
+ * BACKFILL DETECTION (revised 2026-08-27 — see IngestSourceBackfill in
+ * schema.prisma for the incident this fixed): whether to suppress this
+ * run's "new" logging is no longer inferred from "does this source
+ * currently have zero rows," because that signal is silently defeated by
+ * any out-of-band write against the same database — most notably a
+ * developer running `npm run ingest:<source>` by hand (see each module's
+ * own `require.main === module` block) before that source's cron has ever
+ * fired for real. Two rules instead:
+ *   1. A run NOT triggered by the live Vercel cron (`isLiveCronRun` below)
+ *      never marks a source's backfill complete and always suppresses its
+ *      own "new" logging — a manual/local run should never itself produce
+ *      real feed events, so it can't burn the one true backfill exemption
+ *      the source's actual first cron run is entitled to.
+ *   2. A cron-triggered run suppresses "new" logging exactly until an
+ *      IngestSourceBackfill row exists for this sourcePrefix, and writes
+ *      that row itself once such a run completes — so the exemption is
+ *      spent by the real first cron run, not by whichever run happens to
+ *      find zero rows first.
  */
 export async function upsertNormalizedProjects(
   projects: NormalizedProject[],
@@ -438,19 +457,19 @@ export async function upsertNormalizedProjects(
   const errors: { matchKey: string; message: string }[] = [];
 
   const sourcePrefix = options.sourcePrefix ?? sourcePrefixOf(projects[0]?.matchKey ?? "");
-  // See upsertNormalizedProject's `suppressNewChangeLog` comment: checked
-  // once, up front, against whatever the DB held before this run touches
-  // anything — a source with zero previously-tracked rows is getting its
-  // very first ingestion run, so every "new"-looking row below is really
-  // just this run's initial backfill, not a same-day discovery.
-  const isBackfillRun =
-    sourcePrefix !== "" &&
-    (await prisma.project.count({ where: { matchKey: { startsWith: `${sourcePrefix}:` } } })) === 0;
+
+  // Vercel sets VERCEL=1 in every deployed function (build, preview, and
+  // production runtime alike) but never in a plain local `tsx` invocation —
+  // see BACKFILL DETECTION above.
+  const isLiveCronRun = process.env.VERCEL === "1";
+  const backfillRecord =
+    sourcePrefix !== "" ? await prisma.ingestSourceBackfill.findUnique({ where: { sourcePrefix } }) : null;
+  const suppressNewChangeLog = !isLiveCronRun || !backfillRecord;
 
   for (let i = 0; i < projects.length; i += concurrency) {
     const batch = projects.slice(i, i + concurrency);
     const results = await Promise.allSettled(
-      batch.map((p) => upsertNormalizedProject(p, { suppressNewChangeLog: isBackfillRun })),
+      batch.map((p) => upsertNormalizedProject(p, { suppressNewChangeLog })),
     );
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
@@ -461,6 +480,14 @@ export async function upsertNormalizedProjects(
         errors.push({ matchKey: batch[j].matchKey, message: String(result.reason) });
       }
     }
+  }
+
+  if (isLiveCronRun && !backfillRecord && sourcePrefix !== "") {
+    // Race-safe: two overlapping cron invocations for the same source would
+    // otherwise both try to create this row.
+    await prisma.ingestSourceBackfill
+      .create({ data: { sourcePrefix } })
+      .catch(() => {});
   }
 
   const vanished = sourcePrefix ? await markVanished(sourcePrefix, new Set(projects.map((p) => p.matchKey))) : 0;

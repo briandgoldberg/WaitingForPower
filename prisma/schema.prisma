@@ -134,6 +134,32 @@ model Project {
   @@index([noLongerReported])
 }
 
+// One row per ingestion source, written once its real backfill is done —
+// see `suppressNewChangeLog` / `isBackfillRun` in common.ts. A source's
+// very first ingestion run makes every candidate look "new" to the diff,
+// even though they're just pre-existing dockets the site is only now
+// starting to track; left unsuppressed that floods the changes feed on day
+// one. The obvious signal for "is this day one" — this source currently
+// has zero Project rows — isn't reliable enough on its own: a developer
+// manually running `npm run ingest:<source>` against the same database
+// used for both local dev and production (see schema header) before that
+// source's cron ever fires for real seeds a handful of rows, which makes
+// the *real* first cron run look like it isn't day one anymore, and it
+// floods the feed with everything the manual run hadn't already caught
+// (confirmed live 2026-08-27: exactly this happened to Maine DEP, Louisiana
+// PSC, and Rhode Island EFSB). This table is the fix: a source is only
+// ever considered backfilled once a run actually invoked by the live
+// Vercel cron (not a manual CLI run — see `isLiveCronRun` in common.ts)
+// completes while this row doesn't yet exist for it. A manual CLI run
+// never writes this row and never posts real feed events itself, so it
+// can't burn the one true backfill exemption a source gets.
+model IngestSourceBackfill {
+  // `${source}:` prefix of Project.matchKey for this source, e.g. "me-dep" —
+  // see sourcePrefixOf in common.ts.
+  sourcePrefix String   @id
+  completedAt  DateTime @default(now())
+}
+
 // One row per (project, ingestion run) where something worth telling a
 // user about actually changed — the data source for the homepage "changes"
 // feed (the site's core value prop as of 2026-08-25: actionable

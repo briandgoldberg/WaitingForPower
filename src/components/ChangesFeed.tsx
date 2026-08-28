@@ -55,27 +55,39 @@ function relativeTime(iso: string, nowMs: number): string {
   if (hours < 24) return `${Math.round(hours)}h ago`;
   const days = hours / 24;
   if (days < 14) return `${Math.round(days)}d ago`;
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 // Same day-bucketing most social/notification feeds use (GitHub, Slack,
 // etc.): Today / Yesterday / This Week / This Month, then by calendar
-// month for anything older. Computed from calendar-day boundaries in the
-// viewer's local time, not a rolling 24h/7d window, so "Today" always
-// means the same thing a clock on the wall would.
+// month for anything older. Deliberately bucketed by UTC calendar day, not
+// the viewer's own local day, even though "local" was the original intent
+// (see git history) — confirmed live 2026-08-28 that local-day bucketing
+// is a second, independent source of the same hydration-mismatch error the
+// shared `now` prop above was meant to fix: threading one timestamp
+// through both passes guarantees server and client agree on *which
+// instant* "now" is, but getFullYear()/getMonth()/getDate() are LOCAL-
+// timezone getters, so the exact same instant still resolves to a
+// different calendar day (and therefore a different set of Today/
+// Yesterday groups — a structural DOM mismatch, not just stale text) on a
+// server that always runs UTC versus a browser in any other timezone. Only
+// invisible in local dev because the dev server and the browser checking
+// it happen to share one machine's timezone. Bucketing by UTC day on both
+// sides trades a few hours of edge-of-day fuzziness for a guarantee that
+// never depends on where either side happens to be running.
 function dateGroupLabel(iso: string, now: Date): string {
   const date = new Date(iso);
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const startOfDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   const today = startOfDay(now);
   const changeDay = startOfDay(date);
-  const dayDiff = Math.round((today.getTime() - changeDay.getTime()) / (1000 * 60 * 60 * 24));
+  const dayDiff = Math.round((today - changeDay) / (1000 * 60 * 60 * 24));
 
   if (dayDiff <= 0) return "Today";
   if (dayDiff === 1) return "Yesterday";
   if (dayDiff <= 7) return "This Week";
-  if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) return "This Month";
-  const sameYear = date.getFullYear() === now.getFullYear();
-  return date.toLocaleDateString("en-US", sameYear ? { month: "long" } : { month: "long", year: "numeric" });
+  if (date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth()) return "This Month";
+  const sameYear = date.getUTCFullYear() === now.getUTCFullYear();
+  return date.toLocaleDateString("en-US", { month: "long", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" });
 }
 
 function groupByDate(changes: ProjectChangeDTO[], now: Date): { label: string; items: ProjectChangeDTO[] }[] {

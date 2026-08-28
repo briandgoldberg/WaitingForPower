@@ -28,6 +28,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: TITLE,
     description: DESCRIPTION,
+    site: "@WaitingForPower",
   },
 };
 
@@ -37,10 +38,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.variable} min-h-screen flex flex-col`}>
         <header className="border-b border-[var(--border)] bg-[var(--panel)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-            <Link href="/" className="flex items-baseline gap-2">
-              <span className="text-lg font-bold tracking-tight">WaitingForPower</span>
-              <span className="text-xs text-[var(--muted)] hidden sm:inline">
-                an Energy Project Tracker
+            <Link href="/" className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.svg" alt="" width={28} height={28} className="rounded-full shrink-0" />
+              <span className="flex items-baseline gap-2">
+                <span className="text-lg font-bold tracking-tight">WaitingForPower</span>
+                <span className="text-xs text-[var(--muted)] hidden sm:inline">
+                  an Energy Project Tracker
+                </span>
               </span>
             </Link>
             <nav className="flex flex-wrap items-center gap-1 text-sm">
@@ -75,6 +80,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               WaitingForPower tracks U.S. energy projects of every fuel type — structural, sourced.
             </p>
             <div className="flex items-center gap-3">
+              <a
+                href="https://x.com/WaitingForPower"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                Follow on X
+              </a>
               <a
                 href="https://github.com/briandgoldberg/WaitingForPower"
                 target="_blank"

@@ -52,7 +52,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
-import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
+import { resolveMatchKey, isMergedWithAnotherSource } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
 
 const SOCRATA_BASE = "https://data.permits.performance.gov/resource/fh3k-bqsc.json";
@@ -215,7 +215,14 @@ export function normalizeDashboardRecord(r: DashboardRecord): NormalizedProject 
 
 export async function ingestPermittingDashboard() {
   const rows = await fetchAll();
-  const normalized = rows.map(normalizeDashboardRecord);
+  // Skip project_ids a human has already merged (manualOverrides.csv) with
+  // a real state-level docket tracker — see isMergedWithAnotherSource for
+  // the daily stage-oscillation bug this fixes. This module simply stops
+  // writing currentStage/currentStatus for those, deferring to the other
+  // source entirely, rather than the two sources fighting over the field
+  // once a day.
+  const notAlreadyMerged = rows.filter((r) => !isMergedWithAnotherSource("permittingDashboard", r.project_id));
+  const normalized = notAlreadyMerged.map(normalizeDashboardRecord);
   const { upserted, removedResolved, errors } = await upsertNormalizedProjects(normalized);
   console.log(
     `Permitting Dashboard ingestion complete: upserted ${upserted} projects ` +

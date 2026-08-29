@@ -23,6 +23,7 @@ import { prisma } from "@/lib/db";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES } from "@/lib/data/taxonomies";
+import { isMergedMatchKey } from "@/lib/ingest/manualOverrides";
 
 export interface NormalizedSource {
   label: string;
@@ -229,23 +230,41 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     ? new Set((await prisma.milestone.findMany({ where: { projectId: existing.id }, select: { description: true } })).map((m) => m.description))
     : new Set<string>();
 
+  // MERGED-FIELD NULL SAFETY: for a project shared by 2+ sources
+  // (manualOverrides.csv), a null from one source must never erase a
+  // value another source already contributed — see isMergedMatchKey's doc
+  // in manualOverrides.ts for the incident this fixes (confirmed live
+  // 2026-08-28: Cascade Renewable Transmission's capacity flapped between
+  // 320 kV and unknown every day, generating a bogus "Capacity disclosed"
+  // feed entry each time, because its two legitimate merged sources
+  // disagree on whether capacity is published). A non-merged project keeps
+  // the previous behavior below unchanged: the incoming source's value
+  // always wins, including a null — a single source's own data going
+  // missing is a real signal worth reflecting, not masking.
+  const isMerged = isMergedMatchKey(p.matchKey);
+  function keepIfMergedAndNull<T>(incoming: T | null | undefined, existingValue: T | null | undefined): T | null {
+    if (incoming != null) return incoming;
+    if (isMerged && existingValue != null) return existingValue;
+    return null;
+  }
+
   const fields = {
     name: p.name,
     projectType: p.projectType,
     fuelType: p.fuelType,
-    lat: p.lat ?? null,
-    lon: p.lon ?? null,
+    lat: keepIfMergedAndNull(p.lat, existing?.lat),
+    lon: keepIfMergedAndNull(p.lon, existing?.lon),
     state: p.state ?? null,
-    county: p.county ?? null,
-    capacityValue: p.capacityValue ?? null,
-    capacityUnit: p.capacityUnit ?? null,
-    applicationFiledDate: p.applicationFiledDate ?? null,
+    county: keepIfMergedAndNull(p.county, existing?.county),
+    capacityValue: keepIfMergedAndNull(p.capacityValue, existing?.capacityValue),
+    capacityUnit: keepIfMergedAndNull(p.capacityUnit, existing?.capacityUnit),
+    applicationFiledDate: keepIfMergedAndNull(p.applicationFiledDate, existing?.applicationFiledDate),
     dateConfidence: p.dateConfidence ?? "exact",
     currentStatus: p.currentStatus,
     currentStage: p.currentStage,
     causeDetail: p.causeDetail,
     interconnectionQueueStage: p.interconnectionQueueStage ?? null,
-    networkUpgradeCostUsd: p.networkUpgradeCostUsd ?? null,
+    networkUpgradeCostUsd: keepIfMergedAndNull(p.networkUpgradeCostUsd, existing?.networkUpgradeCostUsd),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,

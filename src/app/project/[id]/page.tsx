@@ -8,6 +8,7 @@ import type { ProjectDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
+import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!p) notFound();
 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
+  const stateCodes = splitStateCodes(p.state);
+  const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
@@ -90,7 +93,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{p.name}</h1>
             <p className="text-sm text-[var(--muted)] mt-1">
-              {[p.county, p.state].filter(Boolean).join(", ") || "Location not specified"}
+              {p.county && `${p.county}, `}
+              {singleStateCode ? (
+                <Link href={`/state/${singleStateCode}`} className="underline">
+                  {p.state}
+                </Link>
+              ) : (
+                p.state
+              )}
+              {!p.county && !p.state && "Location not specified"}
             </p>
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />

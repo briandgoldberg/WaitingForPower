@@ -571,13 +571,18 @@ export async function ingestNhSecDockets(maxCandidates = MAX_CANDIDATES): Promis
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const row of realCandidates) {
     try {
       const filings = await fetchDocketFilings(row.docketNumber);
-      toUpsert.push(normalizeCandidate(row, filings));
+      const normalized = normalizeCandidate(row, filings);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: row.docketNumber, message: String(err) });
     }
@@ -589,7 +594,7 @@ export async function ingestNhSecDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: secRows.length,

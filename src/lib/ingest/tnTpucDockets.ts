@@ -581,6 +581,8 @@ export interface IngestSummary {
 
 export async function ingestTnTpucDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const docketNumbers = selectWithRotation(await fetchActiveDocketNumbers(), maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(docketNumbers.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -591,7 +593,9 @@ export async function ingestTnTpucDockets(maxCandidates = MAX_CANDIDATES): Promi
       const detail = await fetchDocketDetail(docketNumber);
       if (isElectricCcnCandidate(detail.caption)) {
         realApplicationCandidates += 1;
-        toUpsert.push(normalizeDocket(detail));
+        const normalized = normalizeDocket(detail);
+        toUpsert.push(normalized);
+        if (rotatingTier.has(docketNumber)) rotatingMatchKeys.add(normalized.matchKey);
       }
     } catch (err) {
       errors.push({ matchKey: resolveMatchKey("tn-tpuc", docketNumber), message: String(err) });
@@ -608,7 +612,7 @@ export async function ingestTnTpucDockets(maxCandidates = MAX_CANDIDATES): Promi
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = docketNumbers.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: docketNumbers.length,

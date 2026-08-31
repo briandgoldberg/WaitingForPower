@@ -616,6 +616,9 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   const decidedNumbers = await buildDecidedNumberSet(realCandidates);
 
+  const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
@@ -626,11 +629,15 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
         // module header STATUS — so its own detail page is never fetched
         // (saves a request); still pushed through normalizeCandidate(...,
         // null) so upsertNormalizedProjects deletes any existing row.
-        toUpsert.push(normalizeCandidate(candidate, null));
+        const normalized = normalizeCandidate(candidate, null);
+        toUpsert.push(normalized);
+        if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
         continue;
       }
       const detail = await fetchCandidateDetail(candidate.url);
-      toUpsert.push(normalizeCandidate(candidate, detail));
+      const normalized = normalizeCandidate(candidate, detail);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
       await sleep(REQUEST_DELAY_MS);
     } catch (err) {
       errors.push({ matchKey: `${candidate.kind}-${candidate.number}`, message: String(err) });
@@ -642,7 +649,7 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

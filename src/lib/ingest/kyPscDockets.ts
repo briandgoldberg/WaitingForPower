@@ -494,7 +494,11 @@ export async function ingestKyPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const caseNumber of selectWithRotation(allCaseNumbers, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const selected = selectWithRotation(allCaseNumbers, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const caseNumber of selected) {
     try {
       const detail = await fetchCaseDetail(caseNumber);
       if (EXCLUDE_RE.test(detail.nature)) {
@@ -504,7 +508,9 @@ export async function ingestKyPscDockets(maxCandidates = MAX_CANDIDATES): Promis
         continue;
       }
       realApplicationCandidates += 1;
-      toUpsert.push(normalizeCase(detail));
+      const normalized = normalizeCase(detail);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(caseNumber)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: caseNumber, message: String(err) });
     }
@@ -516,7 +522,7 @@ export async function ingestKyPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = allCaseNumbers.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCaseNumbers.length,

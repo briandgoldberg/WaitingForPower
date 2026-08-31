@@ -485,6 +485,9 @@ export async function ingestOkOccDockets(maxCandidates = MAX_CANDIDATES): Promis
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
@@ -497,7 +500,10 @@ export async function ingestOkOccDockets(maxCandidates = MAX_CANDIDATES): Promis
       const docs = await searchByCaseNumber(candidate.caseNumber);
       const resolution = determineResolution(docs);
       const normalized = normalizeCase(candidate.caseNumber, docs, resolution);
-      if (normalized) toUpsert.push(normalized);
+      if (normalized) {
+        toUpsert.push(normalized);
+        if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
+      }
     } catch (err) {
       errors.push({ matchKey: candidate.caseNumber, message: String(err) });
     }
@@ -509,7 +515,7 @@ export async function ingestOkOccDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidateDocuments: broadDocs.length,

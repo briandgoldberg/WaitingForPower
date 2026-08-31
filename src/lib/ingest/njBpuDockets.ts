@@ -750,13 +750,18 @@ export async function ingestNjBpuDockets(maxCandidates = MAX_CANDIDATES): Promis
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const candidate of realApplications) {
     try {
       const resolution = await fetchDocketResolution(jar, candidate.search.caseId);
-      toUpsert.push(normalizeCandidate(candidate, resolution));
+      const normalized = normalizeCandidate(candidate, resolution);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.search.docket, message: String(err) });
     }
@@ -768,7 +773,7 @@ export async function ingestNjBpuDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realApplications.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

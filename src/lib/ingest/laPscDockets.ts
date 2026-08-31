@@ -749,8 +749,13 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const record of selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const selected = selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const record of selected) {
     const matchKey = resolveMatchKey("la-psc", record.docketNumber);
+    if (rotatingTier.has(record)) rotatingMatchKeys.add(matchKey);
     try {
       // One politeness delay per HTTP request actually made this iteration
       // — a skipped (non-candidate) docket makes only the DocketDetails
@@ -784,7 +789,7 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = allCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

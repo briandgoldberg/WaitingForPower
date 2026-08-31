@@ -639,7 +639,12 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const { record, docketLabel } of selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const rotatedCandidates = selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(rotatedCandidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const entry of rotatedCandidates) {
+    const { record, docketLabel } = entry;
     try {
       if (!CONTENT_RE.test(record.description) || !CONSTRUCTION_RE.test(record.description) || EXCLUDE_RE.test(record.description)) {
         // Not a real generation/storage/transmission construction project —
@@ -649,7 +654,9 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       realApplicationCandidates += 1;
       const orderTexts = await fetchOrderTexts(record.caseNumber);
       const resolution = detectResolution(orderTexts);
-      toUpsert.push(normalizeCase(record, docketLabel, resolution));
+      const normalized = normalizeCase(record, docketLabel, resolution);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(entry)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: record.caseNumber, message: String(err) });
     }
@@ -671,7 +678,7 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = allCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

@@ -402,10 +402,16 @@ export async function ingestNdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     (l) => CATEGORY_ALLOWLIST.has(l.category) && !TRANSFER_RE.test(l.description),
   );
 
+  const selected = selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
-  for (const listing of selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  for (const listing of selected) {
     try {
-      toUpsert.push(await normalizeCandidate(listing));
+      const normalized = await normalizeCandidate(listing);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(listing)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: listing.caseNumber, message: String(err) });
     }
@@ -421,7 +427,7 @@ export async function ingestNdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allListings.length,

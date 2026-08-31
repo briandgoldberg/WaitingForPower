@@ -349,10 +349,16 @@ export async function ingestSdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   const candidates = allListings.filter((l) => CONTENT_RE.test(l.rawTitle) && !EXCLUDE_RE.test(l.rawTitle));
 
+  const realApplications = selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
-  for (const listing of selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  for (const listing of realApplications) {
     try {
-      toUpsert.push(await normalizeCandidate(listing));
+      const normalized = await normalizeCandidate(listing);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(listing)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: listing.docketNumber, message: String(err) });
     }
@@ -368,7 +374,7 @@ export async function ingestSdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allListings.length,

@@ -426,6 +426,8 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
     maxCandidates,
     ROTATING_RECENT_SLOTS,
   );
+  const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -433,7 +435,9 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   for (const candidate of candidates) {
     try {
       const detail = await fetchFacilityDetail(candidate.slug);
-      toUpsert.push(normalizeFacility(candidate, detail));
+      const normalized = normalizeFacility(candidate, detail);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.nodeId ?? candidate.slug, message: String(err) });
     }
@@ -445,7 +449,7 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allFacilities.length,

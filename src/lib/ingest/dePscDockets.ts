@@ -684,7 +684,12 @@ export async function ingestDePscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const toUpsert: NormalizedProject[] = [];
   let realApplicationCandidates = 0;
 
-  for (const { candidate, source } of selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const selected = selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const item of selected) {
+    const { candidate, source } = item;
     if (TEST_DOCKET_RE.test(candidate.caption)) {
       // Not a real application — see module header STATUS (Docket 25-1020,
       // PSC staff's own DelaFile system test). Not counted as "decided" for
@@ -694,7 +699,9 @@ export async function ingestDePscDockets(maxCandidates = MAX_CANDIDATES): Promis
     }
     realApplicationCandidates += 1;
     try {
-      toUpsert.push(normalizeCandidate(candidate, source));
+      const normalized = normalizeCandidate(candidate, source);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(item)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.matterNo, message: String(err) });
     }
@@ -709,7 +716,7 @@ export async function ingestDePscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = allCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

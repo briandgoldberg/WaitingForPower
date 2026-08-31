@@ -552,12 +552,17 @@ export async function ingestMeDepSiteLawPermits(maxCandidates = MAX_CANDIDATES):
 
   const realCandidates = selectWithRotation(dedupeRecords(allRecords.filter(isRealCandidate)), maxCandidates, ROTATING_RECENT_SLOTS);
 
+  const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const record of realCandidates) {
     try {
-      toUpsert.push(normalizeRecord(record));
+      const normalized = normalizeRecord(record);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(record)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: record.LICENSE_NUMBER ?? record.ATS_NUMBER, message: String(err) });
     }
@@ -573,7 +578,7 @@ export async function ingestMeDepSiteLawPermits(maxCandidates = MAX_CANDIDATES):
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allRecords.length,

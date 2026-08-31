@@ -860,8 +860,13 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const docket of selectWithRotation(allDockets, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const selected = selectWithRotation(allDockets, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const docket of selected) {
     const matchKey = resolveMatchKey("ar-psc", docket);
+    if (rotatingTier.has(docket)) rotatingMatchKeys.add(matchKey);
     try {
       const detail = await fetchDocketDetail(docket);
       await sleep(REQUEST_DELAY_MS);
@@ -916,7 +921,7 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = allDockets.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allDockets.length,

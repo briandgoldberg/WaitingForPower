@@ -478,6 +478,8 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
     .sort((a, b) => (b.search.startDate?.getTime() ?? 0) - (a.search.startDate?.getTime() ?? 0));
 
   const realApplications = selectWithRotation(realCandidatesSortedByRecency, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -485,7 +487,9 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
   for (const candidate of realApplications) {
     try {
       const detail = await fetchDetail(candidate.search.matterId);
-      toUpsert.push(normalizeMatter(candidate.search, detail, candidate.track));
+      const normalized = normalizeMatter(candidate.search, detail, candidate.track);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.search.caseOrMatterNumber, message: String(err) });
     }
@@ -499,7 +503,7 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
   // rather than wrongly flagging dockets outside today's rotation window
   // as no longer reported.
   const wasCapped = realApplications.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

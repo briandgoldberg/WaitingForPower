@@ -317,6 +317,9 @@ export interface IngestSummary {
 export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const candidates = selectWithRotation(await searchCandidates(), maxCandidates, ROTATING_RECENT_SLOTS);
 
+  const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
@@ -327,7 +330,9 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
       // so its filing history is never displayed; skipping the fetch saves
       // a request per resolved candidate.
       const docs = stageForStatus(candidate.status) === "local_review" ? parseDocuments(await fetchDetail(candidate.docketId)) : [];
-      toUpsert.push(normalizeDocket(candidate, docs));
+      const normalized = normalizeDocket(candidate, docs);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.docketId, message: String(err) });
     }
@@ -339,7 +344,7 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return { candidatesFound: candidates.length, upserted, removedResolved, errors };
 }

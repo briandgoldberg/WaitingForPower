@@ -450,6 +450,9 @@ export async function ingestMaEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
   let removedResolvedFromStatusCheck = 0;
@@ -460,7 +463,9 @@ export async function ingestMaEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
       if (isResolved(detail)) {
         removedResolvedFromStatusCheck++;
       } else {
-        toUpsert.push(normalizeDocket(candidate, detail));
+        const normalized = normalizeDocket(candidate, detail);
+        toUpsert.push(normalized);
+        if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
       }
     } catch (err) {
       errors.push({ matchKey: candidate.Number, message: String(err) });
@@ -473,7 +478,7 @@ export async function ingestMaEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realApplications.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allDockets.length,

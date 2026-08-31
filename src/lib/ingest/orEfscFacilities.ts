@@ -472,12 +472,17 @@ export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Pr
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const candidate of candidates) {
     try {
-      toUpsert.push(normalizeFacility(candidate));
+      const normalized = normalizeFacility(candidate);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: String(candidate.Id), message: String(err) });
     }
@@ -488,7 +493,7 @@ export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Pr
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allFacilities.length,

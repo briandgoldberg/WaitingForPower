@@ -847,9 +847,14 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
   const allEntries = [...byCase.entries()];
   const inScopeEntries = allEntries.filter(([, mentions]) => classifyBySuffix(mentions[0].suffix) !== null);
 
+  const selected = selectWithRotation(inScopeEntries, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
 
-  for (const [key, mentions] of selectWithRotation(inScopeEntries, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  for (const entry of selected) {
+    const [key, mentions] = entry;
     // Chronological order (meeting date, then in-page paragraph order within
     // a meeting via Array.prototype.sort's stability) — see
     // pickFactsMention/pickResolutionMention for why the facts and
@@ -859,7 +864,9 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
     const projectType = classifyBySuffix(sorted[0].suffix);
     if (!projectType) continue; // defensive; already filtered above
     try {
-      toUpsert.push(normalizeCase(sorted[0].caseNumber, sorted[0].suffix, sorted, projectType));
+      const normalized = normalizeCase(sorted[0].caseNumber, sorted[0].suffix, sorted, projectType);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(entry)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: key, message: String(err) });
     }
@@ -874,7 +881,7 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = inScopeEntries.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allEntries.length,

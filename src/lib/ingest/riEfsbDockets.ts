@@ -726,6 +726,9 @@ export async function ingestRiEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
@@ -735,7 +738,9 @@ export async function ingestRiEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
       const docs = extractDetailDocuments(detailHtml);
       const filedDate = extractEarliestDate(detailHtml);
       const resolution: Resolution = hasWithdrawalNotice(docs) ? "withdrawn" : await detectResolution(docs);
-      toUpsert.push(normalizeDocket(row, resolution, filedDate));
+      const normalized = normalizeDocket(row, resolution, filedDate);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: row.docketNumber, message: String(err) });
     }
@@ -752,7 +757,7 @@ export async function ingestRiEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allRows.length,

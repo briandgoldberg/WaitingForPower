@@ -571,6 +571,8 @@ export interface IngestSummary {
 
 export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const candidates = await searchCpcnCandidates(maxCandidates);
+  const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -580,18 +582,23 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
   for (const row of candidates) {
     const needsDetail = ACTIVE_STATUSES.has(row.caseStatus) || LITIGATION_STATUSES.has(row.caseStatus);
     if (!needsDetail) {
-      toUpsert.push(buildCleanupPlaceholder(row));
+      const normalized = buildCleanupPlaceholder(row);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
       continue;
     }
     try {
       detailFetches += 1;
       const caption = await fetchCaption(row.legalCaseId);
+      let normalized: NormalizedProject;
       if (isGenuineNewCpcnApplication(caption)) {
-        toUpsert.push(buildActiveProject(row, caption));
+        normalized = buildActiveProject(row, caption);
         realApplicationsTracked += 1;
       } else {
-        toUpsert.push(buildCleanupPlaceholder(row));
+        normalized = buildCleanupPlaceholder(row);
       }
+      toUpsert.push(normalized);
+      if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: resolveMatchKey("in-iurc", row.docketNumber), message: String(err) });
     }
@@ -603,7 +610,7 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: candidates.length,

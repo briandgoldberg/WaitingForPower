@@ -501,13 +501,18 @@ export async function ingestIdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
     ROTATING_RECENT_SLOTS,
   );
 
+  const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const row of realCandidates) {
     try {
       const detail = await fetchCaseDetail(row.caseId);
-      toUpsert.push(normalizeCase(row, detail));
+      const normalized = normalizeCase(row, detail);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: row.caseNumber, message: String(err) });
     }
@@ -523,7 +528,7 @@ export async function ingestIdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realCandidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allOpenCases.length,

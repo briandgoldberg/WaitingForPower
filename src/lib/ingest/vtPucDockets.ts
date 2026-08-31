@@ -554,7 +554,11 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   const toUpsert: NormalizedProject[] = [];
   let realApplicationCandidates = 0;
 
-  for (const record of selectWithRotation(allRecords, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const rotatedRecords = selectWithRotation(allRecords, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(rotatedRecords.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const record of rotatedRecords) {
     try {
       if (!CONTENT_RE.test(record.description) || EXCLUDE_RE.test(record.description)) {
         // Not a real new-facility CPG petition — see module header
@@ -562,7 +566,9 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
         continue;
       }
       realApplicationCandidates += 1;
-      toUpsert.push(normalizeCandidate(record));
+      const normalized = normalizeCandidate(record);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(record)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: record.caseNumber, message: String(err) });
     }
@@ -578,7 +584,7 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = allRecords.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allRecords.length,

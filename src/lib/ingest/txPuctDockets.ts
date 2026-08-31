@@ -422,6 +422,8 @@ export interface IngestSummary {
 
 export async function ingestTxPuctDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const candidates = selectWithRotation(await searchCandidates(), maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   let skippedBookFile = 0;
   let skippedComplianceDocket = 0;
@@ -444,7 +446,9 @@ export async function ingestTxPuctDockets(maxCandidates = MAX_CANDIDATES): Promi
         continue;
       }
       const filings = await fetchFilingsForDocket(candidate.controlNumber);
-      toUpsert.push(normalizeDocket(candidate, filings));
+      const normalized = normalizeDocket(candidate, filings);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: String(candidate.controlNumber), message: String(err) });
     }
@@ -456,7 +460,7 @@ export async function ingestTxPuctDockets(maxCandidates = MAX_CANDIDATES): Promi
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: candidates.length,

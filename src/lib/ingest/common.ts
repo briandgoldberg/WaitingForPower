@@ -528,10 +528,38 @@ async function markVanished(sourcePrefix: string, seenMatchKeys: Set<string>): P
  *      that row itself once such a run completes — so the exemption is
  *      spent by the real first cron run, not by whichever run happens to
  *      find zero rows first.
+ *
+ * `suppressNewForMatchKeys` (added 2026-08-30): a second, per-project
+ * reason to suppress "new" logging, independent of BACKFILL DETECTION
+ * above — see selectWithRotation's own doc for the incident this fixes.
+ * A source whose real population exceeds its cap doesn't just risk
+ * false-vanishing older candidates (wasCapped, markVanished); the *first*
+ * time rotation reaches one of them and creates its row for real, that
+ * row is exactly as new-to-the-database as a genuinely fresh filing, but
+ * it isn't real news — it's backlog the source's original backfill never
+ * got to. Confirmed live 2026-08-30: NY DPS's rotation correctly started
+ * creating rows for ~39 previously-unreachable dockets (Beacon Wind,
+ * Horseshoe Solar, several multi-year-old National Grid/NYPA cases), and
+ * since NY DPS's real backfill had already completed days earlier, that
+ * one-time exemption was already spent — so all 39 got flagged "new" in
+ * one run, the exact flood BACKFILL DETECTION exists to prevent, just
+ * triggered by a different mechanism. A blanket per-run suppression
+ * (like wasCapped's) can't be the fix here: it would also silence a
+ * genuinely fresh filing on any day the source happens to be over cap,
+ * which for an already-over-cap source is every day forever. Callers
+ * instead pass the specific matchKeys pulled from the *rotating* (not
+ * always-recent) tier this run — see each module's own wiring — so only
+ * backlog catch-up is suppressed; a fresh filing always ranks in the
+ * always-recent tier and keeps its real "new" callout.
  */
 export async function upsertNormalizedProjects(
   projects: NormalizedProject[],
-  options: { sourcePrefix?: string; concurrency?: number; wasCapped?: boolean } = {},
+  options: {
+    sourcePrefix?: string;
+    concurrency?: number;
+    wasCapped?: boolean;
+    suppressNewForMatchKeys?: Set<string>;
+  } = {},
 ): Promise<{ upserted: number; removedResolved: number; vanished: number; errors: { matchKey: string; message: string }[] }> {
   const concurrency = options.concurrency ?? 40;
   let upserted = 0;
@@ -551,7 +579,11 @@ export async function upsertNormalizedProjects(
   for (let i = 0; i < projects.length; i += concurrency) {
     const batch = projects.slice(i, i + concurrency);
     const results = await Promise.allSettled(
-      batch.map((p) => upsertNormalizedProject(p, { suppressNewChangeLog })),
+      batch.map((p) =>
+        upsertNormalizedProject(p, {
+          suppressNewChangeLog: suppressNewChangeLog || (options.suppressNewForMatchKeys?.has(p.matchKey) ?? false),
+        }),
+      ),
     );
     for (let j = 0; j < results.length; j++) {
       const result = results[j];

@@ -895,7 +895,11 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   let realApplicationCandidates = 0;
 
-  for (const candidate of selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS)) {
+  const selected = selectWithRotation(candidates, maxCandidates, ROTATING_RECENT_SLOTS);
+  const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
+
+  for (const candidate of selected) {
     try {
       const detail = await fetchDocketDetail(candidate.docketId);
       const combinedText = `${detail.description} ${detail.synopsis}`;
@@ -913,7 +917,9 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       await sleep(REQUEST_DELAY_MS);
       const docs = await fetchDocketDocuments(cookie, candidate.docketId);
       const resolution = detectResolution(docs);
-      toUpsert.push(normalizeCandidate(detail, resolution));
+      const normalized = normalizeCandidate(detail, resolution);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.docketNumber, message: String(err) });
     }
@@ -930,7 +936,7 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = candidates.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: candidates.length,

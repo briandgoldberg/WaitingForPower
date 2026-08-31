@@ -530,6 +530,8 @@ export async function ingestUtPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     maxCandidates,
     ROTATING_RECENT_SLOTS,
   );
+  const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -537,7 +539,9 @@ export async function ingestUtPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   for (const listing of realApplications) {
     try {
       const resolution = await fetchDocketResolution(listing.url);
-      toUpsert.push(normalizeDocket(listing, resolution));
+      const normalized = normalizeDocket(listing, resolution);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(listing)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: listing.docketNo, message: String(err) });
     }
@@ -549,7 +553,7 @@ export async function ingestUtPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realApplications.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: cpcnPhraseMatches.length,

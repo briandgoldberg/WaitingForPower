@@ -524,6 +524,8 @@ export async function ingestWiPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     maxCandidates,
     ROTATING_RECENT_SLOTS,
   );
+  const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
+  const rotatingMatchKeys = new Set<string>();
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -531,7 +533,9 @@ export async function ingestWiPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   for (const candidate of realApplications) {
     try {
       const resolution = await fetchDocketResolution(candidate.utilityId, candidate.seqNum);
-      toUpsert.push(normalizeDocket(candidate, resolution));
+      const normalized = normalizeDocket(candidate, resolution);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.docket, message: String(err) });
     }
@@ -543,7 +547,7 @@ export async function ingestWiPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // list, so vanished-detection must be skipped rather than flooding the
   // feed with false "no longer reported" flags.
   const wasCapped = realApplications.length >= maxCandidates;
-  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped });
+  const { upserted, removedResolved } = await upsertNormalizedProjects(toUpsert, { wasCapped, suppressNewForMatchKeys: rotatingMatchKeys });
 
   return {
     candidatesFound: allCandidates.length,

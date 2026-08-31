@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db";
 import { splitStateCodes } from "@/lib/data/usStates";
 import { statusBucketForProject, type ProjectStage } from "@/lib/data/taxonomies";
+import { BLOG_POSTS } from "@/lib/data/blogPosts";
 
 const BASE_URL = "https://waitingforpower.com";
 
@@ -14,6 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: BASE_URL, changeFrequency: "weekly", priority: 1 },
     { url: `${BASE_URL}/projects`, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/states`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${BASE_URL}/blog`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${BASE_URL}/policies`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${BASE_URL}/methodology`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE_URL}/about`, changeFrequency: "monthly", priority: 0.4 },
@@ -46,5 +48,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticRoutes, ...projectRoutes, ...stateRoutes];
+  const blogRoutes: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
+    url: `${BASE_URL}/blog/${post.slug}`,
+    lastModified: new Date(post.publishedAt),
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  return [...staticRoutes, ...projectRoutes, ...stateRoutes, ...blogRoutes];
 }

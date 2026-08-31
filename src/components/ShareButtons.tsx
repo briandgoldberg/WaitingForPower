@@ -51,6 +51,26 @@ function IconButton({
   );
 }
 
+// Labeled variant of the X icon button above, for a spot that wants a full
+// call-to-action rather than a compact icon row (e.g. under a blog post).
+// Reuses the same intent URL, not a separate implementation.
+export function PostToXButton({ url, text }: { url: string; text: string }) {
+  const { twitter } = shareUrls(url, text);
+  return (
+    <a
+      href={twitter}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+    >
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+        <path d="M18.9 2H22l-7.6 8.7L23.3 22h-7.1l-5.5-7.2L4.3 22H1.2l8.1-9.3L1 2h7.3l5 6.6L18.9 2Zm-1.2 18h1.9L7.4 4H5.4l12.3 16Z" />
+      </svg>
+      Post to X
+    </a>
+  );
+}
+
 export function ShareButtons({ url, text }: { url: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const urls = shareUrls(url, text);

@@ -469,6 +469,7 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
     capacityUnit: c.depDetail?.capacityMw != null ? "MW" : null,
     applicationFiledDate: c.depDetail?.filedDate ?? c.pscDocket?.docketedDate ?? null,
     dateConfidence: "exact",
+    applicant: c.depDetail?.applicant ?? null,
     currentStatus: `Florida siting certification (${caseLabel}): ${c.currentStage === "agency_permitting" ? "application in process" : c.currentStage}`,
     currentStage: c.currentStage,
     causeSlugs,

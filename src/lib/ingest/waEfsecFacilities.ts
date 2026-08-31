@@ -394,6 +394,7 @@ function normalizeFacility(summary: FacilitySummary, detail: FacilityDetail): No
     capacityUnit: detail.capacityMw != null ? "MW" : null,
     applicationFiledDate: filedDate,
     dateConfidence: "approximate",
+    applicant: detail.applicant,
     currentStatus: `WA EFSEC facility status: ${summary.status}${detail.applicant ? ` — applicant ${detail.applicant}` : ""}`,
     currentStage,
     causeSlugs,

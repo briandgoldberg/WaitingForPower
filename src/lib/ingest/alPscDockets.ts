@@ -843,6 +843,7 @@ function normalizeCandidate(detail: DocketDetail, resolution: Resolution): Norma
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: detail.dateOpened,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Alabama PSC Docket ${detail.docketNumber}: ${resolution ?? "pending"}`,
     currentStage,
     causeSlugs,

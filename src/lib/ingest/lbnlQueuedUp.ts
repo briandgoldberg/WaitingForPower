@@ -286,6 +286,13 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
       : queueDateRaw
         ? new Date(queueDateRaw as string)
         : null;
+  const codDateRaw = get("codDate");
+  const codDate =
+    typeof codDateRaw === "number"
+      ? excelSerialToDate(codDateRaw)
+      : codDateRaw
+        ? new Date(codDateRaw as string)
+        : null;
   const status = String(get("status") ?? "").toLowerCase();
   const iaPhase = String(get("iaPhase") ?? "");
   const state = get("state") ? String(get("state")) : null;
@@ -318,6 +325,11 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
     capacityUnit: "MW",
     applicationFiledDate: queueDate,
     dateConfidence: "exact",
+    // LBNL's own estimated COD, refreshed by developers as a project moves
+    // through the queue — a real projection, not a firm commitment, hence
+    // "approximate" even though the underlying value is a specific date.
+    expectedOnlineDate: codDate,
+    expectedOnlineDateConfidence: "approximate",
     currentStatus: `Interconnection queue status: ${status || "unknown"}${iaPhase ? ` (${iaPhase})` : ""}${region ? `, ${region} region` : ""}`,
     currentStage,
     causeSlugs,

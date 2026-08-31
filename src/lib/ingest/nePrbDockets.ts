@@ -802,6 +802,7 @@ function normalizeCase(
     capacityUnit: capacity ? "MW" : null,
     applicationFiledDate: filedInfo.date,
     dateConfidence: filedInfo.approximate ? "approximate" : "exact",
+    applicant,
     currentStatus: `Nebraska PRB ${caseDisplay}: ${resolution ?? "pending before the Board"}`,
     currentStage,
     causeSlugs,

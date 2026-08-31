@@ -546,6 +546,7 @@ function normalizeCase(candidate: CaseSearchResult, resolution: Resolution): Nor
     capacityUnit: null,
     applicationFiledDate: candidate.filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Missouri PSC Case ${candidate.caseNo}: ${resolution ?? "active"}`,
     currentStage,
     causeSlugs,

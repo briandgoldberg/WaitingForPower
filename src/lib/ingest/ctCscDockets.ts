@@ -579,6 +579,7 @@ function normalizeCandidate(candidate: PendingCandidate, detail: CandidateDetail
     capacityUnit: capacity ? "MW" : null,
     applicationFiledDate: detail?.receivedDate ?? null,
     dateConfidence: "exact",
+    applicant,
     currentStatus: resolved
       ? `CT CSC ${label} No. ${candidate.number}: resolved (no longer pending before the Connecticut Siting Council)`
       : `CT CSC ${label} No. ${candidate.number}: pending before the Connecticut Siting Council`,

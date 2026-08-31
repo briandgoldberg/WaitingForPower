@@ -552,6 +552,7 @@ function normalizeCase(row: CpcnListRow, resolution: Resolution): NormalizedProj
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: row.filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Maryland PSC Case No. ${row.caseNum}: ${resolution ?? "active"}`,
     currentStage,
     causeSlugs,

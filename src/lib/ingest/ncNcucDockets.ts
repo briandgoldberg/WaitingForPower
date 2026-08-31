@@ -588,6 +588,7 @@ function normalizeDocket(candidate: DocketCandidate, resolution: DocketResolutio
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: candidate.filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `North Carolina NCUC docket ${candidate.docketNumber}: ${resolution.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

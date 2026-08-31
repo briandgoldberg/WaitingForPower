@@ -220,6 +220,17 @@ export function normalizeEiaPlannedRow(row: PlannedRow, fieldMap: FieldMap): Nor
   const opYear = get("plannedOperationYear");
   const plannedOperation =
     opMonth && opYear ? `${String(opMonth).trim()}/${String(opYear).trim()}` : opYear ? String(opYear) : "unknown";
+  // EIA-860M publishes month as a 1-12 number and year as a 4-digit number —
+  // confirmed against real rows (e.g. the "(2/2027)" example this module's
+  // dataQualityNote below cites). Stored as the 1st of that month; year-only
+  // rows (no month published) fall back to January 1st of that year — both
+  // cases are "approximate" by construction, never "exact".
+  const opMonthNum = opMonth ? Number(opMonth) : null;
+  const opYearNum = opYear ? Number(opYear) : null;
+  const expectedOnlineDate =
+    opYearNum && Number.isFinite(opYearNum)
+      ? new Date(opYearNum, (opMonthNum && Number.isFinite(opMonthNum) ? opMonthNum : 1) - 1, 1)
+      : null;
 
   const causeSlugs: CauseSlug[] = []; // see module header: this source alone doesn't tell us why
 
@@ -236,6 +247,8 @@ export function normalizeEiaPlannedRow(row: PlannedRow, fieldMap: FieldMap): Nor
     capacityUnit: "MW",
     applicationFiledDate: null, // EIA-860M publishes planned in-service date, not an application-filed date
     dateConfidence: "approximate",
+    expectedOnlineDate,
+    expectedOnlineDateConfidence: "approximate",
     currentStatus: String(get("status") ?? ""),
     currentStage: statusToStage(statusCode),
     causeSlugs,

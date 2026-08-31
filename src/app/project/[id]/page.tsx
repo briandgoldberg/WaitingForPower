@@ -103,18 +103,30 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               )}
               {!p.county && !p.state && "Location not specified"}
             </p>
+            {p.applicant && (
+              <p className="text-sm text-[var(--muted)] mt-0.5">Developer: {p.applicant}</p>
+            )}
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
         </div>
       </div>
 
-      <div className={`grid grid-cols-2 gap-3 ${p.interconnectionQueueStage ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
         <Stat label="Verification" value={p.verificationStatus.replace(/_/g, " ")} />
         {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
+        {p.expectedOnlineDate && (
+          <Stat
+            label="Expected online"
+            value={`${new Date(p.expectedOnlineDate).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" })}${p.expectedOnlineDateConfidence === "approximate" ? "*" : ""}`}
+          />
+        )}
       </div>
+      {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
+        <p className="text-xs text-[var(--muted)] -mt-2">* Approximate / developer-estimated date, not a firm commitment.</p>
+      )}
 
       <div className={`grid grid-cols-1 gap-4 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">

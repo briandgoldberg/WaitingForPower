@@ -599,6 +599,7 @@ function normalizeCase(record: CaseListRecord, docketLabel: string, resolution: 
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: record.filedDate,
     dateConfidence: "exact",
+    applicant: record.applicant,
     currentStatus: `West Virginia PSC Case ${record.caseNumber}: ${resolution ?? "active"}`,
     currentStage,
     causeSlugs,

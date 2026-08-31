@@ -302,6 +302,7 @@ async function normalizeCandidate(listing: DocketListing): Promise<NormalizedPro
     capacityUnit,
     applicationFiledDate: listing.filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `SD PUC Docket ${listing.docketNumber}: ${currentStage === "local_review" ? "Pending" : currentStage}`,
     currentStage,
     causeSlugs,

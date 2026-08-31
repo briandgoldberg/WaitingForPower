@@ -33,6 +33,13 @@ export interface ProjectDTO {
   capacityUnit: string | null;
   applicationFiledDate: string | null; // ISO date
   dateConfidence: "exact" | "approximate";
+  // The project's own developer/applicant/owner where its source publishes
+  // one as a distinct field — null wherever it doesn't.
+  applicant: string | null;
+  // When the project is expected to come online — null for most state
+  // docket sources, which don't publish a forward-looking date at all.
+  expectedOnlineDate: string | null; // ISO date
+  expectedOnlineDateConfidence: "exact" | "approximate" | null;
   currentStatus: string;
   currentStage: ProjectStage;
   // See Project.noLongerReported in schema.prisma — true only for a

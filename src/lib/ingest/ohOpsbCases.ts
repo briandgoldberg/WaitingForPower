@@ -187,6 +187,7 @@ function normalizeCase(c: OpsbCase): NormalizedProject {
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: filedDate,
     dateConfidence: "exact",
+    applicant: c.applicant,
     currentStatus: `Ohio OPSB case ${c.caseNumber}: ${c.status || "unknown"} (applicant: ${c.applicant})`,
     currentStage,
     causeSlugs,

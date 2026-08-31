@@ -410,6 +410,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     capacityUnit: voltageKv != null ? "kV" : null,
     applicationFiledDate: search.filedDate,
     dateConfidence: "exact",
+    applicant: search.applicant,
     currentStatus: `Illinois ICC docket ${search.docketNumber}: ${detail.resolved ? "closed" : "active"}`,
     currentStage,
     causeSlugs,

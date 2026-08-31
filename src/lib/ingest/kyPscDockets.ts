@@ -463,6 +463,7 @@ function normalizeCase(detail: CaseDetail): NormalizedProject {
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: detail.filingDate,
     dateConfidence: detail.dateConfidence,
+    applicant,
     currentStatus: `Kentucky PSC Case ${detail.caseNumber}: ${detail.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

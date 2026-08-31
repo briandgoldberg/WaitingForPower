@@ -411,6 +411,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `MA EFSB Docket ${search.Number}: pending before the Energy Facilities Siting Board`,
     currentStage,
     causeSlugs,

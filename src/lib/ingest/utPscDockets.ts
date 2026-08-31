@@ -489,6 +489,7 @@ function normalizeDocket(listing: DocketListing, resolution: DocketResolution): 
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: listing.filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Utah PSC Docket No. ${listing.docketNo}: ${resolution.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

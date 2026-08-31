@@ -56,6 +56,11 @@ export interface NormalizedProject {
   capacityUnit?: string | null;
   applicationFiledDate?: Date | null;
   dateConfidence?: "exact" | "approximate";
+  /** The project's own developer/applicant/owner — see schema.prisma. */
+  applicant?: string | null;
+  /** When the project is expected to come online — see schema.prisma. */
+  expectedOnlineDate?: Date | null;
+  expectedOnlineDateConfidence?: "exact" | "approximate";
   currentStatus: string;
   currentStage: ProjectStage;
   causeSlugs: CauseSlug[];
@@ -260,6 +265,9 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     capacityUnit: keepIfMergedAndNull(p.capacityUnit, existing?.capacityUnit),
     applicationFiledDate: keepIfMergedAndNull(p.applicationFiledDate, existing?.applicationFiledDate),
     dateConfidence: p.dateConfidence ?? "exact",
+    applicant: keepIfMergedAndNull(p.applicant, existing?.applicant),
+    expectedOnlineDate: keepIfMergedAndNull(p.expectedOnlineDate, existing?.expectedOnlineDate),
+    expectedOnlineDateConfidence: p.expectedOnlineDate ? (p.expectedOnlineDateConfidence ?? "exact") : (isMerged ? existing?.expectedOnlineDateConfidence ?? null : null),
     currentStatus: p.currentStatus,
     currentStage: p.currentStage,
     causeDetail: p.causeDetail,

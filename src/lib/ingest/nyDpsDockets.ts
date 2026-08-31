@@ -420,6 +420,7 @@ function normalizeMatter(search: MatterSearchResult, detail: DocketDetail, track
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: search.startDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `New York DPS Case ${search.caseOrMatterNumber}: ${detail.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

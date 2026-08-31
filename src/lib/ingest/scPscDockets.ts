@@ -324,6 +324,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: detail.openedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `South Carolina PSC docket ${search.docketNumber}: ${detail.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

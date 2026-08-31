@@ -484,6 +484,7 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Wisconsin PSC docket ${candidate.docket}: ${resolution.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

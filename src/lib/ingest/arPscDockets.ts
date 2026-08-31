@@ -830,6 +830,7 @@ function normalizeDocket(detail: DocketDetail, resolution: Resolution): Normaliz
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: detail.firstFiledDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Arkansas PSC Docket ${detail.docket}: ${resolution ?? "pending"}`,
     currentStage,
     causeSlugs,

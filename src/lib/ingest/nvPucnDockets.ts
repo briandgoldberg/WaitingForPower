@@ -517,6 +517,7 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Nevada PUCN docket ${candidate.docket}: ${resolution.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

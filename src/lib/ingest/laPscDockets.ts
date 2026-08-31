@@ -714,6 +714,7 @@ function normalizeDocket(record: DocketListRecord, detail: DocketDetail, resolut
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: record.dateFiled,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Louisiana PSC Docket ${record.docketNumber}: ${resolution ?? "pending"} (LPSC's own docket status field: ${detail.status ?? "unknown"})`,
     currentStage,
     causeSlugs,

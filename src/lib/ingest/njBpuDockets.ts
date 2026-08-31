@@ -682,6 +682,7 @@ function normalizeCandidate(candidate: TrackedCandidate, resolution: DocketResol
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: filedDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `New Jersey BPU Docket ${search.docket}: ${resolution.resolution ?? "active"}`,
     currentStage,
     causeSlugs,

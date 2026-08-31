@@ -550,6 +550,7 @@ function buildActiveProject(row: SearchResultRow, caption: string): NormalizedPr
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: row.petitionDate,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Indiana IURC Cause No. ${row.docketNumber}: ${row.caseStatus.toLowerCase()}`,
     currentStage,
     causeSlugs,

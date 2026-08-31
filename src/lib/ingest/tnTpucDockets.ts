@@ -556,6 +556,7 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: earliestFiling,
     dateConfidence: "exact",
+    applicant,
     currentStatus: `Tennessee TPUC Docket No. ${detail.docketNumber}: ${resolution ?? "active"}`,
     currentStage,
     causeSlugs,

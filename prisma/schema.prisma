@@ -63,6 +63,24 @@ model Project {
   // milestone-level precision rather than a specific day; be honest about it.
   dateConfidence String @default("exact")
 
+  // The project's own developer/applicant/owner, where its source publishes
+  // one as a distinct field (most state docket sources do — the applicant
+  // name is usually already parsed out to help build the project's display
+  // `name`, e.g. "Hecate Energy Columbia County 1, LLC"). Null wherever a
+  // source doesn't clearly separate it, rather than guessing from the
+  // display name's own free text.
+  applicant String?
+
+  // When this project is expected to actually come online — EIA-860M
+  // publishes a planned operation month/year for generation, and LBNL
+  // Queued Up publishes an estimated commercial-operation date for
+  // interconnection-queue entries. Null for every other source (most state
+  // docket sources publish no forward-looking date at all). Deliberately
+  // separate from applicationFiledDate/dateConfidence above — this is a
+  // different date with its own, often coarser, precision.
+  expectedOnlineDate           DateTime?
+  expectedOnlineDateConfidence String? // "exact" | "approximate", same convention as dateConfidence above
+
   currentStatus String
 
   // interconnection_study | environmental_review | planned_pre_filing |

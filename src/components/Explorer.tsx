@@ -9,6 +9,7 @@ import { computeAggregateStats } from "@/lib/stats";
 import { StatsHeader } from "@/components/StatsHeader";
 import { FilterPanel } from "@/components/FilterPanel";
 import { ProjectList } from "@/components/ProjectList";
+import { StateDirectory } from "@/components/StateDirectory";
 
 const Map = dynamic(() => import("@/components/Map").then((m) => m.Map), {
   ssr: false,
@@ -115,6 +116,8 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
           )}
         </div>
       </div>
+
+      <StateDirectory projects={projects} />
     </div>
   );
 }

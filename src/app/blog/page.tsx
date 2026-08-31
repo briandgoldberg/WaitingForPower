@@ -22,7 +22,7 @@ export default function BlogIndexPage() {
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Blog</h1>
-        <p className="text-sm text-[var(--muted)] mt-0.5">What the data says, unfiltered.</p>
+        <p className="text-sm text-[var(--muted)] mt-0.5">Ideas from our data and announcements.</p>
       </div>
 
       <ul className="flex flex-col gap-4">

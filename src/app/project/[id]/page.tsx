@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
-import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { SubscribeBox } from "@/components/SubscribeBox";
@@ -136,7 +136,7 @@ export default async function ProjectDetailPage({
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
-        <Stat label="Verification" value={p.verificationStatus.replace(/_/g, " ")} />
+        <Stat label="Verification" value={VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")} />
         {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
         {p.expectedOnlineDate && (
           <Stat
@@ -246,8 +246,8 @@ export default async function ProjectDetailPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
-      <div className="text-base font-semibold capitalize">{value}</div>
-      <div className="text-xs text-[var(--muted)] mt-0.5">{label}</div>
+      <div className="text-xs text-[var(--muted)] uppercase tracking-wide">{label}</div>
+      <div className="text-base font-semibold mt-1">{value}</div>
     </div>
   );
 }

@@ -201,6 +201,10 @@ export const VERIFICATION_STATUSES: { value: VerificationStatus; label: string }
   { value: "user_submitted_pending", label: "User-submitted, pending review" },
 ];
 
+export const VERIFICATION_STATUS_BY_VALUE: Record<VerificationStatus, string> = Object.fromEntries(
+  VERIFICATION_STATUSES.map(({ value, label }) => [value, label]),
+) as Record<VerificationStatus, string>;
+
 export function formatCapacity(value: number | null, unit: string | null): string {
   if (value == null) return "Not disclosed";
   const rounded = value >= 100 ? Math.round(value).toLocaleString("en-US") : value;

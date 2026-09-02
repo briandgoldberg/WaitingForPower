@@ -1,11 +1,12 @@
 import { Resend } from "resend";
 
-// Same sandbox sender the contact form uses (src/app/api/contact/route.ts) —
-// see that file's header. Resend's shared onboarding@resend.dev address can
-// only deliver to the account's own verified address until a custom domain
-// is verified; swap this once waitingforpower.com is added as a Resend
-// sending domain.
-const FROM = "WaitingForPower Alerts <onboarding@resend.dev>";
+// waitingforpower.com is verified as a Resend sending domain (confirmed
+// 2026-09-02), so subscriber notifications go out from it directly rather
+// than the onboarding@resend.dev sandbox address the contact form still
+// uses (src/app/api/contact/route.ts) — that address can only deliver to
+// the account's own verified email, which would silently break delivery to
+// real subscribers.
+const FROM = "WaitingForPower Alerts <alerts@waitingforpower.com>";
 
 function escapeHtml(s: string): string {
   return s

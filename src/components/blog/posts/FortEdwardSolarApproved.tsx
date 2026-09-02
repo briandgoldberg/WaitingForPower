@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { computeStateEfficiencyRanking } from "@/lib/stateEfficiency";
+import { LocatorMap } from "@/components/blog/LocatorMap";
+
+// Real Washington County, NY centroid (see
+// src/lib/data/countyCentroidsByName.json, key "NY|WASHINGTON") projected
+// through the same Albers-USA setup used to generate usStatePaths.json.
+const FORT_EDWARD_MARKER: [number, number] = [769.5491678067469, 153.72457271265307];
 
 // Computed live so the NY comparison stays current — see
 // computeStateEfficiencyRanking's own header for methodology.
@@ -9,6 +15,7 @@ export async function FortEdwardSolarApproved() {
 
   return (
     <div className="text-sm leading-relaxed flex flex-col gap-3">
+      <LocatorMap highlightStateName="New York" marker={FORT_EDWARD_MARKER} label="Fort Edward, NY" />
       <p>
         Boralex&rsquo;s{" "}
         <Link href="/project/fort-edward-solar-llc-ny-dps-case-23-03023-03023" className="underline text-[var(--accent)]">

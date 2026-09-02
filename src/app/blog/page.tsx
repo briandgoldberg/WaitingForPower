@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BLOG_POSTS } from "@/lib/data/blogPosts";
 import { LeastEfficientStatesPreview } from "@/components/blog/previews/LeastEfficientStatesPreview";
+import { FortEdwardSolarPreview } from "@/components/blog/previews/FortEdwardSolarPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 // full-post registry these pair with.
 const PREVIEW_COMPONENTS: Record<string, React.ComponentType> = {
   "least-efficient-states-for-permitting": LeastEfficientStatesPreview,
+  "fort-edward-solar-approved": FortEdwardSolarPreview,
 };
 
 export default function BlogIndexPage() {

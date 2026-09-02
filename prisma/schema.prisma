@@ -140,16 +140,54 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  causes     ProjectCause[]
-  sources    ProjectSource[]
-  milestones Milestone[]
-  changes    ProjectChange[]
+  causes        ProjectCause[]
+  sources       ProjectSource[]
+  milestones    Milestone[]
+  changes       ProjectChange[]
+  subscriptions ProjectSubscription[]
 
   @@index([projectType])
   @@index([fuelType])
   @@index([currentStage])
   @@index([verificationStatus])
   @@index([noLongerReported])
+}
+
+// A per-project "email me when this changes" subscription. Double opt-in
+// (confirmed starts false, flips true only once the confirm link is
+// clicked) so a mistyped or someone-else's address can't get subscribed
+// without their action — same reasoning as any transactional mailing list.
+// Notifications are a daily digest, not real-time: the notify-subscribers
+// cron (see src/app/api/cron/notify-subscribers/route.ts) finds every
+// ProjectChange row created after lastNotifiedAt for a project with
+// confirmed subscribers, emails one summary per subscription, then bumps
+// lastNotifiedAt — so a subscriber never gets more than one email per day
+// even if their project changed twice.
+model ProjectSubscription {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  email String
+
+  confirmed        Boolean @default(false)
+  // Random 32-byte hex tokens (see src/lib/subscriptionTokens.ts) — opaque
+  // bearer capabilities, not guessable from the row's other fields.
+  confirmToken     String  @unique
+  unsubscribeToken String  @unique
+
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+
+  // Cursor into ProjectChange.createdAt for this subscription. Set to
+  // confirmedAt at confirm time (not createdAt/epoch) so a new subscriber
+  // is emailed about changes going forward only, not the project's entire
+  // backdated history. Null until confirmed.
+  lastNotifiedAt DateTime?
+
+  @@unique([projectId, email])
+  @@index([projectId])
+  @@index([confirmed])
 }
 
 // One row per ingestion source, written once its real backfill is done —

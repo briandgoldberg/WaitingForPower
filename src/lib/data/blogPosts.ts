@@ -10,6 +10,13 @@ export interface BlogPostMeta {
 // this array is only the listing metadata for /blog and generateMetadata.
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
+    slug: "fort-edward-solar-approved",
+    title: "What Fort Edward Solar's approval actually means",
+    excerpt:
+      "Boralex's 100 MW Fort Edward Solar Project just cleared New York's siting process after 2.6 years. Here's what actually changed, and what still hasn't.",
+    publishedAt: "2026-09-02",
+  },
+  {
     slug: "least-efficient-states-for-permitting",
     title: "Least efficient states for permitting energy projects",
     excerpt:

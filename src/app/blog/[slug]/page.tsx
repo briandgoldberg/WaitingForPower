@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getBlogPostMeta } from "@/lib/data/blogPosts";
 import { PostToXButton } from "@/components/ShareButtons";
 import { LeastEfficientStatesForPermitting } from "@/components/blog/posts/LeastEfficientStatesForPermitting";
+import { FortEdwardSolarApproved } from "@/components/blog/posts/FortEdwardSolarApproved";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 // for the listing metadata (title/excerpt/date) these pair with.
 const POST_COMPONENTS: Record<string, React.ComponentType> = {
   "least-efficient-states-for-permitting": LeastEfficientStatesForPermitting,
+  "fort-edward-solar-approved": FortEdwardSolarApproved,
 };
 
 export async function generateMetadata({

@@ -36,8 +36,8 @@ export function SubscribeBox({ projectId, projectName }: { projectId: string; pr
   if (status === "sent") {
     return (
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-lg font-semibold mb-1">Check your email</h2>
-        <p className="text-sm text-[var(--muted)]">
+        <h2 className="text-base font-semibold text-[var(--accent)] mb-1">Check your email</h2>
+        <p className="text-sm text-[var(--text-secondary)]">
           We sent a confirmation link to {email}. Click it to start getting updates on {projectName}.
         </p>
       </section>
@@ -47,16 +47,16 @@ export function SubscribeBox({ projectId, projectName }: { projectId: string; pr
   if (status === "already") {
     return (
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-lg font-semibold mb-1">You&rsquo;re already subscribed</h2>
-        <p className="text-sm text-[var(--muted)]">{email} will get an email when this project updates.</p>
+        <h2 className="text-base font-semibold text-[var(--accent)] mb-1">You&rsquo;re already subscribed</h2>
+        <p className="text-sm text-[var(--text-secondary)]">{email} will get an email when this project updates.</p>
       </section>
     );
   }
 
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-      <h2 className="text-lg font-semibold mb-1">Get notified of updates</h2>
-      <p className="text-sm text-[var(--muted)] mb-3">
+      <h2 className="text-base font-semibold text-[var(--accent)] mb-1">Get notified of updates</h2>
+      <p className="text-sm text-[var(--text-secondary)] mb-3">
         We&rsquo;ll email you when {projectName}&rsquo;s status changes — no more than once a day.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">

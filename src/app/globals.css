@@ -7,6 +7,10 @@
   --panel: #ffffff;
   --border: #e2e2df;
   --muted: #6b7280;
+  /* Body/detail copy paired directly under a header — darker than --muted
+     (which stays for genuinely secondary annotations like footnotes and
+     dates) so a header's own explanatory text doesn't wash out. */
+  --text-secondary: #454b54;
   --accent: #1e3a5f;
   --accent-2: #b45309;
 }
@@ -17,6 +21,7 @@
   --color-panel: var(--panel);
   --color-border: var(--border);
   --color-muted: var(--muted);
+  --color-text-secondary: var(--text-secondary);
   --color-accent: var(--accent);
   --color-accent-2: var(--accent-2);
   --font-sans: var(--font-inter);
@@ -29,6 +34,7 @@
     --panel: #1c1f26;
     --border: #2c2f38;
     --muted: #9aa1ac;
+    --text-secondary: #c3c7cd;
     --accent: #6f9bd1;
     --accent-2: #e0a458;
   }

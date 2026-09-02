@@ -151,11 +151,11 @@ export default async function ProjectDetailPage({
 
       <div className={`grid grid-cols-1 gap-4 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-          <h2 className="text-lg font-semibold mb-2">Estimated investment waiting</h2>
+          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated investment waiting</h2>
           {p.investmentWaiting.applicable ? (
             <>
               <div className="text-3xl font-bold tabular-nums">{formatUsd(p.investmentWaiting.estimatedUsd!)}</div>
-              <p className="text-xs text-[var(--muted)] mt-2">
+              <p className="text-xs text-[var(--text-secondary)] mt-2">
                 ≈ {Math.round((p.capacityValue ?? 0) * 1000).toLocaleString("en-US")} kW × $
                 {p.investmentWaiting.costPerKw?.toLocaleString("en-US")}/kW typical overnight
                 construction cost (EIA) — the dollar value of the power plant itself sitting in
@@ -167,15 +167,15 @@ export default async function ProjectDetailPage({
               </p>
             </>
           ) : (
-            <p className="text-sm text-[var(--muted)]">Not estimated: {p.investmentWaiting.reason}</p>
+            <p className="text-sm text-[var(--text-secondary)]">Not estimated: {p.investmentWaiting.reason}</p>
           )}
         </section>
 
         {p.networkUpgradeCostUsd != null && (
           <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-            <h2 className="text-lg font-semibold mb-2">Estimated network upgrade cost</h2>
+            <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated network upgrade cost</h2>
             <div className="text-3xl font-bold tabular-nums">{formatUsd(p.networkUpgradeCostUsd)}</div>
-            <p className="text-xs text-[var(--muted)] mt-2">
+            <p className="text-xs text-[var(--text-secondary)] mt-2">
               The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
               interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
               preliminary — see the data quality note below.
@@ -188,8 +188,8 @@ export default async function ProjectDetailPage({
 
       {(p.lat != null && p.lon != null) && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-          <h2 className="text-lg font-semibold mb-2">Location</h2>
-          <p className="text-sm text-[var(--muted)]">
+          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Location</h2>
+          <p className="text-sm text-[var(--text-secondary)]">
             {p.lat.toFixed(4)}, {p.lon.toFixed(4)} — see the{" "}
             <Link href="/" className="underline">
               map
@@ -201,7 +201,7 @@ export default async function ProjectDetailPage({
 
       {p.milestones.length > 0 && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-          <h2 className="text-lg font-semibold mb-3">Timeline</h2>
+          <h2 className="text-base font-semibold text-[var(--accent)] mb-3">Timeline</h2>
           <ul className="flex flex-col gap-3">
             {p.milestones.map((m, i) => (
               <li key={i} className="flex gap-3 text-sm">
@@ -223,7 +223,7 @@ export default async function ProjectDetailPage({
       )}
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-lg font-semibold mb-2">Sources</h2>
+        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Sources</h2>
         <ul className="flex flex-col gap-1.5 text-sm">
           {p.sources.map((s) => (
             <li key={s.url}>
@@ -246,8 +246,8 @@ export default async function ProjectDetailPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
-      <div className="text-xs text-[var(--muted)] uppercase tracking-wide">{label}</div>
-      <div className="text-base font-semibold mt-1">{value}</div>
+      <div className="text-sm font-semibold text-[var(--accent)]">{label}</div>
+      <div className="text-sm text-[var(--text-secondary)] mt-1">{value}</div>
     </div>
   );
 }

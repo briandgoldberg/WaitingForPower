@@ -57,7 +57,7 @@ export function SubscribeBox({ projectId, projectName }: { projectId: string; pr
     <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
       <h2 className="text-base font-semibold text-[var(--accent)] mb-1">Get notified of updates</h2>
       <p className="text-sm text-[var(--text-secondary)] mb-3">
-        We&rsquo;ll email you when {projectName}&rsquo;s status changes — no more than once a day.
+        We&rsquo;ll email you when {projectName}&rsquo;s status changes.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
         <input

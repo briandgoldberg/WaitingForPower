@@ -5,12 +5,14 @@ import { getBlogPostMeta } from "@/lib/data/blogPosts";
 import { PostToXButton } from "@/components/ShareButtons";
 import { LeastEfficientStatesForPermitting } from "@/components/blog/posts/LeastEfficientStatesForPermitting";
 import { FortEdwardSolarApproved } from "@/components/blog/posts/FortEdwardSolarApproved";
+import { GasTakingOverNewFilings } from "@/components/blog/posts/GasTakingOverNewFilings";
 
 export const dynamic = "force-dynamic";
 
 // Maps a post's slug to its body component — see src/lib/data/blogPosts.ts
 // for the listing metadata (title/excerpt/date) these pair with.
 const POST_COMPONENTS: Record<string, React.ComponentType> = {
+  "gas-taking-over-new-filings": GasTakingOverNewFilings,
   "least-efficient-states-for-permitting": LeastEfficientStatesForPermitting,
   "fort-edward-solar-approved": FortEdwardSolarApproved,
 };

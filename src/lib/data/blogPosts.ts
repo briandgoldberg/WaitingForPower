@@ -10,6 +10,13 @@ export interface BlogPostMeta {
 // this array is only the listing metadata for /blog and generateMetadata.
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
+    slug: "gas-taking-over-new-filings",
+    title: "Gas is taking over new power plant filings",
+    excerpt:
+      "Gas was under 2% of newly-filed generation capacity in 2022. In 2025 it was 41%. Here's the chart, and why it's happening.",
+    publishedAt: "2026-09-03",
+  },
+  {
     slug: "fort-edward-solar-approved",
     title: "What Fort Edward Solar's approval actually means",
     excerpt:

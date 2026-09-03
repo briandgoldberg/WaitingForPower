@@ -49,23 +49,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </span>
               </span>
             </Link>
-            <nav className="flex flex-wrap items-center gap-1 text-sm">
-              <Link href="/" className="px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+            {/* flex-nowrap + overflow-x-auto: on a narrow viewport this
+                keeps every link on one scrollable row instead of wrapping
+                (previously "Contact Us" alone dropped to its own third
+                header row on mobile). Scrollbar hidden since the row fits
+                without scrolling on anything past a small phone anyway. */}
+            <nav className="flex flex-nowrap items-center gap-1 text-sm overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Link href="/" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Home
               </Link>
-              <Link href="/projects" className="px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+              <Link href="/projects" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Projects
               </Link>
-              <Link href="/blog" className="px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+              <Link href="/blog" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Blog
               </Link>
               <Link
                 href="/policies"
-                className="px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10"
+                className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10"
               >
                 Advocacy
               </Link>
-              <Link href="/contact" className="px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+              <Link href="/contact" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Contact Us
               </Link>
             </nav>

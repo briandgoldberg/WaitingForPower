@@ -45,7 +45,12 @@ export async function GET(req: NextRequest) {
     const result = await sendFeedWeeklyEmail({
       to: sub.email,
       state: scopeState,
-      summaries: inScope.map((r) => ({ projectName: r.project.name, projectSlug: r.project.slug, summary: r.summary })),
+      summaries: inScope.map((r) => ({
+        projectName: r.project.name,
+        projectSlug: r.project.slug,
+        summary: r.summary,
+        createdAt: r.createdAt.toISOString(),
+      })),
       unsubscribeToken: sub.unsubscribeToken,
     });
 

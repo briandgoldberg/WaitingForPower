@@ -79,20 +79,22 @@ export default async function HomePage({
             {alertMessage}
           </div>
         )}
-        <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-col gap-2">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <p className="text-sm text-[var(--muted)] max-w-2xl">
-            Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
-          </p>
-          <Link
-            href="/projects"
-            className="text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-            style={{ color: "var(--accent)" }}
-          >
-            {totalProjects.toLocaleString()} projects tracked →
-          </Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-sm text-[var(--muted)] max-w-2xl">
+              Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
+            </p>
+            <Link
+              href="/projects"
+              className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+              style={{ color: "var(--accent)" }}
+            >
+              {totalProjects.toLocaleString()} projects tracked →
+            </Link>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2.5">

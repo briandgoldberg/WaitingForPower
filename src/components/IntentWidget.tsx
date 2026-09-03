@@ -146,7 +146,7 @@ export function IntentWidget() {
             type="email"
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
-            placeholder="you@example.com (optional)"
+            placeholder="you@example.com"
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm mb-3"
           />
           <div className="flex items-center justify-between gap-2">

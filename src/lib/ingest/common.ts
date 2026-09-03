@@ -138,6 +138,17 @@ function buildChangeSummary(
       parts.push(`Capacity disclosed: ${detail.newCapacityValue.toLocaleString("en-US")} ${unit}`.trim());
     } else if (detail.newCapacityValue != null) {
       parts.push(`Capacity revised to ${detail.newCapacityValue.toLocaleString("en-US")} ${unit}`.trim());
+    } else {
+      // previousCapacityValue was real, newCapacityValue is null — the only
+      // one of the three real previous/new combinations (fact_revised only
+      // fires when they differ, so both-null can't reach here) this branch
+      // used to leave unhandled, producing an empty summary string. Real,
+      // confirmed live 2026-09: 6 blank homepage-feed rows, all Cascade
+      // Renewable Transmission, from before the keepIfMergedAndNull merge-
+      // safety fix (see this file's MERGED-FIELD NULL SAFETY comment) — its
+      // two merged sources used to disagree often enough to flap the value
+      // to null and back daily.
+      parts.push("Capacity no longer disclosed");
     }
   }
   if (changeTypes.includes("new_filing")) {

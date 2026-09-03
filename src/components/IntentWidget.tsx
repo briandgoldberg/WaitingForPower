@@ -133,7 +133,7 @@ export function IntentWidget() {
         <>
           <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">Anything else? (optional)</p>
           <p className="text-xs text-[var(--text-secondary)] mb-2">
-            Leave a note or an email if you&rsquo;d like us to reach out — totally optional.
+            Leave a note or an email if you&rsquo;d like us to reach out.
           </p>
           <textarea
             value={feedbackText}

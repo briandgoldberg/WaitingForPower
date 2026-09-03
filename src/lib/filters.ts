@@ -89,8 +89,14 @@ export function hasActiveFilters(f: FilterState): boolean {
   );
 }
 
-export function matchesFilters(p: ProjectDTO, f: FilterState): boolean {
-  if (statusBucketForProject(p.currentStage, p.noLongerReported) !== f.status) return false;
+export function matchesFilters(p: ProjectDTO, f: FilterState, opts: { ignoreStatus?: boolean } = {}): boolean {
+  // ignoreStatus: used by queryProjects' allStatuses option (see
+  // src/lib/queryProjects.ts) — the public API and MCP server need a way to
+  // request every status bucket at once ("all"), which FilterState.status
+  // itself can't represent (it's always exactly one bucket, by design, to
+  // match the Explorer's own single-select status pills). The Explorer
+  // never passes this — it always has one real status selected.
+  if (!opts.ignoreStatus && statusBucketForProject(p.currentStage, p.noLongerReported) !== f.status) return false;
   if (f.minYearsWaiting != null) {
     if (p.yearsWaiting == null || p.yearsWaiting < f.minYearsWaiting) return false;
   }

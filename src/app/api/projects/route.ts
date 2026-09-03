@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryProjects, toFilterState } from "@/lib/queryProjects";
+import type { StatusBucket } from "@/lib/data/taxonomies";
 import { prisma } from "@/lib/db";
 
 // Public, read-only, no key required — CORS is wide open on purpose so
@@ -34,6 +35,8 @@ function parseNumber(value: string | null): number | null {
 //   stage           comma-separated currentStage values
 //   minYearsWaiting number
 //   minCapacity     number, MW
+//   status          "in_permitting" (default) | "cancelled_suspended" |
+//                   "permits_complete" | "no_longer_reported" | "all"
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
@@ -51,6 +54,7 @@ export async function GET(request: Request) {
     })
     .catch((err) => console.error("Failed to log /api/projects request:", err));
 
+  const status = searchParams.get("status") as StatusBucket | "all" | null;
   const filters = toFilterState({
     state: searchParams.get("state"),
     fuelType: parseList(searchParams.get("fuelType")),
@@ -58,9 +62,10 @@ export async function GET(request: Request) {
     stage: parseList(searchParams.get("stage")),
     minYearsWaiting: parseNumber(searchParams.get("minYearsWaiting")),
     minCapacity: parseNumber(searchParams.get("minCapacity")),
+    status,
   });
 
-  const filtered = await queryProjects(filters);
+  const filtered = await queryProjects(filters, { allStatuses: status === "all" });
 
   return NextResponse.json(filtered, { headers: CORS_HEADERS });
 }

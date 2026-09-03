@@ -41,6 +41,8 @@ const PROJECT_STAGES = [
   "litigation",
 ] as const;
 
+const STATUSES = ["in_permitting", "cancelled_suspended", "permits_complete", "no_longer_reported", "all"] as const;
+
 // Trimmed per-project shape for list results — full detail (sources,
 // milestones) is a lot of tokens across dozens of results; get_project
 // fetches the complete record for one project once an agent has a slug.
@@ -74,6 +76,12 @@ const searchFilterShape = {
     .optional(),
   minYearsWaiting: z.number().min(0).describe("Only projects waiting at least this many years.").optional(),
   minCapacity: z.number().min(0).describe("Only projects with capacity at least this many MW.").optional(),
+  status: z
+    .enum(STATUSES)
+    .describe(
+      'Which status bucket to search. Defaults to "in_permitting" (the site\'s original "still waiting" scope) if omitted — pass "permits_complete", "cancelled_suspended", "no_longer_reported", or "all" to reach approved, cancelled, or untracked-by-source projects too.',
+    )
+    .optional(),
 };
 
 const handler = createMcpHandler(
@@ -90,7 +98,7 @@ const handler = createMcpHandler(
           offset: z.number().int().min(0).default(0).describe("Number of matching results to skip, for paging."),
         }),
       },
-      async ({ state, fuelType, projectType, stage, minYearsWaiting, minCapacity, limit, offset }) => {
+      async ({ state, fuelType, projectType, stage, minYearsWaiting, minCapacity, status, limit, offset }) => {
         const filters = toFilterState({
           state,
           fuelType,
@@ -98,8 +106,9 @@ const handler = createMcpHandler(
           stage,
           minYearsWaiting,
           minCapacity,
+          status,
         });
-        const all = await queryProjects(filters);
+        const all = await queryProjects(filters, { allStatuses: status === "all" });
         const page = all.slice(offset, offset + limit).map(toSummary);
         const result = { totalMatches: all.length, offset, limit, results: page };
         return {
@@ -142,9 +151,9 @@ const handler = createMcpHandler(
           "Headline aggregate numbers (project count, capacity waiting, clean-energy capacity waiting, estimated investment waiting) for the WaitingForPower dataset, optionally scoped by the same filters as search_projects.",
         inputSchema: z.object(searchFilterShape),
       },
-      async ({ state, fuelType, projectType, stage, minYearsWaiting, minCapacity }) => {
-        const filters = toFilterState({ state, fuelType, projectType, stage, minYearsWaiting, minCapacity });
-        const filtered = await queryProjects(filters);
+      async ({ state, fuelType, projectType, stage, minYearsWaiting, minCapacity, status }) => {
+        const filters = toFilterState({ state, fuelType, projectType, stage, minYearsWaiting, minCapacity, status });
+        const filtered = await queryProjects(filters, { allStatuses: status === "all" });
         const stats = computeAggregateStats(filtered);
         return {
           content: [{ type: "text", text: JSON.stringify(stats, null, 2) }],

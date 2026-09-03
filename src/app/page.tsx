@@ -91,7 +91,7 @@ export default async function HomePage({
             className="text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
             style={{ color: "var(--accent)" }}
           >
-            Tracking {totalProjects.toLocaleString()} energy projects nationwide →
+            {totalProjects.toLocaleString()} projects tracked →
           </Link>
         </div>
 

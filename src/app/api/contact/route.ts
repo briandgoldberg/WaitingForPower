@@ -76,7 +76,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const { error } = await resend.emails.send({
-      from: "WaitingForPower Contact Form <onboarding@resend.dev>",
+      // waitingforpower.com is a verified Resend sending domain (confirmed
+      // 2026-09-02) — using it instead of the onboarding@resend.dev sandbox
+      // address, which only reliably delivers to the Resend account's own
+      // verified email and would silently fail to notify Brian if that
+      // account's verified email isn't exactly CONTACT_EMAIL.
+      from: "WaitingForPower Contact Form <contact@waitingforpower.com>",
       to: CONTACT_EMAIL,
       replyTo: email,
       subject: `[WaitingForPower] ${topicLabel} — ${name}`,

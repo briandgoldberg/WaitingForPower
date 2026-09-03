@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { sendFeedbackNotificationEmail } from "@/lib/feedbackEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,14 @@ export async function POST(req: NextRequest) {
   }
 
   await prisma.visitorFeedback.create({ data: { intent, path } });
+
+  // Fire-and-forget — a visitor answering a one-question widget shouldn't
+  // wait on an email send, and a Resend failure shouldn't surface as an
+  // error to them. See sendFeedbackNotificationEmail's own header for why
+  // this is immediate rather than only rolled up in the daily digest.
+  sendFeedbackNotificationEmail({ intent, path }).catch((err) =>
+    console.error("Failed to send feedback notification email:", err),
+  );
 
   return NextResponse.json({ ok: true });
 }

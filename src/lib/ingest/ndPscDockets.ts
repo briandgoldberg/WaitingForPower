@@ -330,6 +330,24 @@ async function normalizeCandidate(listing: CaseListing): Promise<NormalizedProje
     "Sourced from the North Dakota Public Service Commission's public case search, scoped to Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) — see the ingestion module header for why the ND PSC (unlike several sibling states in this series) really is the direct siting authority.",
     "\"Still waiting\" vs. resolved here is determined by scanning this case's own docket entries for a real Commission \"Order\" entry and, when found, parsing that order's own PDF text for grant/deny/dismiss language — not by this case's own \"Date Closed\" field, which was confirmed live to stay blank even after a real grant order. See the ingestion module header for the real confirmed example.",
   ];
+  // KNOWN CROSS-STATE COMPANION DOCKET — this module only ever writes
+  // dataQualityNoteParts fresh from this file (upsertNormalizedProjects
+  // isn't merge-aware for this field, see common.ts), so a one-off manual
+  // DB addition would get silently overwritten by the next daily run.
+  // Baked in here instead so it survives every re-run. Confirmed live
+  // 2026-09-03 against Iowa Utilities Commission's EFS (efs.iowa.gov,
+  // authenticated docket search): Docket HLP-2021-0001, "Petition for
+  // Hazardous Liquid Pipeline Permit," filed 8/4/2021, primary company
+  // Summit Carbon Solutions LLC, status "Compliance Filing Window" — the
+  // same physical pipeline's Iowa permit, not auto-ingested (see README's
+  // Iowa entry for why: EFS now requires an authenticated session with no
+  // durable, storable API credential, unlike every other source in this
+  // series). See also this project's ProjectSource row for the direct link.
+  if (listing.caseNumber === "PU-22-391") {
+    dataQualityNoteParts.push(
+      "This same physical CO2 pipeline also has an Iowa Hazardous Liquid Pipeline permit — Iowa Utilities Commission Docket HLP-2021-0001, filed 8/4/2021, status \"Compliance Filing Window\" (see the source link above) — added as a one-time manual citation, not auto-updating; Iowa's own docket system requires an authenticated session with no durable API credential (see README.md).",
+    );
+  }
   if (capacityUnit === "kV") {
     dataQualityNoteParts.push("Capacity shown is the transmission line's voltage rating (kV), not a MW capacity figure — this source does not publish line MW ratings.");
   }

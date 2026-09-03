@@ -6,10 +6,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token") ?? "";
 
-  const sub = await prisma.projectSubscription.findUnique({
-    where: { confirmToken: token },
-    include: { project: { select: { slug: true } } },
-  });
+  const sub = await prisma.feedSubscription.findUnique({ where: { confirmToken: token } });
 
   if (!sub) {
     return NextResponse.redirect(new URL("/?alert=invalid", req.url));
@@ -17,13 +14,14 @@ export async function GET(req: NextRequest) {
 
   if (!sub.confirmed) {
     const now = new Date();
-    await prisma.projectSubscription.update({
+    await prisma.feedSubscription.update({
       where: { id: sub.id },
-      // lastNotifiedAt starts at confirm time so the next digest run only
-      // covers changes from here forward, not the project's full history.
+      // lastNotifiedAt starts at confirm time so the first daily email only
+      // covers changes from here forward, not the feed's full history.
       data: { confirmed: true, confirmedAt: now, lastNotifiedAt: now },
     });
   }
 
-  return NextResponse.redirect(new URL(`/project/${sub.project.slug}?alert=confirmed`, req.url));
+  const stateParam = sub.state ? `&state=${sub.state}` : "";
+  return NextResponse.redirect(new URL(`/?alert=confirmed${stateParam}`, req.url));
 }

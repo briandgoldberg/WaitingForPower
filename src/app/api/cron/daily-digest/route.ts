@@ -1,10 +1,10 @@
 // Daily summary email to briandgoldberg@gmail.com covering the previous
 // ~24 hours: bot/MCP/API calls (ApiRequestLog), visitor feedback
 // (VisitorFeedback), contact form submissions (ContactSubmission), and new
-// project-notification subscriptions (ProjectSubscription). A rolling
-// 24-hour window ending at run time, not a strict UTC calendar day — same
-// convention as notify-subscribers, and simpler than reasoning about
-// calendar-day boundaries for a cron that just needs to run once daily.
+// feed subscriptions (FeedSubscription). A rolling 24-hour window ending at
+// run time, not a strict UTC calendar day — same convention as
+// notify-feed-subscribers, and simpler than reasoning about calendar-day
+// boundaries for a cron that just needs to run once daily.
 //
 // Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}` on cron
 // invocations — see src/app/api/cron/ingest-eia/route.ts for the same check.
@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendDailyDigestEmail } from "@/lib/dailyDigestEmail";
+import { stateName } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +40,9 @@ export async function GET(req: NextRequest) {
       select: { topic: true, name: true, email: true, organization: true, message: true },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.projectSubscription.findMany({
+    prisma.feedSubscription.findMany({
       where: { createdAt: { gte: since } },
-      select: { email: true, confirmed: true, project: { select: { name: true } } },
+      select: { email: true, confirmed: true, state: true },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
       .filter((r) => r.feedbackText || r.contactEmail)
       .map((r) => ({ intent: r.intent, feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     contactSubmissions,
-    newSubscriptions: newSubscriptions.map((s) => ({ projectName: s.project.name, email: s.email, confirmed: s.confirmed })),
+    newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
   });
 
   if (!result.ok) {

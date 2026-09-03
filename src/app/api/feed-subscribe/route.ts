@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { STATE_NAMES } from "@/lib/data/usStates";
 import { generateSubscriptionToken } from "@/lib/subscriptionTokens";
-import { sendConfirmEmail } from "@/lib/subscriptionEmail";
+import { sendFeedConfirmEmail } from "@/lib/feedSubscriptionEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -13,26 +14,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const projectId = String(body.projectId ?? "").trim();
   const email = String(body.email ?? "").trim();
+  const stateRaw = String(body.state ?? "").trim().toUpperCase();
+  const state = stateRaw && stateRaw in STATE_NAMES ? stateRaw : null;
 
-  if (!projectId) {
-    return NextResponse.json({ error: "Missing project." }, { status: 400 });
-  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, name: true, slug: true },
-  });
-  if (!project) {
-    return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  if (stateRaw && !state) {
+    return NextResponse.json({ error: "Unrecognized state." }, { status: 400 });
   }
 
-  const existing = await prisma.projectSubscription.findUnique({
-    where: { projectId_email: { projectId: project.id, email } },
+  // See FeedSubscription's schema.prisma header — "" is the DB-level "every
+  // state" sentinel; `state` (possibly null) is what the rest of this route
+  // and the email use.
+  const dbState = state ?? "";
+
+  const existing = await prisma.feedSubscription.findUnique({
+    where: { email_state: { email, state: dbState } },
   });
 
   if (existing?.confirmed) {
@@ -45,18 +44,13 @@ export async function POST(req: NextRequest) {
   const confirmToken = existing?.confirmToken ?? generateSubscriptionToken();
   const unsubscribeToken = existing?.unsubscribeToken ?? generateSubscriptionToken();
 
-  await prisma.projectSubscription.upsert({
-    where: { projectId_email: { projectId: project.id, email } },
-    create: { projectId: project.id, email, confirmToken, unsubscribeToken },
+  await prisma.feedSubscription.upsert({
+    where: { email_state: { email, state: dbState } },
+    create: { email, state: dbState, confirmToken, unsubscribeToken },
     update: {},
   });
 
-  const result = await sendConfirmEmail({
-    to: email,
-    projectName: project.name,
-    projectSlug: project.slug,
-    confirmToken,
-  });
+  const result = await sendFeedConfirmEmail({ to: email, state, confirmToken });
 
   if (!result.ok) {
     return NextResponse.json({ error: "Failed to send confirmation email. Please try again." }, { status: 502 });

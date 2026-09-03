@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-// Same verified sending domain as subscriptionEmail.ts and the contact
+// Same verified sending domain as feedSubscriptionEmail.ts and the contact
 // form (waitingforpower.com, confirmed verified 2026-09-02).
 const FROM = "WaitingForPower Alerts <alerts@waitingforpower.com>";
 const TO = "briandgoldberg@gmail.com";

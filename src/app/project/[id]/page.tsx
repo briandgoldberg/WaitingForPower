@@ -8,7 +8,6 @@ import type { ProjectDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
-import { SubscribeBox } from "@/components/SubscribeBox";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
@@ -59,26 +58,11 @@ export async function generateMetadata({
   };
 }
 
-const ALERT_MESSAGES: Record<string, string> = {
-  confirmed: "You're subscribed — we'll email you when this project updates.",
-  unsubscribed: "You've been unsubscribed from updates for this project.",
-  invalid: "That link has expired or was already used.",
-};
-
-export default async function ProjectDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ alert?: string }>;
-}) {
+export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { alert } = await searchParams;
   const p = await getProject(id);
 
   if (!p) notFound();
-
-  const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
   const stateCodes = splitStateCodes(p.state);
@@ -86,11 +70,6 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
-      {alertMessage && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm">
-          {alertMessage}
-        </div>
-      )}
       {p.isAggregateExample && (
         <div className="rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">
           <strong>This is a regional aggregate, not a single physical project.</strong> It&rsquo;s
@@ -183,8 +162,6 @@ export default async function ProjectDetailPage({
           </section>
         )}
       </div>
-
-      <SubscribeBox projectId={p.id} projectName={p.name} />
 
       {(p.lat != null && p.lon != null) && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">

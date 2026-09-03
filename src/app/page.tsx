@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getRecentChanges } from "@/lib/changes";
 import { ChangesFeed } from "@/components/ChangesFeed";
+import { StateFeedFilter } from "@/components/StateFeedFilter";
+import { FeedSubscribeBox } from "@/components/FeedSubscribeBox";
+import { STATE_NAMES, stateName } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +38,22 @@ const DATASET_JSON_LD = {
   },
 };
 
-export default async function HomePage() {
-  const { changes, hasMore } = await getRecentChanges(50);
+const ALERT_MESSAGES: Record<string, string> = {
+  confirmed: "You're subscribed — we'll email you daily with updates.",
+  unsubscribed: "You've been unsubscribed from daily feed updates.",
+  invalid: "That link has expired or was already used.",
+};
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ state?: string; alert?: string }>;
+}) {
+  const { state: stateParam, alert } = await searchParams;
+  const state = stateParam && stateParam.toUpperCase() in STATE_NAMES ? stateParam.toUpperCase() : null;
+  const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
+
+  const { changes, hasMore } = await getRecentChanges(50, 0, state);
   // Passed down instead of letting ChangesFeed call `new Date()` itself —
   // see ChangesFeed's `now` prop comment for the hydration mismatch this
   // fixes.
@@ -50,6 +67,11 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
       />
       <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
+        {alertMessage && (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm">
+            {alertMessage}
+          </div>
+        )}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
@@ -59,33 +81,37 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Recent changes
-          </h2>
-          {/* color set via inline style, not text-white/text-[var(--accent)]
-              — see globals.css's `a { color: inherit }` rule, which sits
-              outside Tailwind's layered utilities and wins over ANY
-              class-based text color on a link, confirmed earlier tonight. */}
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <Link
-              href="/projects"
-              className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors"
-              style={{ color: "var(--accent)" }}
-            >
-              View all projects →
-            </Link>
-            <Link
-              href="/contact?topic=data-access"
-              className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent hover:bg-accent/90 shadow-sm transition-colors"
-              style={{ color: "white" }}
-            >
-              Get a custom feed →
-            </Link>
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)] whitespace-nowrap">
+              Recent changes{state && ` in ${stateName(state)}`}
+            </h2>
+            {/* color set via inline style, not text-white/text-[var(--accent)]
+                — see globals.css's `a { color: inherit }` rule, which sits
+                outside Tailwind's layered utilities and wins over ANY
+                class-based text color on a link, confirmed earlier tonight. */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <StateFeedFilter state={state} />
+              <FeedSubscribeBox state={state} />
+              <Link
+                href="/projects"
+                className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                style={{ color: "var(--accent)" }}
+              >
+                View all projects →
+              </Link>
+            </div>
           </div>
         </div>
 
-        <ChangesFeed initialChanges={changes} initialHasMore={hasMore} now={now} />
+        {/* key={state}: ChangesFeed seeds its own state from initialChanges
+            via useState's lazy initializer, which only runs once on mount —
+            a client-side navigation to a new ?state= otherwise leaves the
+            old filtered list on screen even though this server component
+            re-rendered with fresh data (confirmed live: the "Recent changes
+            in New York" heading updated but the cards below didn't). Keying
+            by state forces a real remount when the filter changes. */}
+        <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
       </div>
     </>
   );

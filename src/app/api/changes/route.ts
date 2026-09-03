@@ -17,8 +17,9 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
   const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(searchParams.get("limit")) || PAGE_SIZE));
+  const state = searchParams.get("state");
 
-  const { changes, hasMore } = await getRecentChanges(limit, offset);
+  const { changes, hasMore } = await getRecentChanges(limit, offset, state);
 
   return NextResponse.json({ changes, hasMore, nextOffset: offset + changes.length }, { headers: CORS_HEADERS });
 }

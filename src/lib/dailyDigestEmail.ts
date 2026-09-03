@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-// Same verified sending domain as subscriptionEmail.ts (see that file's
+// Same verified sending domain as feedSubscriptionEmail.ts (see that file's
 // header — waitingforpower.com, confirmed verified 2026-09-02).
 const FROM = "WaitingForPower Digest <digest@waitingforpower.com>";
 const TO = "briandgoldberg@gmail.com";
@@ -23,7 +23,9 @@ export interface DailyDigestData {
   // second step — a subset of feedbackTotal, not a separate count.
   feedbackDetails: { intent: string; feedbackText: string | null; contactEmail: string | null; path: string }[];
   contactSubmissions: { topic: string; name: string; email: string; organization: string | null; message: string }[];
-  newSubscriptions: { projectName: string; email: string; confirmed: boolean }[];
+  // scope is already the human label ("California" or "All states") — see
+  // src/app/api/cron/daily-digest/route.ts.
+  newSubscriptions: { scope: string; email: string; confirmed: boolean }[];
 }
 
 const INTENT_LABELS: Record<string, string> = {
@@ -86,7 +88,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     data.newSubscriptions.length === 0
       ? "<p>None.</p>"
       : `<ul>${data.newSubscriptions
-          .map((s) => `<li>${escapeHtml(s.email)} — ${escapeHtml(s.projectName)}${s.confirmed ? "" : " (unconfirmed)"}</li>`)
+          .map((s) => `<li>${escapeHtml(s.email)} — ${escapeHtml(s.scope)}${s.confirmed ? "" : " (unconfirmed)"}</li>`)
           .join("")}</ul>`;
 
   const html = `
@@ -94,7 +96,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     ${section("Bot / MCP / API calls", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
     ${section("Contact form submissions", contactSectionHtml)}
-    ${section("New notification subscriptions", subsSectionHtml)}
+    ${section("New feed subscriptions", subsSectionHtml)}
   `;
 
   const text = [
@@ -125,10 +127,10 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
           .map((c) => `- ${c.topic} — ${c.name} (${c.email})${c.organization ? ` — ${c.organization}` : ""}\n  ${c.message}`)
           .join("\n"),
     "",
-    "NEW NOTIFICATION SUBSCRIPTIONS",
+    "NEW FEED SUBSCRIPTIONS",
     data.newSubscriptions.length === 0
       ? "None."
-      : data.newSubscriptions.map((s) => `- ${s.email} — ${s.projectName}${s.confirmed ? "" : " (unconfirmed)"}`).join("\n"),
+      : data.newSubscriptions.map((s) => `- ${s.email} — ${s.scope}${s.confirmed ? "" : " (unconfirmed)"}`).join("\n"),
   ].join("\n");
 
   const { error } = await resend.emails.send({

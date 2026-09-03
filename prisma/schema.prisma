@@ -140,11 +140,10 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  causes        ProjectCause[]
-  sources       ProjectSource[]
-  milestones    Milestone[]
-  changes       ProjectChange[]
-  subscriptions ProjectSubscription[]
+  causes     ProjectCause[]
+  sources    ProjectSource[]
+  milestones Milestone[]
+  changes    ProjectChange[]
 
   @@index([projectType])
   @@index([fuelType])
@@ -153,22 +152,39 @@ model Project {
   @@index([noLongerReported])
 }
 
-// A per-project "email me when this changes" subscription. Double opt-in
-// (confirmed starts false, flips true only once the confirm link is
-// clicked) so a mistyped or someone-else's address can't get subscribed
-// without their action — same reasoning as any transactional mailing list.
-// Notifications are a daily digest, not real-time: the notify-subscribers
-// cron (see src/app/api/cron/notify-subscribers/route.ts) finds every
-// ProjectChange row created after lastNotifiedAt for a project with
-// confirmed subscribers, emails one summary per subscription, then bumps
-// lastNotifiedAt — so a subscriber never gets more than one email per day
-// even if their project changed twice.
-model ProjectSubscription {
-  id        String  @id @default(cuid())
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
+// A subscription to the homepage changes feed, optionally scoped to one
+// state — replaces the original per-project ProjectSubscription (removed
+// 2026-09; real usage over its whole life was zero confirmed subscribers,
+// because a single project changes far too rarely — site-wide volume is
+// only ~3-5 ProjectChange rows/day across thousands of tracked projects,
+// so a per-project subscriber was being promised roughly one email a year).
+// Not tied to a Project row at all — `state` is a plain USPS code rather
+// than a relation, since the scope is a filter over ProjectChange, not a
+// single project. Double opt-in for the same reason the old model had it: a
+// mistyped or someone-else's address can't get subscribed without clicking
+// the confirm link.
+//
+// `state` is NOT NULL with "" meaning "every state" — deliberately not
+// nullable, even though the concept is "an optional filter": Prisma's
+// generated findUnique/upsert input for a compound @@unique containing a
+// nullable field won't accept null (confirmed live — a real TS2322 type
+// error, not a guess), because a Postgres unique index doesn't treat
+// multiple NULLs as duplicates, so "unique" lookup-by-null isn't reliable.
+// The rest of the app still represents "no state selected" as `null` — see
+// each Prisma call site (src/app/api/feed-subscribe/*,
+// src/app/api/cron/notify-feed-subscribers) for the `?? ""` / `|| null`
+// mapping right at this boundary.
+//
+// Sent daily regardless of whether anything changed in scope (see
+// src/app/api/cron/notify-feed-subscribers/route.ts) — unlike the old
+// per-project model, which skipped a subscriber entirely on a quiet day.
+// A predictable "yes, still watching" cadence is the point here; the email
+// itself says plainly when there's nothing new.
+model FeedSubscription {
+  id    String  @id @default(cuid())
   email String
+  // USPS code, e.g. "CA" — "" means every state (the unfiltered feed).
+  state String @default("")
 
   confirmed        Boolean @default(false)
   // Random 32-byte hex tokens (see src/lib/subscriptionTokens.ts) — opaque
@@ -179,14 +195,13 @@ model ProjectSubscription {
   createdAt   DateTime  @default(now())
   confirmedAt DateTime?
 
-  // Cursor into ProjectChange.createdAt for this subscription. Set to
-  // confirmedAt at confirm time (not createdAt/epoch) so a new subscriber
-  // is emailed about changes going forward only, not the project's entire
-  // backdated history. Null until confirmed.
+  // Cursor into ProjectChange.createdAt. Set to confirmedAt at confirm
+  // time (not createdAt/epoch) so a new subscriber's first email covers
+  // changes going forward only, not the feed's entire backdated history.
   lastNotifiedAt DateTime?
 
-  @@unique([projectId, email])
-  @@index([projectId])
+  @@unique([email, state])
+  @@index([state])
   @@index([confirmed])
 }
 

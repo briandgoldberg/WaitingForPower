@@ -145,6 +145,7 @@ export function ChangesFeed({
   initialChanges,
   initialHasMore,
   now,
+  state,
 }: {
   initialChanges: ProjectChangeDTO[];
   initialHasMore: boolean;
@@ -159,6 +160,10 @@ export function ChangesFeed({
   // open for a long time will show a "now" that's stuck at load time, same
   // tradeoff every SSR site with relative timestamps makes.
   now: string;
+  // Current state filter (see src/components/StateFeedFilter.tsx) — threaded
+  // into "Load more" so paging further back stays scoped to the same filter
+  // the server-rendered first page already applied.
+  state: string | null;
 }) {
   const [changes, setChanges] = useState(initialChanges);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -170,7 +175,8 @@ export function ChangesFeed({
     setLoading(true);
     setError(false);
     try {
-      const res = await fetch(`/api/changes?offset=${changes.length}`);
+      const stateQuery = state ? `&state=${state}` : "";
+      const res = await fetch(`/api/changes?offset=${changes.length}${stateQuery}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: { changes: ProjectChangeDTO[]; hasMore: boolean } = await res.json();
       setChanges((prev) => [...prev, ...data.changes]);

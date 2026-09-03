@@ -40,16 +40,16 @@ export async function sendFeedConfirmEmail(params: {
   const { error } = await resend.emails.send({
     from: FROM,
     to: params.to,
-    subject: `Confirm: daily updates for ${scope}`,
+    subject: `Confirm: weekly updates for ${scope}`,
     text: [
-      `You asked for a daily email of energy permitting changes in ${scope}.`,
+      `You asked for a weekly email of energy permitting changes in ${scope}.`,
       "",
       `Confirm this subscription: ${confirmUrl}`,
       "",
       "If you didn't request this, you can ignore this email — nothing happens until you click the link above.",
     ].join("\n"),
     html: `
-      <p>You asked for a daily email of energy permitting changes in <strong>${escapeHtml(scope)}</strong>.</p>
+      <p>You asked for a weekly email of energy permitting changes in <strong>${escapeHtml(scope)}</strong>.</p>
       <p><a href="${confirmUrl}">Confirm this subscription</a></p>
       <p style="color:#666;font-size:13px;">If you didn't request this, you can ignore this email — nothing happens until you click the link above.</p>
     `,
@@ -62,7 +62,7 @@ export async function sendFeedConfirmEmail(params: {
   return { ok: true };
 }
 
-export async function sendFeedDailyEmail(params: {
+export async function sendFeedWeeklyEmail(params: {
   to: string;
   state: string | null;
   summaries: { projectName: string; projectSlug: string; summary: string }[];
@@ -79,9 +79,9 @@ export async function sendFeedDailyEmail(params: {
   const { error } = await resend.emails.send({
     from: FROM,
     to: params.to,
-    subject: hasUpdates ? `${params.summaries.length} update${params.summaries.length === 1 ? "" : "s"} in ${scope}` : `No updates in ${scope} today`,
+    subject: hasUpdates ? `${params.summaries.length} update${params.summaries.length === 1 ? "" : "s"} in ${scope}` : `No updates in ${scope} this week`,
     text: [
-      hasUpdates ? `${params.summaries.length} update(s) in ${scope}:` : `No new permitting changes in ${scope} today.`,
+      hasUpdates ? `${params.summaries.length} update(s) in ${scope}:` : `No new permitting changes in ${scope} this week.`,
       "",
       ...params.summaries.map((s) => `- ${s.projectName}: ${s.summary} (https://waitingforpower.com/project/${s.projectSlug})`),
       "",
@@ -90,7 +90,7 @@ export async function sendFeedDailyEmail(params: {
       `Unsubscribe: ${unsubscribeUrl}`,
     ].join("\n"),
     html: `
-      <p>${hasUpdates ? `<strong>${params.summaries.length}</strong> update${params.summaries.length === 1 ? "" : "s"} in <strong>${escapeHtml(scope)}</strong>:` : `No new permitting changes in <strong>${escapeHtml(scope)}</strong> today.`}</p>
+      <p>${hasUpdates ? `<strong>${params.summaries.length}</strong> update${params.summaries.length === 1 ? "" : "s"} in <strong>${escapeHtml(scope)}</strong>:` : `No new permitting changes in <strong>${escapeHtml(scope)}</strong> this week.`}</p>
       ${
         hasUpdates
           ? `<ul>${params.summaries
@@ -107,7 +107,7 @@ export async function sendFeedDailyEmail(params: {
   });
 
   if (error) {
-    console.error("Resend error (feed daily email):", error);
+    console.error("Resend error (feed weekly email):", error);
     return { ok: false, error: error.message };
   }
   return { ok: true };

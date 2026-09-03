@@ -39,7 +39,7 @@ export function FeedSubscribeBox({ state }: { state: string | null }) {
   if (status === "sent") {
     return (
       <p className="self-start text-xs text-[var(--text-secondary)]">
-        Check your email — we sent a link to confirm daily updates for {scope}.
+        Check your email — we sent a link to confirm weekly updates for {scope}.
       </p>
     );
   }
@@ -47,7 +47,7 @@ export function FeedSubscribeBox({ state }: { state: string | null }) {
   if (status === "already") {
     return (
       <p className="self-start text-xs text-[var(--text-secondary)]">
-        {email} already gets daily updates for {scope}.
+        {email} already gets weekly updates for {scope}.
       </p>
     );
   }
@@ -81,7 +81,7 @@ export function FeedSubscribeBox({ state }: { state: string | null }) {
         className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent hover:bg-accent/90 shadow-sm transition-colors disabled:opacity-60 whitespace-nowrap"
         style={{ color: "white" }}
       >
-        {status === "loading" ? "Sending…" : `Get daily updates for ${scope}`}
+        {status === "loading" ? "Sending…" : `Get weekly updates for ${scope}`}
       </button>
       <button
         type="button"

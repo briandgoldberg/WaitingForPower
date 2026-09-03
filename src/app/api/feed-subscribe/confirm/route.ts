@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     await prisma.feedSubscription.update({
       where: { id: sub.id },
-      // lastNotifiedAt starts at confirm time so the first daily email only
+      // lastNotifiedAt starts at confirm time so the first weekly email only
       // covers changes from here forward, not the feed's full history.
       data: { confirmed: true, confirmedAt: now, lastNotifiedAt: now },
     });

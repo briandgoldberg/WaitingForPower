@@ -1,8 +1,8 @@
-// Daily email to every confirmed FeedSubscription — replaces the retired
+// Weekly email to every confirmed FeedSubscription — replaces the retired
 // per-project notify-subscribers cron. Unlike that one, this always sends
 // (see FeedSubscription's schema.prisma header: a predictable "yes, still
 // watching" cadence is the point), saying plainly when there's nothing new
-// in scope rather than skipping a subscriber on a quiet day.
+// in scope rather than skipping a subscriber on a quiet week.
 //
 // Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}` on cron
 // invocations — see src/app/api/cron/ingest-eia/route.ts for the same check.
@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { splitStateCodes } from "@/lib/data/usStates";
-import { sendFeedDailyEmail } from "@/lib/feedSubscriptionEmail";
+import { sendFeedWeeklyEmail } from "@/lib/feedSubscriptionEmail";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       (r) => !r.project.isAggregateExample && (scopeState == null || splitStateCodes(r.project.state).includes(scopeState)),
     );
 
-    const result = await sendFeedDailyEmail({
+    const result = await sendFeedWeeklyEmail({
       to: sub.email,
       state: scopeState,
       summaries: inScope.map((r) => ({ projectName: r.project.name, projectSlug: r.project.slug, summary: r.summary })),

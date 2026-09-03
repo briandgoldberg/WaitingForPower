@@ -39,8 +39,8 @@ const DATASET_JSON_LD = {
 };
 
 const ALERT_MESSAGES: Record<string, string> = {
-  confirmed: "You're subscribed — we'll email you daily with updates.",
-  unsubscribed: "You've been unsubscribed from daily feed updates.",
+  confirmed: "You're subscribed — we'll email you weekly with updates.",
+  unsubscribed: "You've been unsubscribed from weekly feed updates.",
   invalid: "That link has expired or was already used.",
 };
 
@@ -86,17 +86,12 @@ export default async function HomePage({
             <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)] whitespace-nowrap">
               Recent changes{state && ` in ${stateName(state)}`}
             </h2>
-            {/* color set via inline style, not text-white/text-[var(--accent)]
-                — see globals.css's `a { color: inherit }` rule, which sits
-                outside Tailwind's layered utilities and wins over ANY
-                class-based text color on a link, confirmed earlier tonight. */}
             <div className="flex items-center gap-2 flex-wrap">
               <StateFeedFilter state={state} />
               <FeedSubscribeBox state={state} />
               <Link
                 href="/projects"
-                className="text-xs font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-                style={{ color: "var(--accent)" }}
+                className="self-start text-xs font-semibold px-3.5 py-1.5 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
               >
                 View all projects →
               </Link>

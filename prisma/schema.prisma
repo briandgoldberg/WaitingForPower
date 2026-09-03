@@ -175,9 +175,9 @@ model Project {
 // src/app/api/cron/notify-feed-subscribers) for the `?? ""` / `|| null`
 // mapping right at this boundary.
 //
-// Sent daily regardless of whether anything changed in scope (see
+// Sent weekly regardless of whether anything changed in scope (see
 // src/app/api/cron/notify-feed-subscribers/route.ts) — unlike the old
-// per-project model, which skipped a subscriber entirely on a quiet day.
+// per-project model, which skipped a subscriber entirely on a quiet week.
 // A predictable "yes, still watching" cadence is the point here; the email
 // itself says plainly when there's nothing new.
 model FeedSubscription {

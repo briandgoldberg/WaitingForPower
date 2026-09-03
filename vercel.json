@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/cron/notify-feed-subscribers",
-      "schedule": "30 15 * * *"
+      "schedule": "30 15 * * 0"
     },
     {
       "path": "/api/cron/daily-digest",

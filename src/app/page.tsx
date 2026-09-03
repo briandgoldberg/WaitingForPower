@@ -4,6 +4,7 @@ import { ChangesFeed } from "@/components/ChangesFeed";
 import { StateFeedFilter } from "@/components/StateFeedFilter";
 import { FeedSubscribeBox } from "@/components/FeedSubscribeBox";
 import { STATE_NAMES, stateName } from "@/lib/data/usStates";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,12 @@ export default async function HomePage({
   // see ChangesFeed's `now` prop comment for the hydration mismatch this
   // fixes.
   const now = new Date().toISOString();
+  // Real live count, every status bucket — same isAggregateExample exclusion
+  // as computeAggregateStats' totalProjects (src/lib/stats.ts), so this
+  // number always matches what "Projects" itself shows. Powers the hero CTA
+  // below instead of a plain "View all projects" link competing with the
+  // state filter and subscribe button for space in that row.
+  const totalProjects = await prisma.project.count({ where: { isAggregateExample: false } });
 
   return (
     <>
@@ -72,13 +79,20 @@ export default async function HomePage({
             {alertMessage}
           </div>
         )}
-        <div>
+        <div className="flex flex-col items-start gap-2">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
+          <p className="text-sm text-[var(--muted)] max-w-2xl">
             Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
           </p>
+          <Link
+            href="/projects"
+            className="text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+            style={{ color: "var(--accent)" }}
+          >
+            Tracking {totalProjects.toLocaleString()} energy projects nationwide →
+          </Link>
         </div>
 
         <div className="flex flex-col gap-2.5">
@@ -89,12 +103,6 @@ export default async function HomePage({
             <div className="flex items-center gap-2 flex-wrap">
               <StateFeedFilter state={state} />
               <FeedSubscribeBox state={state} />
-              <Link
-                href="/projects"
-                className="self-start text-xs font-semibold px-3.5 py-1.5 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
-              >
-                View all projects →
-              </Link>
             </div>
           </div>
         </div>

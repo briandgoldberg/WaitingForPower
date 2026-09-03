@@ -343,3 +343,55 @@ model Submission {
   // Set once approved and copied into a Project row, so we can link back.
   publishedProjectId String?
 }
+
+// One row per answer to the "What brings you to WaitingForPower today?"
+// one-question intent widget (src/components/IntentWidget.tsx) — shown once
+// per browser (a localStorage flag), never re-prompted. `intent` is one of
+// a small fixed set of button choices (see INTENT_OPTIONS in the widget),
+// not free text, so this stays cheap to summarize in the daily digest email
+// rather than becoming a pile of unstructured survey responses.
+model VisitorFeedback {
+  id        String   @id @default(cuid())
+  intent    String
+  path      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// One row per request to /mcp or /api/projects — added because this project
+// has no analytics package and Vercel's own CLI log retention is only
+// ~20 minutes with no Log Drains configured, so without a durable store
+// there was no way to ever answer "has an agent used this" even a day
+// later, let alone feed a daily digest email. See those routes' own
+// `console.log`-replacing write for what's captured.
+model ApiRequestLog {
+  id        Int      @id @default(autoincrement())
+  // "mcp" | "api_projects"
+  endpoint  String
+  method    String
+  userAgent String?
+  // Raw query string for api_projects; null for mcp (its params are in the
+  // JSON-RPC body, not the URL, and not worth parsing just for a log row).
+  query     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([endpoint])
+}
+
+// Durable copy of every contact-form submission (src/app/api/contact) —
+// previously that route only sent an email via Resend and persisted
+// nothing, so there was no queryable record for the daily digest email
+// (or for anything else) once the email itself scrolled out of an inbox.
+model ContactSubmission {
+  id           String   @id @default(cuid())
+  topic        String
+  name         String
+  email        String
+  organization String?
+  message      String
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}

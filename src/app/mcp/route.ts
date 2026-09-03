@@ -12,6 +12,7 @@ import { computeAggregateStats } from "@/lib/stats";
 import { CAUSE_CATEGORIES } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
 import { STATE_NAMES } from "@/lib/data/usStates";
+import { prisma } from "@/lib/db";
 
 const FUEL_TYPES = [
   "solar",
@@ -219,13 +220,18 @@ const handler = createMcpHandler(
   },
 );
 
-// Lightweight usage logging — this project has no analytics package and
-// Vercel's CLI log retention here is only ~20 minutes with no Log Drains
-// configured, so without this there is no way to ever answer "has an agent
-// used this" even a day later. User-Agent is the one signal likely to
-// distinguish a real MCP client from a browser hitting this URL directly.
-function loggedHandler(req: Request) {
-  console.log(`[MCP] ${req.method} ${new URL(req.url).pathname} ua="${req.headers.get("user-agent") ?? ""}"`);
+// Durable usage logging (ApiRequestLog) — this project has no analytics
+// package and Vercel's CLI log retention here is only ~20 minutes with no
+// Log Drains configured, so without a DB row there was no way to ever
+// answer "has an agent used this" even a day later, let alone feed the
+// daily digest email (src/app/api/cron/daily-digest). User-Agent is the
+// one signal likely to distinguish a real MCP client from a browser
+// hitting this URL directly. Logging failures are swallowed — a broken
+// log write must never break the actual MCP response.
+async function loggedHandler(req: Request) {
+  prisma.apiRequestLog
+    .create({ data: { endpoint: "mcp", method: req.method, userAgent: req.headers.get("user-agent") } })
+    .catch((err) => console.error("Failed to log MCP request:", err));
   return handler(req);
 }
 

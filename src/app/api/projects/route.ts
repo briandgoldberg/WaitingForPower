@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryProjects, toFilterState } from "@/lib/queryProjects";
+import { prisma } from "@/lib/db";
 
 // Public, read-only, no key required — CORS is wide open on purpose so
 // external tools/agents can call this directly from the browser or a server.
@@ -36,10 +37,19 @@ function parseNumber(value: string | null): number | null {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
-  // See src/app/mcp/route.ts's matching log line for why this exists —
-  // no analytics package, and Vercel's CLI log retention here is too short
-  // to ever answer "has this been used" without it.
-  console.log(`[API] GET /api/projects?${searchParams.toString()} ua="${request.headers.get("user-agent") ?? ""}"`);
+  // See src/app/mcp/route.ts's matching ApiRequestLog write for why this
+  // exists — no analytics package, and Vercel's CLI log retention here is
+  // too short to ever answer "has this been used" without a durable row.
+  prisma.apiRequestLog
+    .create({
+      data: {
+        endpoint: "api_projects",
+        method: "GET",
+        userAgent: request.headers.get("user-agent"),
+        query: searchParams.toString() || null,
+      },
+    })
+    .catch((err) => console.error("Failed to log /api/projects request:", err));
 
   const filters = toFilterState({
     state: searchParams.get("state"),

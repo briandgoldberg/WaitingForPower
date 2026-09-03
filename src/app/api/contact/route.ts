@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import { prisma } from "@/lib/db";
 
 const CONTACT_EMAIL = "briandgoldberg@gmail.com";
 
@@ -47,6 +48,18 @@ export async function POST(req: NextRequest) {
   }
   if (organization.length > 200) {
     return NextResponse.json({ error: "Organization name is too long." }, { status: 400 });
+  }
+
+  // Persisted before the email send attempt — previously this route sent
+  // an email and kept no other record, so a submission was only as durable
+  // as Brian's inbox. Persisting first means a submission is on record for
+  // the daily digest even if the Resend send below fails.
+  try {
+    await prisma.contactSubmission.create({
+      data: { topic, name, email, organization: organization || null, message },
+    });
+  } catch (err) {
+    console.error("Failed to persist contact submission:", err);
   }
 
   const apiKey = process.env.RESEND_API_KEY;

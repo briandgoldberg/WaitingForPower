@@ -19,6 +19,9 @@ export interface DailyDigestData {
   apiUserAgents: string[];
   feedback: { intent: string; count: number }[];
   feedbackTotal: number;
+  // Rows where the visitor actually filled in the widget's optional
+  // second step — a subset of feedbackTotal, not a separate count.
+  feedbackDetails: { intent: string; feedbackText: string | null; contactEmail: string | null; path: string }[];
   contactSubmissions: { topic: string; name: string; email: string; organization: string | null; message: string }[];
   newSubscriptions: { projectName: string; email: string; confirmed: boolean }[];
 }
@@ -56,7 +59,18 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     data.feedbackTotal === 0
       ? "<p>No responses.</p>"
       : `<p><strong>${data.feedbackTotal}</strong> total.</p>
-         <ul>${data.feedback.map((f) => `<li>${escapeHtml(INTENT_LABELS[f.intent] ?? f.intent)}: ${f.count}</li>`).join("")}</ul>`;
+         <ul>${data.feedback.map((f) => `<li>${escapeHtml(INTENT_LABELS[f.intent] ?? f.intent)}: ${f.count}</li>`).join("")}</ul>
+         ${
+           data.feedbackDetails.length > 0
+             ? `<p style="margin:8px 0 4px;"><strong>With a message or contact email:</strong></p>
+                <ul>${data.feedbackDetails
+                  .map(
+                    (d) =>
+                      `<li>${escapeHtml(INTENT_LABELS[d.intent] ?? d.intent)}${d.contactEmail ? ` — ${escapeHtml(d.contactEmail)}` : ""}${d.feedbackText ? `<br>${escapeHtml(d.feedbackText)}` : ""}</li>`,
+                  )
+                  .join("")}</ul>`
+             : ""
+         }`;
 
   const contactSectionHtml =
     data.contactSubmissions.length === 0
@@ -94,6 +108,15 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     "VISITOR FEEDBACK",
     data.feedbackTotal === 0 ? "No responses." : `${data.feedbackTotal} total.`,
     ...data.feedback.map((f) => `- ${INTENT_LABELS[f.intent] ?? f.intent}: ${f.count}`),
+    ...(data.feedbackDetails.length > 0
+      ? [
+          "With a message or contact email:",
+          ...data.feedbackDetails.map(
+            (d) =>
+              `- ${INTENT_LABELS[d.intent] ?? d.intent}${d.contactEmail ? ` — ${d.contactEmail}` : ""}${d.feedbackText ? `\n  ${d.feedbackText}` : ""}`,
+          ),
+        ]
+      : []),
     "",
     "CONTACT FORM SUBMISSIONS",
     data.contactSubmissions.length === 0

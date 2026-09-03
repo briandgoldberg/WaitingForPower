@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid intent." }, { status: 400 });
   }
 
-  await prisma.visitorFeedback.create({ data: { intent, path } });
+  const row = await prisma.visitorFeedback.create({ data: { intent, path } });
 
   // Fire-and-forget — a visitor answering a one-question widget shouldn't
   // wait on an email send, and a Resend failure shouldn't surface as an
@@ -40,5 +40,8 @@ export async function POST(req: NextRequest) {
     console.error("Failed to send feedback notification email:", err),
   );
 
-  return NextResponse.json({ ok: true });
+  // `id` lets the widget's optional second step (a message and/or contact
+  // email — see src/app/api/feedback/[id]) attach to this same row instead
+  // of creating a second one.
+  return NextResponse.json({ ok: true, id: row.id });
 }

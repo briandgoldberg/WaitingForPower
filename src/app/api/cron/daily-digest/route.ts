@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.visitorFeedback.findMany({
       where: { createdAt: { gte: since } },
-      select: { intent: true },
+      select: { intent: true, feedbackText: true, contactEmail: true, path: true },
     }),
     prisma.contactSubmission.findMany({
       where: { createdAt: { gte: since } },
@@ -66,6 +66,9 @@ export async function GET(req: NextRequest) {
     apiUserAgents: [...userAgentSet].slice(0, 20),
     feedback: [...feedbackByIntent.entries()].map(([intent, count]) => ({ intent, count })),
     feedbackTotal: feedbackRows.length,
+    feedbackDetails: feedbackRows
+      .filter((r) => r.feedbackText || r.contactEmail)
+      .map((r) => ({ intent: r.intent, feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     contactSubmissions,
     newSubscriptions: newSubscriptions.map((s) => ({ projectName: s.project.name, email: s.email, confirmed: s.confirmed })),
   });

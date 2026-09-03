@@ -219,4 +219,14 @@ const handler = createMcpHandler(
   },
 );
 
-export { handler as GET, handler as POST };
+// Lightweight usage logging — this project has no analytics package and
+// Vercel's CLI log retention here is only ~20 minutes with no Log Drains
+// configured, so without this there is no way to ever answer "has an agent
+// used this" even a day later. User-Agent is the one signal likely to
+// distinguish a real MCP client from a browser hitting this URL directly.
+function loggedHandler(req: Request) {
+  console.log(`[MCP] ${req.method} ${new URL(req.url).pathname} ua="${req.headers.get("user-agent") ?? ""}"`);
+  return handler(req);
+}
+
+export { loggedHandler as GET, loggedHandler as POST };

@@ -36,6 +36,11 @@ function parseNumber(value: string | null): number | null {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
+  // See src/app/mcp/route.ts's matching log line for why this exists —
+  // no analytics package, and Vercel's CLI log retention here is too short
+  // to ever answer "has this been used" without it.
+  console.log(`[API] GET /api/projects?${searchParams.toString()} ua="${request.headers.get("user-agent") ?? ""}"`);
+
   const filters = toFilterState({
     state: searchParams.get("state"),
     fuelType: parseList(searchParams.get("fuelType")),

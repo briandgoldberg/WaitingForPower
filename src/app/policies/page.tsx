@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
+
+export const metadata: Metadata = {
+  title: "Advocacy — WaitingForPower",
+  description:
+    "Six bipartisan policies to speed up energy permitting decisions, one per bottleneck, inspired by Citizens' Climate Lobby's approach to durable, market-based climate policy.",
+  alternates: { canonical: "/policies" },
+};
 
 export default function PoliciesPage() {
   return (

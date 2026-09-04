@@ -4,6 +4,7 @@ import { MethodologyPanel } from "@/components/about/MethodologyPanel";
 export const metadata: Metadata = {
   title: "Methodology — WaitingForPower",
   description: "How the numbers on WaitingForPower are computed, what they assume, and where they're deliberately incomplete.",
+  alternates: { canonical: "/methodology" },
 };
 
 export default function MethodologyPage() {

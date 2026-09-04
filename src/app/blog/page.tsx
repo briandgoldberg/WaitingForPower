@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Blog | WaitingForPower",
   description: "Analysis and findings from WaitingForPower's live dataset of U.S. energy projects waiting on permitting approval.",
+  alternates: { canonical: "/blog" },
 };
 
 // Maps a post's slug to its index-card thumbnail — see

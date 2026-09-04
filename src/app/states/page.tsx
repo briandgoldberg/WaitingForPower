@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "Energy Projects by State | WaitingForPower",
   description:
     "Browse U.S. energy projects waiting on permitting approval by state — generation, transmission, storage, LNG, and pipeline projects, live and sourced.",
+  alternates: { canonical: "/states" },
 };
 
 export default async function StatesIndexPage() {

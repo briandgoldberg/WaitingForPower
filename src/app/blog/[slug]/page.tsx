@@ -28,6 +28,7 @@ export async function generateMetadata({
   return {
     title: `${meta.title} | WaitingForPower`,
     description: meta.excerpt,
+    alternates: { canonical: `/blog/${meta.slug}` },
     openGraph: {
       title: meta.title,
       description: meta.excerpt,

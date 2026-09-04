@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Contact — WaitingForPower",
   description:
     "Get in touch with WaitingForPower about data feeds, API access, custom datasets, partnerships, press, feedback, and bugs.",
+  alternates: { canonical: "/contact" },
 };
 
 export default async function ContactPage({

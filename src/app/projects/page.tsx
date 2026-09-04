@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Projects — WaitingForPower",
   description:
     "Explore every U.S. energy project WaitingForPower tracks — map and list views, filterable by state, status, fuel type, and permitting stage.",
+  alternates: { canonical: "/projects" },
 };
 
 // schema.org Dataset markup — lets search engines and AI agents identify

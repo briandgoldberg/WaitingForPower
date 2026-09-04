@@ -18,6 +18,16 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://waitingforpower.com"),
   title: TITLE,
   description: DESCRIPTION,
+  // Only actually applies to routes that don't declare their own metadata
+  // (Next.js metadata inheritance replaces `alternates` wholesale rather
+  // than merging it) — i.e. the homepage. Every other route sets its own
+  // `alternates.canonical` (see each page's own metadata/generateMetadata)
+  // so Google stops treating waitingforpower.com and www.waitingforpower.com
+  // as separate, possibly-duplicate pages — confirmed live in Search
+  // Console 2026-09-03: no page on the site set a canonical at all, and
+  // Google was flagging some pages "duplicate without user-selected
+  // canonical" as a result.
+  alternates: { canonical: "/" },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,

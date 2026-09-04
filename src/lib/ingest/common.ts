@@ -69,6 +69,8 @@ export interface NormalizedProject {
   interconnectionQueueStage?: string | null;
   /** Preliminary network-upgrade cost estimate in USD — see schema.prisma. */
   networkUpgradeCostUsd?: number | null;
+  /** Preliminary point-of-interconnection cost estimate in USD — see schema.prisma. */
+  poiCostUsd?: number | null;
   /** Grid balancing authority / ISO-RTO territory — see schema.prisma. */
   balancingAuthority?: string | null;
   /** Owning entity's business/ownership type (EIA-860M "Sector") — see schema.prisma. */
@@ -273,6 +275,21 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     return null;
   }
 
+  // Some fields are owned entirely by a separate, independent join module
+  // (e.g. lbnlInterconnectionCostsPjm.ts) rather than by whichever module
+  // creates/updates this row's own base fields — a regular re-ingestion run
+  // from the OWNING module (e.g. lbnlQueuedUp.ts) has no way to know this
+  // value even exists, so its own NormalizedProject always leaves it
+  // undefined. Unlike keepIfMergedAndNull above (which only protects a
+  // genuine cross-source merge), this preserves the existing value
+  // unconditionally whenever the incoming value is null/undefined — without
+  // it, a routine queue re-ingestion run would silently wipe out a cost
+  // estimate the very next time it runs, regardless of whether this project
+  // happens to be a manual-merge case.
+  function keepExistingIfNull<T>(incoming: T | null | undefined, existingValue: T | null | undefined): T | null {
+    return incoming ?? existingValue ?? null;
+  }
+
   const fields = {
     name: p.name,
     projectType: p.projectType,
@@ -292,7 +309,8 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     currentStage: p.currentStage,
     causeDetail: p.causeDetail,
     interconnectionQueueStage: p.interconnectionQueueStage ?? null,
-    networkUpgradeCostUsd: keepIfMergedAndNull(p.networkUpgradeCostUsd, existing?.networkUpgradeCostUsd),
+    networkUpgradeCostUsd: keepExistingIfNull(p.networkUpgradeCostUsd, existing?.networkUpgradeCostUsd),
+    poiCostUsd: keepExistingIfNull(p.poiCostUsd, existing?.poiCostUsd),
     balancingAuthority: keepIfMergedAndNull(p.balancingAuthority, existing?.balancingAuthority),
     ownerSector: keepIfMergedAndNull(p.ownerSector, existing?.ownerSector),
     netSummerCapacityMw: keepIfMergedAndNull(p.netSummerCapacityMw, existing?.netSummerCapacityMw),

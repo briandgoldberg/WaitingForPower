@@ -158,8 +158,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
         {p.networkUpgradeCostUsd != null && (
           <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-            <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated network upgrade cost</h2>
-            <div className="text-3xl font-bold tabular-nums">{formatUsd(p.networkUpgradeCostUsd)}</div>
+            <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated interconnection cost</h2>
+            <div className="text-3xl font-bold tabular-nums">
+              {formatUsd((p.poiCostUsd ?? 0) + p.networkUpgradeCostUsd)}
+            </div>
+            {p.poiCostUsd != null && (
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                {formatUsd(p.poiCostUsd)} point-of-interconnection + {formatUsd(p.networkUpgradeCostUsd)} network upgrade
+              </p>
+            )}
             <p className="text-xs text-[var(--text-secondary)] mt-2">
               The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
               interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates

@@ -14,6 +14,10 @@
       "schedule": "0 15 * * 0"
     },
     {
+      "path": "/api/cron/ingest-lbnl-costs-pjm",
+      "schedule": "0 12 1 * *"
+    },
+    {
       "path": "/api/cron/ingest-ornl-hydro",
       "schedule": "0 16 * * 0"
     },

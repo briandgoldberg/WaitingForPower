@@ -118,21 +118,26 @@ non-interconnection source.
   workbook's own `IA_phase_clean` value (e.g. "Feasibility Study", "System
   Impact Study") through onto the project, rather than discarding it after
   collapsing it into the coarse shared `currentStage` bucket.
-- `networkUpgradeCostUsd`: reserved for a join against LBNL's *separate*
+- `networkUpgradeCostUsd` / `poiCostUsd`: joined in from LBNL's *separate*
   interconnection cost-analysis datasets (`emp.lbl.gov/interconnection_costs`)
-  — not yet populated by any module. Confirmed 2026-08-21: those datasets are
-  six independent per-region publications (MISO, PJM, SPP, ISO-NE, NYISO,
-  non-ISO BAs), not one combined/annually-refreshed file like Queued Up, and
-  several editions are years stale (MISO's is from 2021). The per-region
-  project IDs do join cleanly to LBNL Queued Up's own `entity`+`q_id` (spot-
-  checked against PJM: "A03" appears as both `q_id` in Queued Up and
-  `Project #` in the PJM cost file), so a join is technically sound — but
-  coverage against currently-*active* queue entries will be sparse, since
-  most rows in these cost studies are long-since-operational or withdrawn
-  projects. Whenever this gets built, any populated `networkUpgradeCostUsd`
-  must carry a `dataQualityNote` citing LBNL's own "preliminary estimate"
-  caveat, per the same pattern as this site's `dateConfidence: "approximate"`
-  fields.
+  — see `src/lib/ingest/lbnlInterconnectionCostsPjm.ts`. Confirmed 2026-08-21:
+  those datasets are six independent per-region publications (MISO, PJM,
+  SPP, ISO-NE, NYISO, non-ISO BAs), not one combined/annually-refreshed file
+  like Queued Up, and several editions are years stale (MISO's is from
+  2021) — only PJM is joined so far (confirmed live 2026-09-04 against the
+  real file: it splits cost into `$2022 POI Cost/kW` and `$2022 Network
+  Cost/kW`, in real $2022/kW, multiplied by nameplate MW to get a total USD
+  figure). The per-region project IDs do join cleanly to LBNL Queued Up's
+  own `entity`+`q_id` (confirmed against PJM: "A03" appears as both `q_id`
+  in Queued Up and `Project #` in the PJM cost file) — but coverage against
+  currently-*active* queue entries is sparse, since most rows in these cost
+  studies are long-since-operational or withdrawn projects, and this join
+  only ever updates a Project row LBNL Queued Up has already created (never
+  creates one itself). Every populated value carries a `dataQualityNote`
+  citing LBNL's own "preliminary estimate" caveat, per the same pattern as
+  this site's `dateConfidence: "approximate"` fields. MISO/SPP/ISO-NE/NYISO/
+  non-ISO-BA joins aren't built yet — same approach, different source file
+  and column names per region.
 
 ## RESOLVED_STAGES: what never appears on the site
 

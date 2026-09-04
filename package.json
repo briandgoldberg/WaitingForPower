@@ -12,6 +12,7 @@
     "ingest:eia": "tsx src/lib/ingest/eia860mPlanned.ts",
     "ingest:permitting-dashboard": "tsx src/lib/ingest/permittingDashboard.ts",
     "ingest:lbnl": "tsx src/lib/ingest/lbnlQueuedUp.ts",
+    "ingest:lbnl-costs-pjm": "tsx src/lib/ingest/lbnlInterconnectionCostsPjm.ts",
     "ingest:ornl-hydro": "tsx src/lib/ingest/ornlHydropowerRelicensing.ts",
     "ingest:eia-pipelines": "tsx src/lib/ingest/eiaPipelineProjects.ts",
     "ingest:va-scc": "tsx src/lib/ingest/vaSccDockets.ts",

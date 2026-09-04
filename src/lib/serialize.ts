@@ -60,6 +60,7 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     dataQualityNote: p.dataQualityNote,
     interconnectionQueueStage: p.interconnectionQueueStage,
     networkUpgradeCostUsd: p.networkUpgradeCostUsd,
+    poiCostUsd: p.poiCostUsd,
     balancingAuthority: p.balancingAuthority,
     ownerSector: p.ownerSector,
     netSummerCapacityMw: p.netSummerCapacityMw,

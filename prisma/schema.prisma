@@ -127,11 +127,25 @@ model Project {
   primeMoverCode String?
 
   // Preliminary network-upgrade cost estimate in USD, joined in from LBNL's
-  // separate interconnection cost-analysis datasets by matchKey. Always
-  // paired with a dataQualityNote — LBNL's own docs call these estimates
+  // separate interconnection cost-analysis datasets by matchKey — see
+  // src/lib/ingest/lbnlInterconnectionCostsPjm.ts (PJM only so far; MISO,
+  // SPP, ISO-NE, NYISO, and the non-ISO BAs are each their own separate
+  // publication, not yet joined — see that module's header). Always paired
+  // with a dataQualityNote — LBNL's own docs call these estimates
   // preliminary, and the underlying studies are irregularly-updated
-  // per-region snapshots, not a live figure.
+  // per-region snapshots, not a live figure. Owned entirely by that join
+  // module, not by lbnlQueuedUp.ts's own regular re-ingestion — see
+  // keepExistingIfNull in common.ts for why a routine queue re-ingestion
+  // run must never null this back out.
   networkUpgradeCostUsd Float?
+
+  // The point-of-interconnection cost component, split out from
+  // networkUpgradeCostUsd (the broader transmission-network-reinforcement
+  // component) — real developers care about this split specifically
+  // (network upgrades are the dominant, harder-to-predict share of total
+  // interconnection cost). Same source/module/caveats as
+  // networkUpgradeCostUsd above.
+  poiCostUsd Float?
 
   // True for entries that represent a regional/aggregate statistic
   // (e.g. "PJM Interconnection Queue") rather than one physical project.

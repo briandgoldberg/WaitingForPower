@@ -3,8 +3,9 @@
 import { useMemo } from "react";
 import { FUEL_TYPES, PROJECT_TYPES, STATUS_BUCKETS, TRACKED_PROJECT_STAGES } from "@/lib/data/taxonomies";
 import { SOURCE_OPTIONS } from "@/lib/filters";
-import type { FilterState, SourceKey } from "@/lib/filters";
+import type { CauseFilterValue, FilterState, SourceKey } from "@/lib/filters";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { CAUSE_CATEGORIES } from "@/lib/data/causeCategories";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 import type { ProjectDTO } from "@/lib/types";
 function toggle<T>(arr: T[], value: T): T[] {
@@ -195,6 +196,27 @@ export function FilterPanel({
               {s.label}
             </Pill>
           ))}
+        </div>
+      </Section>
+
+      <Section title="Cause">
+        <div className="flex flex-wrap gap-1">
+          {CAUSE_CATEGORIES.map((c) => (
+            <Pill
+              key={c.slug}
+              active={filters.causes.includes(c.slug)}
+              color={c.color}
+              onClick={() => onChange({ ...filters, causes: toggle<CauseFilterValue>(filters.causes, c.slug) })}
+            >
+              {c.shortLabel}
+            </Pill>
+          ))}
+          <Pill
+            active={filters.causes.includes("unknown")}
+            onClick={() => onChange({ ...filters, causes: toggle<CauseFilterValue>(filters.causes, "unknown") })}
+          >
+            Unknown
+          </Pill>
         </div>
       </Section>
 

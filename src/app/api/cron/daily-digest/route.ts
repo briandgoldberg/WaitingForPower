@@ -1,7 +1,8 @@
 // Daily summary email to briandgoldberg@gmail.com covering the previous
 // ~24 hours: bot/MCP/API calls (ApiRequestLog), visitor feedback
-// (VisitorFeedback), contact form submissions (ContactSubmission), and new
-// feed subscriptions (FeedSubscription). A rolling 24-hour window ending at
+// (VisitorFeedback), contact form submissions (ContactSubmission), new
+// feed subscriptions (FeedSubscription), and community votes
+// (ProjectVerdict). A rolling 24-hour window ending at
 // run time, not a strict UTC calendar day — same convention as
 // notify-feed-subscribers, and simpler than reasoning about calendar-day
 // boundaries for a cron that just needs to run once daily.
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, contactSubmissions, newSubscriptions] = await Promise.all([
+  const [apiLogs, feedbackRows, contactSubmissions, newSubscriptions, voteRows] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -43,6 +44,11 @@ export async function GET(req: NextRequest) {
     prisma.feedSubscription.findMany({
       where: { createdAt: { gte: since } },
       select: { email: true, confirmed: true, state: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.projectVerdict.findMany({
+      where: { createdAt: { gte: since } },
+      select: { vote: true, project: { select: { name: true, slug: true } } },
       orderBy: { createdAt: "asc" },
     }),
   ]);
@@ -72,6 +78,7 @@ export async function GET(req: NextRequest) {
       .map((r) => ({ intent: r.intent, feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     contactSubmissions,
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
+    votes: voteRows.map((v) => ({ projectName: v.project.name, projectSlug: v.project.slug, vote: v.vote as "green" | "red" })),
   });
 
   if (!result.ok) {
@@ -85,6 +92,7 @@ export async function GET(req: NextRequest) {
     feedbackCount: feedbackRows.length,
     contactSubmissionCount: contactSubmissions.length,
     newSubscriptionCount: newSubscriptions.length,
+    voteCount: voteRows.length,
   };
   console.log("daily-digest cron:", summary);
   return NextResponse.json(summary);

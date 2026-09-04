@@ -26,6 +26,9 @@ export interface DailyDigestData {
   // scope is already the human label ("California" or "All states") — see
   // src/app/api/cron/daily-digest/route.ts.
   newSubscriptions: { scope: string; email: string; confirmed: boolean }[];
+  // Support/Against votes cast on the community verdict widget (see
+  // GreenlightVote.tsx / ProjectVerdict in schema.prisma) in this window.
+  votes: { projectName: string; projectSlug: string; vote: "green" | "red" }[];
 }
 
 const INTENT_LABELS: Record<string, string> = {
@@ -91,12 +94,26 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
           .map((s) => `<li>${escapeHtml(s.email)} — ${escapeHtml(s.scope)}${s.confirmed ? "" : " (unconfirmed)"}</li>`)
           .join("")}</ul>`;
 
+  const greenVoteCount = data.votes.filter((v) => v.vote === "green").length;
+  const redVoteCount = data.votes.length - greenVoteCount;
+  const votesSectionHtml =
+    data.votes.length === 0
+      ? "<p>None.</p>"
+      : `<p><strong>${data.votes.length}</strong> total (${greenVoteCount} support, ${redVoteCount} against).</p>
+         <ul>${data.votes
+           .map(
+             (v) =>
+               `<li><a href="https://waitingforpower.com/project/${escapeHtml(v.projectSlug)}">${escapeHtml(v.projectName)}</a> — ${v.vote === "green" ? "Support" : "Against"}</li>`,
+           )
+           .join("")}</ul>`;
+
   const html = `
     <p style="color:#666;font-size:13px;">WaitingForPower daily digest — ${escapeHtml(data.windowLabel)}</p>
     ${section("Bot / MCP / API calls", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
     ${section("Contact form submissions", contactSectionHtml)}
     ${section("New feed subscriptions", subsSectionHtml)}
+    ${section("Community votes", votesSectionHtml)}
   `;
 
   const text = [
@@ -131,6 +148,14 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     data.newSubscriptions.length === 0
       ? "None."
       : data.newSubscriptions.map((s) => `- ${s.email} — ${s.scope}${s.confirmed ? "" : " (unconfirmed)"}`).join("\n"),
+    "",
+    "COMMUNITY VOTES",
+    data.votes.length === 0
+      ? "None."
+      : `${data.votes.length} total (${greenVoteCount} support, ${redVoteCount} against).`,
+    ...data.votes.map(
+      (v) => `- ${v.projectName} (https://waitingforpower.com/project/${v.projectSlug}) — ${v.vote === "green" ? "Support" : "Against"}`,
+    ),
   ].join("\n");
 
   const { error } = await resend.emails.send({

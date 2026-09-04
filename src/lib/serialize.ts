@@ -66,6 +66,8 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     netSummerCapacityMw: p.netSummerCapacityMw,
     netWinterCapacityMw: p.netWinterCapacityMw,
     primeMoverCode: p.primeMoverCode,
+    queueCluster: p.queueCluster,
+    pointOfInterconnection: p.pointOfInterconnection,
     sources: p.sources.map((s) => ({ label: s.label, url: s.url })),
     milestones: p.milestones
       .slice()

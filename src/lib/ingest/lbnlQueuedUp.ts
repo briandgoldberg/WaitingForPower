@@ -136,6 +136,9 @@ const FIELD_CANDIDATES: Record<string, string[]> = {
   codDate: ["on_date", "cod", "cod_date", "estimated_cod"],
   iaPhase: ["IA_phase_clean", "ia_phase_clean", "ia_phase"],
   region: ["region"],
+  cluster: ["cluster"],
+  poiName: ["poi_name"],
+  developer: ["developer"],
 };
 
 type FieldMap = Record<keyof typeof FIELD_CANDIDATES, string | undefined>;
@@ -306,6 +309,9 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
   const state = get("state") ? String(get("state")) : null;
   const county = get("county") ? String(get("county")) : null;
   const region = get("region") ? String(get("region")) : null;
+  const cluster = get("cluster") != null && String(get("cluster")).trim() !== "" ? String(get("cluster")) : null;
+  const poiName = get("poiName") ? String(get("poiName")) : null;
+  const developer = get("developer") ? String(get("developer")) : null;
   const centroid = countyCentroid(get("fipsCode") as string | number | null | undefined);
 
   const causeSlugs: CauseSlug[] = ["interconnection_queue_backlog"];
@@ -356,6 +362,9 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
     // schema.prisma comment.
     interconnectionQueueStage: status === "active" ? iaPhase || null : null,
     balancingAuthority: region,
+    queueCluster: cluster,
+    pointOfInterconnection: poiName,
+    applicant: developer,
     milestones,
     dataQualityNote: centroid
       ? "No exact site address is published in this dataset — the map pin is placed at the project's county centroid, not its actual site."
@@ -427,13 +436,38 @@ export async function ingestLbnlQueuedUp(filePath: string, minCapacityMw = MIN_C
   return ingestLbnlQueuedUpBuffer(readFileSync(filePath), minCapacityMw);
 }
 
+// emp.lbl.gov's bot-protection intermittently 403s a request that would
+// otherwise succeed — confirmed live 2026-09-04: repeated identical requests
+// to the same URL, seconds apart, returned 403/200/403/200 with no header
+// or timing difference explaining which — this reads as a WAF sampling a
+// fraction of non-browser requests, not a hard per-client block (a genuine
+// TLS-fingerprint block would be consistent, and wasn't). A single failed
+// fetch here previously aborted the whole ingestion run — very likely why
+// this source's live cron backfill has never completed (see
+// IngestSourceBackfill in schema.prisma, and every currently-tracked LBNL
+// project's matchKey still being null as of 2026-09-04). Retrying a few
+// times with a short delay costs nothing on the weeks it isn't needed and
+// turns a per-request failure rate that isn't even reliably reproducible
+// into a very low per-run one.
+async function fetchWithRetry(url: string, init: RequestInit, attempts = 4): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, init);
+      if (res.ok) return res;
+      lastError = new Error(`Failed to fetch ${url}: ${res.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+  }
+  throw lastError;
+}
+
 // Scrapes the current .xlsx attachment link off the queues landing page —
 // see module header for why this can't be a predictable static URL.
 export async function findCurrentWorkbookUrl(): Promise<string> {
-  const res = await fetch(LANDING_PAGE_URL, { headers: BROWSER_HEADERS });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${LANDING_PAGE_URL}: ${res.status}`);
-  }
+  const res = await fetchWithRetry(LANDING_PAGE_URL, { headers: BROWSER_HEADERS });
   const html = await res.text();
   const match = /href="([^"]+\.xlsx)"/i.exec(html);
   if (!match) {
@@ -447,8 +481,7 @@ export async function findCurrentWorkbookUrl(): Promise<string> {
 
 export async function fetchAndIngestCurrentWorkbook(minCapacityMw = MIN_CAPACITY_MW): Promise<IngestSummary> {
   const url = await findCurrentWorkbookUrl();
-  const res = await fetch(url, { headers: BROWSER_HEADERS });
-  if (!res.ok) throw new Error(`Failed to download ${url}: ${res.status}`);
+  const res = await fetchWithRetry(url, { headers: BROWSER_HEADERS });
   const buf = Buffer.from(await res.arrayBuffer());
   const summary = await ingestLbnlQueuedUpBuffer(buf, minCapacityMw);
   return { ...summary, sourceFileUrl: url };

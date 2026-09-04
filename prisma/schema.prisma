@@ -98,6 +98,23 @@ model Project {
   // on top. Null for every other source.
   interconnectionQueueStage String?
 
+  // LBNL Queued Up's own "queue cluster (if applicable)" field — confirmed
+  // live 2026-09-04 against the real 2026-edition codebook: populated for
+  // ~50% of currently-tracked active >=250MW rows, values are a mix of study
+  // years ("2024", "2025") and named cohorts ("Cluster 1", "Transition Late
+  // Stage") depending on the interconnecting utility's own convention, not a
+  // single standardized ID scheme. Stored as-is (stringified), not
+  // normalized across utilities. Null for every other source.
+  queueCluster String?
+
+  // LBNL Queued Up's own "poi_name" field — the substation name or
+  // transmission line tap this project is interconnecting at (confirmed live
+  // 2026-09-04: populated for ~93% of rows). The real-world basis for
+  // "competing projects sharing the same point of interconnection," a
+  // concern real due-diligence checklists flag explicitly. Null for every
+  // other source.
+  pointOfInterconnection String?
+
   // The grid balancing authority / ISO-RTO territory (e.g. "PJM", "MISO",
   // "NEVP") — populated from EIA-860M's "Balancing Authority Code" and LBNL
   // Queued Up's own "region"/"entity" fields, both already fetched by those

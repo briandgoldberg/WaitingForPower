@@ -65,6 +65,10 @@ export interface ProjectDTO {
   netSummerCapacityMw: number | null;
   netWinterCapacityMw: number | null;
   primeMoverCode: string | null;
+  // LBNL-only queue cluster/study group and point-of-interconnection name —
+  // see schema.prisma.
+  queueCluster: string | null;
+  pointOfInterconnection: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
 

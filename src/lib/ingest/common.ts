@@ -80,6 +80,10 @@ export interface NormalizedProject {
   netWinterCapacityMw?: number | null;
   /** EIA-860M "Prime Mover Code" — see schema.prisma. */
   primeMoverCode?: string | null;
+  /** LBNL Queued Up's own queue cluster / study group — see schema.prisma. */
+  queueCluster?: string | null;
+  /** LBNL Queued Up's own point-of-interconnection name — see schema.prisma. */
+  pointOfInterconnection?: string | null;
   isAggregateExample?: boolean;
   estimatedMwDelayed?: number | null;
   dataQualityNote?: string | null;
@@ -251,6 +255,24 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     (await prisma.project.findUnique({ where: { matchKey: p.matchKey } })) ??
     (await prisma.project.findUnique({ where: { slug } }));
 
+  // A project this site never tracked while it was still pending must not
+  // be created retroactively just because a source's full historical
+  // export happens to include it — the RESOLVED_STAGES comment above (kept
+  // regardless of outcome) describes a project THIS SITE WAS ALREADY
+  // TRACKING transitioning to a resolved stage, not a brand-new row for
+  // something that was already resolved the very first time any source
+  // ever mentioned it. Confirmed live 2026-09-04: running LBNL Queued Up's
+  // full workbook (which includes years of withdrawn/operational history
+  // in the same sheet as active requests, not just currently-active rows)
+  // against this un-guarded logic created ~30,000 brand-new rows for
+  // decades-old withdrawn/operational interconnection requests this site
+  // had never once tracked — ballooning the live total project count from
+  // ~3,611 to 33,692 in one run. Every ingestion module shares this
+  // function, so this guard is universal, not LBNL-specific.
+  if (!existing && RESOLVED_STAGES.includes(p.currentStage)) {
+    return null;
+  }
+
   // Captured BEFORE the milestone deleteMany/createMany below overwrites
   // them, so "new_filing" can be detected by diffing descriptions.
   const existingMilestoneDescriptions = existing
@@ -316,6 +338,8 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     netSummerCapacityMw: keepIfMergedAndNull(p.netSummerCapacityMw, existing?.netSummerCapacityMw),
     netWinterCapacityMw: keepIfMergedAndNull(p.netWinterCapacityMw, existing?.netWinterCapacityMw),
     primeMoverCode: keepIfMergedAndNull(p.primeMoverCode, existing?.primeMoverCode),
+    queueCluster: keepIfMergedAndNull(p.queueCluster, existing?.queueCluster),
+    pointOfInterconnection: keepIfMergedAndNull(p.pointOfInterconnection, existing?.pointOfInterconnection),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,
@@ -611,10 +635,15 @@ export async function upsertNormalizedProjects(
     wasCapped?: boolean;
     suppressNewForMatchKeys?: Set<string>;
   } = {},
-): Promise<{ upserted: number; removedResolved: number; vanished: number; errors: { matchKey: string; message: string }[] }> {
+): Promise<{ upserted: number; removedResolved: number; skippedNeverTrackedResolved: number; vanished: number; errors: { matchKey: string; message: string }[] }> {
   const concurrency = options.concurrency ?? 40;
   let upserted = 0;
   let removedResolved = 0;
+  // Count of upsertNormalizedProject calls that returned null — a
+  // resolved-stage row this site never tracked while it was still pending,
+  // skipped rather than created. See that function's own guard for the
+  // incident this fixes.
+  let skippedNeverTrackedResolved = 0;
   const errors: { matchKey: string; message: string }[] = [];
 
   const sourcePrefix = options.sourcePrefix ?? sourcePrefixOf(projects[0]?.matchKey ?? "");
@@ -639,8 +668,12 @@ export async function upsertNormalizedProjects(
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
       if (result.status === "fulfilled") {
-        upserted += 1;
-        if (RESOLVED_STAGES.includes(batch[j].currentStage)) removedResolved += 1;
+        if (result.value === null) {
+          skippedNeverTrackedResolved += 1;
+        } else {
+          upserted += 1;
+          if (RESOLVED_STAGES.includes(batch[j].currentStage)) removedResolved += 1;
+        }
       } else {
         errors.push({ matchKey: batch[j].matchKey, message: String(result.reason) });
       }
@@ -658,5 +691,5 @@ export async function upsertNormalizedProjects(
   const vanished =
     sourcePrefix && !options.wasCapped ? await markVanished(sourcePrefix, new Set(projects.map((p) => p.matchKey))) : 0;
 
-  return { upserted, removedResolved, vanished, errors };
+  return { upserted, removedResolved, skippedNeverTrackedResolved, vanished, errors };
 }

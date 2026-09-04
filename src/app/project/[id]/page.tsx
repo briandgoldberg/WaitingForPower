@@ -123,6 +123,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
         {p.balancingAuthority && <Stat label="Grid region" value={p.balancingAuthority} />}
         {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
+        {p.pointOfInterconnection && <Stat label="Point of interconnection" value={p.pointOfInterconnection} />}
+        {p.queueCluster && <Stat label="Queue cluster" value={p.queueCluster} />}
         {p.expectedOnlineDate && (
           <Stat
             label="Expected online"

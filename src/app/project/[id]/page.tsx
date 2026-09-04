@@ -8,6 +8,7 @@ import type { ProjectDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
+import { GreenlightVote } from "@/components/GreenlightVote";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 const getProject = cache(async (slug: string) => {
   const project = await prisma.project.findUnique({
     where: { slug },
-    include: { causes: true, sources: true, milestones: true },
+    include: { causes: true, sources: true, milestones: true, verdicts: true },
   });
   return project ? serializeProject(project) : null;
 });
@@ -112,6 +113,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             )}
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
+        </div>
+        <div className="mt-3">
+          <GreenlightVote slug={p.slug} initialGreen={p.greenVotes} initialRed={p.redVotes} />
         </div>
       </div>
 

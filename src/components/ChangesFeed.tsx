@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ProjectChangeDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { stateName } from "@/lib/data/usStates";
+import { GreenlightVote } from "@/components/GreenlightVote";
 
 // Bundled changeTypes are shown as one card — this picks which single
 // badge/color represents the whole bundle when more than one fired in the
@@ -108,30 +109,37 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
   const badge = badgeFor(change.changeTypes, change.newStage);
   const fuel = FUEL_TYPE_BY_VALUE[change.project.fuelType];
   return (
-    <Link
-      href={`/project/${change.project.slug}`}
-      className="flex gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors"
-    >
-      <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: fuel?.color ?? "#6b7280" }} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <span className="font-medium text-sm truncate min-w-0 flex-1">{change.project.name}</span>
-          <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${badge.className}`}>
-            {badge.label}
-          </span>
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors">
+      <Link href={`/project/${change.project.slug}`} className="flex gap-3">
+        <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: fuel?.color ?? "#6b7280" }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <span className="font-medium text-sm truncate min-w-0 flex-1">{change.project.name}</span>
+            <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${badge.className}`}>
+              {badge.label}
+            </span>
+          </div>
+          <p className="text-xs text-[var(--muted)] mt-0.5">{change.summary}</p>
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-1.5">
+            {change.project.state && <span>{stateName(change.project.state)}</span>}
+            <span aria-hidden>·</span>
+            <span>{fuel?.label ?? change.project.fuelType}</span>
+            <span aria-hidden>·</span>
+            <span>{formatCapacity(change.project.capacityValue, change.project.capacityUnit)}</span>
+            <span aria-hidden>·</span>
+            <span>{relativeTime(change.createdAt, nowMs)}</span>
+          </div>
         </div>
-        <p className="text-xs text-[var(--muted)] mt-0.5">{change.summary}</p>
-        <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-1.5">
-          {change.project.state && <span>{stateName(change.project.state)}</span>}
-          <span aria-hidden>·</span>
-          <span>{fuel?.label ?? change.project.fuelType}</span>
-          <span aria-hidden>·</span>
-          <span>{formatCapacity(change.project.capacityValue, change.project.capacityUnit)}</span>
-          <span aria-hidden>·</span>
-          <span>{relativeTime(change.createdAt, nowMs)}</span>
-        </div>
+      </Link>
+      <div className="pl-5 mt-1.5">
+        <GreenlightVote
+          slug={change.project.slug}
+          initialGreen={change.project.greenVotes}
+          initialRed={change.project.redVotes}
+          compact
+        />
       </div>
-    </Link>
+    </div>
   );
 }
 

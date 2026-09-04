@@ -1,4 +1,4 @@
-import type { Project, ProjectCause, ProjectSource, Milestone } from "@prisma/client";
+import type { Project, ProjectCause, ProjectSource, Milestone, ProjectVerdict } from "@prisma/client";
 import { daysWaiting, yearsWaiting } from "@/lib/calc/dates";
 import { estimateInvestmentWaiting } from "@/lib/calc/investmentWaiting";
 import type { ProjectDTO } from "@/lib/types";
@@ -9,6 +9,12 @@ export type ProjectWithRelations = Project & {
   causes: ProjectCause[];
   sources: ProjectSource[];
   milestones: Milestone[];
+  // Optional — most callers (e.g. the full-table Explorer fetch in
+  // queryProjects.ts) don't need vote tallies and skip this relation
+  // entirely; greenVotes/redVotes just default to 0 below when omitted.
+  // Only the project detail page's own fetch (src/app/project/[id]/page.tsx)
+  // includes it for real.
+  verdicts?: ProjectVerdict[];
 };
 
 export function serializeProject(p: ProjectWithRelations): ProjectDTO {
@@ -68,6 +74,8 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     primeMoverCode: p.primeMoverCode,
     queueCluster: p.queueCluster,
     pointOfInterconnection: p.pointOfInterconnection,
+    greenVotes: p.verdicts?.filter((v) => v.vote === "green").length ?? 0,
+    redVotes: p.verdicts?.filter((v) => v.vote === "red").length ?? 0,
     sources: p.sources.map((s) => ({ label: s.label, url: s.url })),
     milestones: p.milestones
       .slice()

@@ -203,12 +203,39 @@ model Project {
   sources    ProjectSource[]
   milestones Milestone[]
   changes    ProjectChange[]
+  verdicts   ProjectVerdict[]
 
   @@index([projectType])
   @@index([fuelType])
   @@index([currentStage])
   @@index([verificationStatus])
   @@index([noLongerReported])
+}
+
+// A visitor's "green-light or red-light this" call on one project — do you
+// want to see it built, or not — surfaced on both the project detail page
+// and the homepage changes feed. Deliberately not a prediction of the real
+// regulatory outcome (see the earlier-scoped, still-unbuilt prediction-poll
+// idea) — this is a values/opinion signal, "should this get built," not a
+// forecast, so it never needs resolving against a real outcome and carries
+// none of that feature's auto-scoring complexity.
+//
+// Anonymous, no account: `voterKey` is a random id the client generates
+// once and keeps in localStorage — same zero-friction, proportionate-to-
+// the-stakes pattern as VisitorFeedback and FeedSubscription's double-
+// opt-in. One vote per (project, browser) — voting again from the same
+// browser overwrites the prior vote rather than double-counting.
+model ProjectVerdict {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  voterKey  String
+  // "green" | "red" — build it, or don't.
+  vote      String
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, voterKey])
+  @@index([projectId])
 }
 
 // A subscription to the homepage changes feed, optionally scoped to one

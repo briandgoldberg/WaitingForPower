@@ -65,6 +65,10 @@ export interface ProjectDTO {
   netSummerCapacityMw: number | null;
   netWinterCapacityMw: number | null;
   primeMoverCode: string | null;
+  // Community "green-light or red-light this" tally — see ProjectVerdict
+  // in schema.prisma.
+  greenVotes: number;
+  redVotes: number;
   // LBNL-only queue cluster/study group and point-of-interconnection name —
   // see schema.prisma.
   queueCluster: string | null;
@@ -102,6 +106,8 @@ export interface ProjectChangeDTO {
     fuelType: FuelType;
     capacityValue: number | null;
     capacityUnit: string | null;
+    greenVotes: number;
+    redVotes: number;
   };
 }
 

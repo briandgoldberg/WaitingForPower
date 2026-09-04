@@ -98,6 +98,34 @@ model Project {
   // on top. Null for every other source.
   interconnectionQueueStage String?
 
+  // The grid balancing authority / ISO-RTO territory (e.g. "PJM", "MISO",
+  // "NEVP") — populated from EIA-860M's "Balancing Authority Code" and LBNL
+  // Queued Up's own "region"/"entity" fields, both already fetched by those
+  // modules for other purposes (LBNL only ever surfaced this baked into
+  // currentStatus's free text before now). A developer screens by ISO/RTO
+  // territory before almost anything else, so this deserves its own
+  // queryable field rather than being buried in a string. Null for every
+  // source that doesn't publish one.
+  balancingAuthority String?
+
+  // EIA-860M's own "Sector" column (e.g. "Electric Utility", "IPP Non-CHP",
+  // "Commercial") — the owning entity's ownership/business type, distinct
+  // from `applicant` (the entity's name). EIA-only; null elsewhere.
+  ownerSector String?
+
+  // EIA-860M's "Net Summer/Winter Capacity (MW)" — the deliverable capacity
+  // after seasonal derating, distinct from `capacityValue` (nameplate).
+  // EIA-only; null elsewhere.
+  netSummerCapacityMw Float?
+  netWinterCapacityMw Float?
+
+  // EIA-860M's "Prime Mover Code" (e.g. "PV", "WT", "BA", "CT", "CA") — finer
+  // equipment-type detail than the shared `fuelType` taxonomy (distinguishes,
+  // e.g., a simple-cycle gas turbine from a combined-cycle plant). See
+  // PRIME_MOVER_LABELS in src/lib/data/taxonomies.ts for display labels.
+  // EIA-only; null elsewhere.
+  primeMoverCode String?
+
   // Preliminary network-upgrade cost estimate in USD, joined in from LBNL's
   // separate interconnection cost-analysis datasets by matchKey. Always
   // paired with a dataQualityNote — LBNL's own docs call these estimates

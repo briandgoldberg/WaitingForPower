@@ -96,7 +96,7 @@ import * as XLSX from "xlsx";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
 import countyCentroidsData from "@/lib/data/countyCentroids.json";
 
 const COUNTY_CENTROIDS = countyCentroidsData as unknown as Record<string, [number, number]>;
@@ -293,6 +293,14 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
       : codDateRaw
         ? new Date(codDateRaw as string)
         : null;
+  // withdrawnDate/iaDate were fetched into FIELD_CANDIDATES before now but
+  // never actually used — real milestone dates worth surfacing rather than
+  // discarding, now that the site keeps every project regardless of
+  // resolved outcome (see upsertNormalizedProject's RESOLVED_STAGES note).
+  const parseLbnlDate = (raw: unknown): Date | null =>
+    typeof raw === "number" ? excelSerialToDate(raw) : raw ? new Date(raw as string) : null;
+  const withdrawnDate = parseLbnlDate(get("withdrawnDate"));
+  const iaDate = parseLbnlDate(get("iaDate"));
   const status = String(get("status") ?? "").toLowerCase();
   const iaPhase = String(get("iaPhase") ?? "");
   const state = get("state") ? String(get("state")) : null;
@@ -301,6 +309,14 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
   const centroid = countyCentroid(get("fipsCode") as string | number | null | undefined);
 
   const causeSlugs: CauseSlug[] = ["interconnection_queue_backlog"];
+
+  const milestones: NormalizedMilestone[] = [];
+  if (iaDate) {
+    milestones.push({ date: iaDate, dateConfidence: "exact", stage: "Interconnection agreement", description: "Interconnection agreement executed" });
+  }
+  if (withdrawnDate) {
+    milestones.push({ date: withdrawnDate, dateConfidence: "exact", stage: "Withdrawn", description: "Withdrawn from the interconnection queue" });
+  }
 
   // See STATUS_TO_RESOLVED_STAGE and iaPhaseToStage: for a non-active row,
   // or an active row whose IA phase already cleared the process, this
@@ -339,6 +355,8 @@ export function normalizeQueuedUpRow(row: QueuedUpRow, fieldMap: FieldMap): Norm
     // "active" and not already-cleared) — see interconnectionQueueStage's
     // schema.prisma comment.
     interconnectionQueueStage: status === "active" ? iaPhase || null : null,
+    balancingAuthority: region,
+    milestones,
     dataQualityNote: centroid
       ? "No exact site address is published in this dataset — the map pin is placed at the project's county centroid, not its actual site."
       : "No exact site address/lat-lon is published in this dataset, and this project's county couldn't be matched to a centroid (missing or unrecognized FIPS code); it will not appear on the map until geocoded another way.",

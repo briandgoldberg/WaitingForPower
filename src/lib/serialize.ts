@@ -60,6 +60,11 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     dataQualityNote: p.dataQualityNote,
     interconnectionQueueStage: p.interconnectionQueueStage,
     networkUpgradeCostUsd: p.networkUpgradeCostUsd,
+    balancingAuthority: p.balancingAuthority,
+    ownerSector: p.ownerSector,
+    netSummerCapacityMw: p.netSummerCapacityMw,
+    netWinterCapacityMw: p.netWinterCapacityMw,
+    primeMoverCode: p.primeMoverCode,
     sources: p.sources.map((s) => ({ label: s.label, url: s.url })),
     milestones: p.milestones
       .slice()

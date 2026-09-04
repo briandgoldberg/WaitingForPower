@@ -52,14 +52,20 @@ const SHEET_NAME_CANDIDATES = ["Planned"];
 
 const FIELD_CANDIDATES: Record<string, string[]> = {
   entityId: ["Entity ID"],
+  entityName: ["Entity Name"],
   plantId: ["Plant ID"],
   plantName: ["Plant Name"],
   state: ["Plant State", "State"],
   county: ["County"],
+  balancingAuthorityCode: ["Balancing Authority Code"],
+  sector: ["Sector"],
   generatorId: ["Generator ID"],
   nameplateCapacityMw: ["Nameplate Capacity (MW)"],
+  netSummerCapacityMw: ["Net Summer Capacity (MW)"],
+  netWinterCapacityMw: ["Net Winter Capacity (MW)"],
   technology: ["Technology"],
   energySourceCode: ["Energy Source Code"],
+  primeMoverCode: ["Prime Mover Code"],
   plannedOperationMonth: ["Planned Operation Month"],
   plannedOperationYear: ["Planned Operation Year"],
   status: ["Status"],
@@ -255,6 +261,13 @@ export function normalizeEiaPlannedRow(row: PlannedRow, fieldMap: FieldMap): Nor
     causeDetail:
       "Imported from the EIA-860M \"Planned\" generator inventory. Cause category not yet determined — cross-reference with the Permitting Dashboard, LBNL Queued Up, or manual review before attributing this project's delay to a specific bottleneck.",
     dataQualityNote: `No application-filed date is published by EIA-860M, so days/years waiting cannot be computed until one is added via manual override — only a planned operation date (${plannedOperation}) is available.`,
+    // The owning utility/developer — see Project.applicant's schema comment.
+    applicant: get("entityName") ? String(get("entityName")) : null,
+    balancingAuthority: get("balancingAuthorityCode") ? String(get("balancingAuthorityCode")) : null,
+    ownerSector: get("sector") ? String(get("sector")) : null,
+    netSummerCapacityMw: Number(get("netSummerCapacityMw") ?? NaN) || null,
+    netWinterCapacityMw: Number(get("netWinterCapacityMw") ?? NaN) || null,
+    primeMoverCode: get("primeMoverCode") ? String(get("primeMoverCode")) : null,
     sources: [
       {
         label: "EIA-860M \"Planned\" generator inventory",

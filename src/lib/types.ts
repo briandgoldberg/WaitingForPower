@@ -55,6 +55,13 @@ export interface ProjectDTO {
   // see schema.prisma and src/lib/ingest/README.md.
   interconnectionQueueStage: string | null;
   networkUpgradeCostUsd: number | null;
+  // Grid balancing authority / ISO-RTO territory — see schema.prisma.
+  balancingAuthority: string | null;
+  // EIA-860M-only owner/ownership/capacity/equipment detail — see schema.prisma.
+  ownerSector: string | null;
+  netSummerCapacityMw: number | null;
+  netWinterCapacityMw: number | null;
+  primeMoverCode: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
 

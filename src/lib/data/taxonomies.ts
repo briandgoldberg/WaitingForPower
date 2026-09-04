@@ -205,6 +205,34 @@ export const VERIFICATION_STATUS_BY_VALUE: Record<VerificationStatus, string> = 
   VERIFICATION_STATUSES.map(({ value, label }) => [value, label]),
 ) as Record<VerificationStatus, string>;
 
+// EIA-860's standard Prime Mover Code reference table (stable across EIA
+// forms, not source-specific to any one module) — see Project.primeMoverCode
+// in schema.prisma. Look up with `PRIME_MOVER_LABELS[code] ?? code` so an
+// unmapped/future code still displays as something rather than disappearing.
+export const PRIME_MOVER_LABELS: Record<string, string> = {
+  BA: "Battery storage",
+  CA: "Combined cycle, steam part",
+  CE: "Compressed air storage",
+  CP: "Concentrated solar power",
+  CS: "Combined cycle, single shaft",
+  CT: "Combined cycle, combustion turbine part",
+  ES: "Energy storage, other",
+  FC: "Fuel cell",
+  FW: "Flywheel",
+  GT: "Combustion (gas) turbine",
+  HA: "Hydrokinetic, axial flow turbine",
+  HB: "Hydrokinetic, wave buoy",
+  HK: "Hydrokinetic, other",
+  HY: "Hydraulic turbine",
+  IC: "Internal combustion engine",
+  PS: "Pumped storage",
+  PV: "Photovoltaic",
+  ST: "Steam turbine",
+  WT: "Wind turbine, onshore",
+  WS: "Wind turbine, offshore",
+  OT: "Other",
+};
+
 export function formatCapacity(value: number | null, unit: string | null): string {
   if (value == null) return "Not disclosed";
   const rounded = value >= 100 ? Math.round(value).toLocaleString("en-US") : value;

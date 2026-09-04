@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
-import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
@@ -105,7 +105,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               {!p.county && !p.state && "Location not specified"}
             </p>
             {p.applicant && (
-              <p className="text-sm text-[var(--muted)] mt-0.5">Developer: {p.applicant}</p>
+              <p className="text-sm text-[var(--muted)] mt-0.5">
+                Developer: {p.applicant}
+                {p.ownerSector && ` (${p.ownerSector})`}
+              </p>
             )}
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
@@ -118,6 +121,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
         <Stat label="Verification" value={VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")} />
         {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
+        {p.balancingAuthority && <Stat label="Grid region" value={p.balancingAuthority} />}
+        {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
         {p.expectedOnlineDate && (
           <Stat
             label="Expected online"

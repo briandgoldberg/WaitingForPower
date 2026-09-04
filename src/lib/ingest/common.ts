@@ -69,6 +69,15 @@ export interface NormalizedProject {
   interconnectionQueueStage?: string | null;
   /** Preliminary network-upgrade cost estimate in USD — see schema.prisma. */
   networkUpgradeCostUsd?: number | null;
+  /** Grid balancing authority / ISO-RTO territory — see schema.prisma. */
+  balancingAuthority?: string | null;
+  /** Owning entity's business/ownership type (EIA-860M "Sector") — see schema.prisma. */
+  ownerSector?: string | null;
+  /** Seasonal deliverable capacity, distinct from nameplate — see schema.prisma. */
+  netSummerCapacityMw?: number | null;
+  netWinterCapacityMw?: number | null;
+  /** EIA-860M "Prime Mover Code" — see schema.prisma. */
+  primeMoverCode?: string | null;
   isAggregateExample?: boolean;
   estimatedMwDelayed?: number | null;
   dataQualityNote?: string | null;
@@ -284,6 +293,11 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     causeDetail: p.causeDetail,
     interconnectionQueueStage: p.interconnectionQueueStage ?? null,
     networkUpgradeCostUsd: keepIfMergedAndNull(p.networkUpgradeCostUsd, existing?.networkUpgradeCostUsd),
+    balancingAuthority: keepIfMergedAndNull(p.balancingAuthority, existing?.balancingAuthority),
+    ownerSector: keepIfMergedAndNull(p.ownerSector, existing?.ownerSector),
+    netSummerCapacityMw: keepIfMergedAndNull(p.netSummerCapacityMw, existing?.netSummerCapacityMw),
+    netWinterCapacityMw: keepIfMergedAndNull(p.netWinterCapacityMw, existing?.netWinterCapacityMw),
+    primeMoverCode: keepIfMergedAndNull(p.primeMoverCode, existing?.primeMoverCode),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,

@@ -2,11 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { ProjectDTO } from "@/lib/types";
-import { DEFAULT_FILTERS, buildChips, hasActiveFilters, matchesFilters, type CauseFilterValue, type FilterState } from "@/lib/filters";
-import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
+import { DEFAULT_FILTERS, buildChips, hasActiveFilters, matchesFilters, type FilterState } from "@/lib/filters";
 import { computeAggregateStats } from "@/lib/stats";
 import { StatsHeader } from "@/components/StatsHeader";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -22,22 +20,8 @@ const Map = dynamic(() => import("@/components/Map").then((m) => m.Map), {
   ),
 });
 
-// Validates the `?cause=` deep-link param (see /policies' project-count
-// links) against the real cause taxonomy plus the synthetic "unknown"
-// value — an unrecognized value is silently ignored rather than crashing
-// or showing an empty result set for a typo'd/stale link.
-function causeFromSearchParam(raw: string | null): CauseFilterValue | null {
-  if (raw === "unknown") return "unknown";
-  if (raw && raw in CAUSE_CATEGORY_BY_SLUG) return raw as CauseFilterValue;
-  return null;
-}
-
 export function Explorer({ projects }: { projects: ProjectDTO[] }) {
-  const searchParams = useSearchParams();
-  const [filters, setFilters] = useState<FilterState>(() => {
-    const cause = causeFromSearchParam(searchParams.get("cause"));
-    return cause ? { ...DEFAULT_FILTERS, causes: [cause] } : DEFAULT_FILTERS;
-  });
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [view, setView] = useState<"map" | "list">("map");
   const [panelOpen, setPanelOpen] = useState(true);
 

@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
-import { queryProjects, toFilterState } from "@/lib/queryProjects";
-import { DEFAULT_FILTERS } from "@/lib/filters";
-import { ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
 
 export const metadata: Metadata = {
   title: "Advocacy — WaitingForPower",
@@ -13,28 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/policies" },
 };
 
-export const dynamic = "force-dynamic";
-
-export default async function PoliciesPage() {
-  // Same DEFAULT_FILTERS scope (status: "in_permitting") the /projects
-  // explorer itself defaults to, so this count always matches exactly what
-  // a visitor sees after clicking through — not a different, looser total.
-  const projects = await queryProjects(toFilterState(DEFAULT_FILTERS));
-  const causeCounts = new Map<string, number>();
-  const causeMw = new Map<string, number>();
-  const causeCleanMw = new Map<string, number>();
-  for (const p of projects) {
-    for (const c of p.causeSlugs) {
-      causeCounts.set(c, (causeCounts.get(c) ?? 0) + 1);
-      if (p.capacityUnit === "MW" && p.capacityValue != null) {
-        causeMw.set(c, (causeMw.get(c) ?? 0) + p.capacityValue);
-        if (ZERO_CARBON_FUELS.includes(p.fuelType)) {
-          causeCleanMw.set(c, (causeCleanMw.get(c) ?? 0) + p.capacityValue);
-        }
-      }
-    }
-  }
-
+export default function PoliciesPage() {
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
       <div>
@@ -75,9 +50,6 @@ export default async function PoliciesPage() {
       <div className="flex flex-col gap-5">
         {POLICIES.map((policy) => {
           const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
-          const count = causeCounts.get(policy.slug) ?? 0;
-          const mw = causeMw.get(policy.slug) ?? 0;
-          const cleanMw = causeCleanMw.get(policy.slug) ?? 0;
 
           return (
             <section
@@ -87,32 +59,15 @@ export default async function PoliciesPage() {
             >
               <div className="h-1.5" style={{ backgroundColor: cause.color }} />
               <div className="p-4 sm:p-5 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div>
-                    <span
-                      className="inline-block text-xs font-medium uppercase tracking-wide rounded-full px-2.5 py-1 text-white mb-1.5"
-                      style={{ backgroundColor: cause.color }}
-                    >
-                      {policy.badgeLabel ?? cause.shortLabel}
-                    </span>
-                    <h2 className="text-xl font-bold tracking-tight">{policy.title}</h2>
-                    <p className="text-sm text-[var(--muted)]">{policy.oneLiner}</p>
-                  </div>
-                  <div className="shrink-0 self-start flex flex-col items-end gap-1">
-                    <Link
-                      href={`/projects?cause=${policy.slug}`}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      See the {count.toLocaleString("en-US")} project{count === 1 ? "" : "s"} blocked by this →
-                    </Link>
-                    {mw > 0 && (
-                      <p className="text-[11px] text-[var(--muted)] text-right">
-                        {Math.round(mw).toLocaleString("en-US")} MW blocked
-                        {cleanMw > 0 && ` (${Math.round(cleanMw).toLocaleString("en-US")} MW clean energy)`}
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <span
+                    className="inline-block text-xs font-medium uppercase tracking-wide rounded-full px-2.5 py-1 text-white mb-1.5"
+                    style={{ backgroundColor: cause.color }}
+                  >
+                    {policy.badgeLabel ?? cause.shortLabel}
+                  </span>
+                  <h2 className="text-xl font-bold tracking-tight">{policy.title}</h2>
+                  <p className="text-sm text-[var(--muted)]">{policy.oneLiner}</p>
                 </div>
 
                 <p className="text-sm leading-relaxed">{policy.summary}</p>

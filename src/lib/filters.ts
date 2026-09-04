@@ -7,17 +7,8 @@ import {
   type ProjectType,
   type StatusBucket,
 } from "@/lib/data/taxonomies";
-import { CAUSE_CATEGORY_BY_SLUG, type CauseSlug } from "@/lib/data/causeCategories";
 import type { ProjectDTO } from "@/lib/types";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
-
-// "unknown" isn't a real CauseSlug — it represents a project with zero
-// causeSlugs (see the 4 ingestion sources with no cause-assignment logic
-// yet: EIA-860M, EIA pipelines, the Permitting Dashboard, ORNL hydro —
-// confirmed live 2026-09-04, ~645 projects). Surfaced as an explicit,
-// honest filter option rather than silently excluding these projects from
-// every cause-based view.
-export type CauseFilterValue = CauseSlug | "unknown";
 
 // Not a stored field — this site doesn't have one canonical "source" column
 // per project (a project's `sources` array is label+url pairs meant for
@@ -70,7 +61,6 @@ export interface FilterState {
   // as `state` above. Only ever set for interconnection-queue-sourced
   // projects (see interconnectionQueueStage in src/lib/types.ts).
   queueStages: string[];
-  causes: CauseFilterValue[];
 }
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -83,7 +73,6 @@ export const DEFAULT_FILTERS: FilterState = {
   sourceKeys: [],
   state: null,
   queueStages: [],
-  causes: [],
 };
 
 export function hasActiveFilters(f: FilterState): boolean {
@@ -96,8 +85,7 @@ export function hasActiveFilters(f: FilterState): boolean {
     f.stages.length > 0 ||
     f.sourceKeys.length > 0 ||
     f.state != null ||
-    f.queueStages.length > 0 ||
-    f.causes.length > 0
+    f.queueStages.length > 0
   );
 }
 
@@ -119,11 +107,6 @@ export function matchesFilters(p: ProjectDTO, f: FilterState, opts: { ignoreStat
   if (f.sourceKeys.length > 0 && !f.sourceKeys.includes(sourceKeyForProject(p))) return false;
   if (f.state != null && !splitStateCodes(p.state).includes(f.state)) return false;
   if (f.queueStages.length > 0 && !f.queueStages.includes(p.interconnectionQueueStage ?? "")) return false;
-  if (f.causes.length > 0) {
-    const matchesKnownCause = p.causeSlugs.some((c) => (f.causes as string[]).includes(c));
-    const matchesUnknown = f.causes.includes("unknown") && p.causeSlugs.length === 0;
-    if (!matchesKnownCause && !matchesUnknown) return false;
-  }
   return true;
 }
 
@@ -196,13 +179,6 @@ export function buildChips(f: FilterState): FilterChip[] {
       key: `queueStage-${qs}`,
       label: qs,
       onRemove: (state) => ({ ...state, queueStages: state.queueStages.filter((x) => x !== qs) }),
-    });
-  }
-  for (const c of f.causes) {
-    chips.push({
-      key: `cause-${c}`,
-      label: c === "unknown" ? "Unknown cause" : CAUSE_CATEGORY_BY_SLUG[c].shortLabel,
-      onRemove: (state) => ({ ...state, causes: state.causes.filter((x) => x !== c) }),
     });
   }
   return chips;

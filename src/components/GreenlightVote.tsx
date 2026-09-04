@@ -86,6 +86,13 @@ export function GreenlightVote({
 
   const total = green + red;
   const greenPct = total > 0 ? Math.round((green / total) * 100) : 0;
+  // Lead with whichever side actually has the majority, not always
+  // "support" — a project running 65% against should read "65% against,"
+  // not "35% support." A tie (including the true 0-vote case) reads as
+  // "support" by convention.
+  const againstIsMajority = red > green;
+  const leadPct = againstIsMajority ? 100 - greenPct : greenPct;
+  const leadLabel = againstIsMajority ? "against" : "support";
 
   if (myVote) {
     return (
@@ -95,7 +102,7 @@ export function GreenlightVote({
           <div className="h-full bg-red-500 flex-1" />
         </div>
         <span className={compact ? "text-[var(--muted)] whitespace-nowrap" : "text-xs text-[var(--muted)]"}>
-          {greenPct}% support · {total.toLocaleString("en-US")} vote{total === 1 ? "" : "s"}
+          {leadPct}% {leadLabel} · {total.toLocaleString("en-US")} vote{total === 1 ? "" : "s"}
         </span>
       </div>
     );

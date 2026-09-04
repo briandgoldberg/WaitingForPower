@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAndIngestCurrentWorkbook } from "@/lib/ingest/lbnlQueuedUp";
+import { sendCronFailureEmail } from "@/lib/cronAlertEmail";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -26,6 +27,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {
     console.error("LBNL Queued Up cron ingestion failed:", err);
+    // This source's live backfill has silently failed for months before —
+    // see the fetchWithRetry note in lbnlQueuedUp.ts and the ~30,000-row
+    // cleanup this same failure mode led to once it finally did succeed.
+    // Email immediately rather than relying on someone noticing.
+    await sendCronFailureEmail({ cronName: "ingest-lbnl", error: err });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },
       { status: 500 },

@@ -22,6 +22,18 @@
 //   - Detail: GET /api/edocket/docket/{docketID} (the numeric `docketID`
 //     from search results, not the public docket number string) returns a
 //     `docketStatus.value` field and a `decisions` array — see STATUS.
+//
+// EVENTS: the same detail response also carries a real `events` array —
+// confirmed live 2026-09-05 against several active dockets — each with a
+// structured `eventType` string ("AZ Power Plant and Line Siting Committee
+// Hearing", "Pre-hearing Conference", "Public Comment") and a genuine
+// `eventDateTime`. Only the "Public Comment" type, still in the future, is
+// surfaced as this project's commentPeriodStart/commentLink (see
+// schema.prisma) — the hearing/conference entries are procedural
+// proceedings, not a public comment opportunity. This is the cleanest
+// structured comment-event data found across any state source in this
+// series so far (contrast waEfsecFacilities.ts's separate aggregate page,
+// or ohOpsbCases.ts's free-text hearing paragraphs).
 // Note two separate hosts: efiling.azcc.gov is this API (and the filing
 // tool); edocket.azcc.gov is a separate human-facing search UI that reads
 // the same underlying data — confirmed by hand that
@@ -131,18 +143,45 @@ async function searchCandidates(): Promise<DocketSearchResult[]> {
 
 interface DocketDetail {
   resolution: "granted" | "denied" | null;
+  // Next upcoming "Public Comment" event on this docket, if any — see
+  // module header EVENTS. Only ever a single point-in-time event (a
+  // physical/virtual hearing session), not a multi-day window.
+  nextPublicComment: Date | null;
 }
 
 const DENY_RE = /\bdeny(?:ing|al)?\b|\bdismiss/i;
 
+interface DocketEvent {
+  eventDateTime: string;
+  eventType: string;
+  public: boolean;
+}
+
 async function fetchDetail(docketID: number): Promise<DocketDetail> {
   const res = await fetch(`${BASE_URL}/api/edocket/docket/${docketID}`);
   if (!res.ok) throw new Error(`AZ ACC detail request failed (${res.status}) for docket ${docketID}`);
-  const data = (await res.json()) as { decisions?: { description: string }[] };
+  const data = (await res.json()) as { decisions?: { description: string }[]; events?: DocketEvent[] };
   const decisions = data.decisions ?? [];
-  if (decisions.length === 0) return { resolution: null };
-  const denied = decisions.some((d) => DENY_RE.test(d.description));
-  return { resolution: denied ? "denied" : "granted" };
+  const resolution = decisions.length === 0 ? null : decisions.some((d) => DENY_RE.test(d.description)) ? "denied" : "granted";
+
+  // EVENTS: each docket's own `events` array carries real scheduled
+  // proceedings — confirmed live 2026-09-05 against several active
+  // dockets — with a structured `eventType` (e.g. "AZ Power Plant and Line
+  // Siting Committee Hearing", "Pre-hearing Conference", "Public Comment")
+  // and a real `eventDateTime`. Only "Public Comment" events, still in the
+  // future, and marked `public: true`, are surfaced — the hearing/
+  // conference event types are procedural sessions, not a comment
+  // opportunity.
+  const now = Date.now();
+  let nextPublicComment: Date | null = null;
+  for (const e of data.events ?? []) {
+    if (!e.public || e.eventType !== "Public Comment") continue;
+    const d = new Date(e.eventDateTime);
+    if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
+    if (!nextPublicComment || d.getTime() < nextPublicComment.getTime()) nextPublicComment = d;
+  }
+
+  return { resolution, nextPublicComment };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -241,6 +280,9 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility from the Arizona Corporation Commission's Line Siting Committee — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: detail.nextPublicComment,
+    commentPeriodEnd: null,
+    commentLink: detail.nextPublicComment ? `https://edocket.azcc.gov/search/docket-search/item-detail/${search.docketID}` : null,
     sources: [
       {
         label: `AZ ACC Docket No. ${search.docketNumber}`,

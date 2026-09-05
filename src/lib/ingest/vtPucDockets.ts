@@ -29,6 +29,18 @@
 // separately-coded petition types, making the exclusion a structured-field
 // decision rather than a text-regex guess.
 //
+// HEARING CALENDAR: a separate, newer Drupal site — puc.vermont.gov (NOT
+// epuc.vermont.gov below) — publishes a real "Public Hearing" event
+// calendar at /event-types/public-hearing, each entry titled "PUC Case
+// No. {caseNumber}-Public Hearing-..." with a genuine `<time
+// datetime="...">` and a "Read more" link — confirmed live 2026-09-05.
+// Matched back to a tracked case by its exact case number (far more
+// reliable than name-fuzzy-matching) — see fetchUpcomingHearingsByCase
+// Number below. Most entries on this calendar are unrelated rate-case
+// ("-TF") hearings; real §248 siting hearings ("-PET") do appear on it
+// too (confirmed: Case 24-2797-PET, a 2.2 MW generation facility
+// petition), just outnumbered by rate cases.
+//
 // FETCHING: epuc.vermont.gov runs "ecp_core" ("Electronic Case Portal"), a
 // custom Drupal 7 module built on what appears to be a Journal
 // Technologies-style eCourt Public Portal engine (jtux theme, ecourt-lib.js)
@@ -251,6 +263,52 @@ export const MAX_CANDIDATES = 150;
 // freezing whatever falls outside a plain top-N-by-recency window.
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
+
+// puc.vermont.gov (note: NOT epuc.vermont.gov above — a separate, newer
+// Drupal site) publishes a real "Public Hearing" event calendar, each
+// entry titled "PUC Case No. {caseNumber}-Public Hearing-..." with a
+// genuine `<time datetime="...">` ISO timestamp and a "Read more" link —
+// confirmed live 2026-09-05. Sorted most-recent-first and paginated
+// (?page=N); only the first few pages are checked each run — a real
+// §248 hearing gets scheduled well in advance of the actual date, so a
+// still-upcoming one is reliably within the most recent handful of pages
+// rather than buried deep in years of unrelated rate-case hearings this
+// same calendar also carries.
+const HEARING_CALENDAR_URL = (page: number) => `https://puc.vermont.gov/event-types/public-hearing?page=${page}`;
+const HEARING_CALENDAR_PAGES_TO_CHECK = 3;
+const HEARING_ARTICLE_RE = /<div class="views-row">[\s\S]*?<\/article>\s*<\/div>/g;
+const HEARING_CASE_NO_RE = /PUC Case No\. (\d{2}-\d{4}-[A-Z]+)/;
+const HEARING_TIME_RE = /<time datetime="([^"]+)">/;
+const HEARING_HREF_RE = /<a href="(\/event\/[^"]+)" rel="bookmark">/;
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, UpcomingHearing>> {
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+  for (let page = 0; page < HEARING_CALENDAR_PAGES_TO_CHECK; page++) {
+    const res = await fetch(HEARING_CALENDAR_URL(page), { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) break;
+    const html = await res.text();
+    for (const m of html.matchAll(HEARING_ARTICLE_RE)) {
+      const block = m[0];
+      const caseNo = HEARING_CASE_NO_RE.exec(block)?.[1];
+      const timeIso = HEARING_TIME_RE.exec(block)?.[1];
+      const href = HEARING_HREF_RE.exec(block)?.[1];
+      if (!caseNo || !timeIso || !href) continue;
+      const date = new Date(timeIso);
+      if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+      const existing = map.get(caseNo);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(caseNo, { date, link: `https://puc.vermont.gov${href}` });
+      }
+    }
+  }
+  return map;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -476,7 +534,7 @@ function extractCapacityMw(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function normalizeCandidate(record: CaseRecord): NormalizedProject {
+function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, UpcomingHearing>): NormalizedProject {
   const matchKey = resolveMatchKey("vt-puc", record.caseNumber);
 
   const projectType = inferProjectType(record.description);
@@ -487,6 +545,7 @@ function normalizeCandidate(record: CaseRecord): NormalizedProject {
   const statusLabel = CASE_STATUS_LABELS[record.statusCode] ?? record.statusCode;
   const currentStage: ProjectStage = "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const hearing = upcomingHearings.get(record.caseNumber);
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Vermont Public Utility Commission's public ePUC case search, scoped to pending Certificate of Public Good (CPG, 30 V.S.A. §248 / §248(j)) petitions — the PUC is Vermont's own, direct siting authority for generation, transmission, and storage facilities under §248; see the ingestion module header for the statutory confirmation.",
@@ -523,6 +582,9 @@ function normalizeCandidate(record: CaseRecord): NormalizedProject {
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Good from the Vermont Public Utility Commission, pursuant to 30 V.S.A. §248 — Case No. ${record.caseNumber}, "${record.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `VT PUC Case No. ${record.caseNumber}`,
@@ -557,6 +619,9 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatedRecords = selectWithRotation(allRecords, maxCandidates, ROTATING_RECENT_SLOTS);
   const rotatingTier = new Set(rotatedRecords.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing>());
 
   for (const record of rotatedRecords) {
     try {
@@ -566,7 +631,7 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
         continue;
       }
       realApplicationCandidates += 1;
-      const normalized = normalizeCandidate(record);
+      const normalized = normalizeCandidate(record, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(record)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

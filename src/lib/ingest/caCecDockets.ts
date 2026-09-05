@@ -360,7 +360,84 @@ function parseMDY(raw: string): Date | null {
 const FILING_ROW_RE =
   /<td>\d+<\/td><td>([^<]*)<\/td><td[^>]*>\s*<span[^>]*><strong>(?:<a[^>]*>)?([^<]*)</g;
 
-async function fetchDocketFilings(docketNumber: string): Promise<DocketFiling[]> {
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+// PUBLIC HEARING DATES (added 2026-09-05): CEC has no separate sitewide
+// hearings calendar cross-referenced to a docket number the way this
+// series' VT/CT modules found — the general www.energy.ca.gov/events
+// listing (Business Meetings, workshops, rulemaking hearings) was checked
+// live and confirmed to name none of this module's 10 real "Under Review"
+// candidates, by docket number OR by project name, across its first 3
+// pages. What IS real, confirmed live 2026-09-05: a scheduled
+// project-specific hearing is announced as its own filing directly on that
+// project's efiling.energy.ca.gov DocketLog.aspx row — already fetched by
+// fetchDocketFilings above for every candidate, so no second request is
+// needed. Confirmed live against 23-AFC-01's real "Notice of Hearing on
+// Geothermal Resources" filing (TN 250216): unlike a typical filing row, its
+// own document-title cell carries a real plain-text date/time line
+// IMMEDIATELY after the `<strong>...</strong>` title and its wrapping `<br
+// />` — literally "May 31, 2023<br />9:00 a.m. - 3:30 p.m." — not buried in
+// the linked PDF at all. HEARING_TITLE_DATE_RE below requires both a title
+// containing "hearing" AND that specific "Month D, YYYY" plain-text pattern
+// immediately following — confirmed this correctly returns zero matches for
+// every other real "hearing"-mentioning filing title checked live (e.g.
+// "Hearing Officer Memo re...", "Transcript of August 31, 2023 Informational
+// Hearing", "Request for Mailed Notice of Actions and Hearings" — none of
+// these has a bare date/time line immediately after the title, so the
+// stricter pattern naturally excludes them without needing a separate
+// title-phrase denylist).
+//   Real, honest gap found live: every one of this module's current 10 real
+//   candidates (3 AFC geothermal + 7 Opt-In battery/solar) was checked by
+//   hand 2026-09-05, and the ONLY real "Notice of Hearing" filings found
+//   (23-AFC-01/02/03's shared "Notice of Hearing on Geothermal Resources",
+//   TN 250216) are for a hearing already held May 31, 2023 — no candidate
+//   currently has a real, still-upcoming scheduled hearing. The mechanism
+//   below is real and live-confirmed to work correctly (it would surface a
+//   real upcoming date the day CEC dockets one), it simply has nothing to
+//   report against the current population — see the ingestion module's own
+//   VERIFICATION dry run.
+// This is a hearing DATE, not a stated comment-period window, so
+// commentPeriodEnd is always left null, matching this series'
+// vtPucDockets.ts/ctCscDockets.ts precedent for the same kind of source.
+const HEARING_TITLE_DATE_RE =
+  /<strong>(?:<a href="([^"]*)"[^>]*>)?([^<]*hearing[^<]*)(?:<\/a>)?<\/strong>\s*<br\s*\/>\s*([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/gi;
+
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+] as const;
+
+function parseLongDate(monthName: string, day: string, year: string): Date | null {
+  const month = MONTH_NAMES.indexOf(monthName.toLowerCase() as (typeof MONTH_NAMES)[number]);
+  if (month === -1) return null;
+  const d = new Date(Number(year), month, Number(day));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// See PUBLIC HEARING DATES above — scans the same already-fetched docket-log
+// HTML fetchDocketFilings parses filings from, keeping the earliest
+// still-future hearing date found (a docket could in principle carry more
+// than one "Notice of Hearing" filing over its life, e.g. a rescheduling).
+function extractUpcomingHearing(html: string, docketNumber: string): UpcomingHearing | null {
+  const now = Date.now();
+  let best: UpcomingHearing | null = null;
+  for (const m of html.matchAll(HEARING_TITLE_DATE_RE)) {
+    const date = parseLongDate(m[3], m[4], m[5]);
+    if (!date || date.getTime() <= now) continue;
+    if (!best || date.getTime() < best.date.getTime()) {
+      best = {
+        date,
+        link: m[1] ? m[1] : `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`,
+      };
+    }
+  }
+  return best;
+}
+
+async function fetchDocketFilings(docketNumber: string): Promise<{ filings: DocketFiling[]; upcomingHearing: UpcomingHearing | null }> {
   const url = `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`CEC docket log request failed (${res.status}) for ${docketNumber}`);
@@ -374,7 +451,7 @@ async function fetchDocketFilings(docketNumber: string): Promise<DocketFiling[]>
       `CEC docket log for ${docketNumber} returned zero parsed filing rows — the GridView row structure likely changed. Check FILING_ROW_RE in src/lib/ingest/caCecDockets.ts against a fresh response.`,
     );
   }
-  return filings;
+  return { filings, upcomingHearing: extractUpcomingHearing(html, docketNumber) };
 }
 
 // See module header STATUS: a belt-and-suspenders re-check of each
@@ -494,6 +571,7 @@ function normalizeCandidate(
   candidate: ListingCandidate,
   detail: DetailInfo,
   resolution: ResolutionCheck,
+  upcomingHearing: UpcomingHearing | null,
 ): NormalizedProject | null {
   if (!detail.docketNumber) return null;
 
@@ -550,6 +628,9 @@ function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on California Energy Commission certification — Docket ${detail.docketNumber}${detail.projectTypeText ? ` (${detail.projectTypeText})` : ""}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: upcomingHearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: upcomingHearing?.link ?? null,
     sources: [
       {
         label: `CEC Docket ${detail.docketNumber}`,
@@ -590,9 +671,9 @@ export async function ingestCaCecDockets(maxCandidates = MAX_CANDIDATES): Promis
         errors.push({ matchKey: candidate.href, message: "No Docket Number found on detail page" });
         continue;
       }
-      const filings = await fetchDocketFilings(detail.docketNumber);
+      const { filings, upcomingHearing } = await fetchDocketFilings(detail.docketNumber);
       const resolution = checkDocketResolution(filings);
-      const normalized = normalizeCandidate(candidate, detail, resolution);
+      const normalized = normalizeCandidate(candidate, detail, resolution, upcomingHearing);
       if (normalized) {
         toUpsert.push(normalized);
         if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);

@@ -90,6 +90,44 @@
 // last-known real stage, not guessed into a resolved one — same convention
 // as every other module in this series post-2026-08-25 (see common.ts).
 //
+// HEARING CALENDAR: apps.psc.nd.gov also serves a real "Meeting Notices"
+// feed at /events/meetings (embedded as an iframe on the Commission's own
+// www.psc.nd.gov/meetings-news/meetings-agendas-minutes page, alongside
+// separate Agendas-Audio and Minutes iframes at /events/schedules and
+// /events/minutes — those two carry no case numbers at all and are not
+// used here) — confirmed live 2026-09-05. Each scheduled meeting/hearing is
+// its own `<div class="meetings-boxes">` block with a date/time header and,
+// for case-specific items, a "Case No. <a href=".../pscasedetail?getId=X&
+// getId2=Y">PU-YY-NNN</a>" line using the SAME getId/getId2 case identity
+// this module's own case-detail fetches use — matched back to a tracked
+// case by exact case number, never by name. Real, confirmed live example:
+// PU-26-086 (Homestead Wind, LLC's own siting application, already a real
+// tracked candidate in this module's own case-search results) has a real
+// "Formal Hearing" on September 29, 2026, 09:30 am CDT, at the Grand
+// Williston Hotel & Conference Center, Williston, ND.
+//   A real, confirmed formatting mismatch had to be corrected: this
+// calendar renders case numbers WITHOUT the zero-padding the case-search
+// results page (and thus this module's own `caseNumber`) always uses for
+// the sequence portion — confirmed live side-by-side, the calendar's own
+// "PU-26-86" is the exact same case as the search results' "PU-26-086".
+// normalizeCaseNumber() below re-pads the sequence portion to at least 3
+// digits (matching every real zero-padded example sampled, e.g. "022",
+// "082", "086", "164" from a live 2026 case-search) before using it as a map
+// key, so this module's own already-zero-padded `caseNumber` looks it up
+// correctly.
+//   A meeting can list more than one case (a joint hearing — confirmed live,
+// e.g. PU-26-219 and PU-26-236 sharing one September 7, 2026 slot) or list
+// no case at all (a routine agenda item like "SPP/RTO Update") — both
+// handled by scanning for zero-or-more case-number links inside each block
+// rather than assuming exactly one. Dates are parsed with a plain JS `Date`
+// call against the page's own "Month DD, YYYY - H:MM am/pm" text with its
+// literal "CDT"/"CST" suffix dropped (interpreted as this process's own
+// local time, not really Central time) — a small, accepted timezone
+// imprecision (at most a few hours) that never changes which side of "is
+// this still upcoming" a real hearing falls on at the daily granularity this
+// feature needs, the same kind of simplification several sibling states'
+// own hearing-calendar code already makes.
+//
 // Wired to Vercel Cron weekly (see vercel.json and
 // src/app/api/cron/ingest-nd-psc/route.ts — left for the maintainer to
 // finalize the schedule and route).
@@ -154,6 +192,55 @@ async function getPage(path: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/${path}`, { headers: { "User-Agent": USER_AGENT, Accept: "text/html" } });
   if (!res.ok) throw new Error(`ND PSC GET ${path} failed (${res.status})`);
   return res.text();
+}
+
+// See module header HEARING CALENDAR — a real, separate Meeting Notices
+// feed, confirmed live 2026-09-05.
+const MEETINGS_URL = "https://apps.psc.nd.gov/events/meetings";
+const MEETING_BLOCK_RE = /<div class="meetings-boxes">([\s\S]*?)<\/div>/g;
+const MEETING_DATETIME_RE = /<b>\s*([A-Za-z]+ \d{1,2}, \d{4})\s*-\s*(\d{1,2}:\d{2}\s*[ap]m)/i;
+const MEETING_CASE_RE = /pscasedetail\?getId=\d+&getId2=\d+"[^>]*>\s*(PU-\d+-\d+)\s*<\/a>/gi;
+const MEETING_DOC_LINK_RE = /<a href="(https:\/\/www\.psc\.nd\.gov\/webdocs\/[^"\s]+)"/;
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+// See module header HEARING CALENDAR — the calendar's own case numbers
+// aren't zero-padded the way this module's own `caseNumber` always is.
+function normalizeCaseNumber(raw: string): string {
+  const m = /^PU-(\d+)-(\d+)$/.exec(raw.trim());
+  if (!m) return raw.trim();
+  return `PU-${m[1]}-${m[2].padStart(3, "0")}`;
+}
+
+async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(MEETINGS_URL, { headers: { "User-Agent": USER_AGENT, Accept: "text/html" } });
+  if (!res.ok) throw new Error(`ND PSC meeting notices request failed (${res.status})`);
+  const html = await res.text();
+
+  const map = new Map<string, UpcomingHearing>();
+  const now = Date.now();
+  for (const block of html.matchAll(MEETING_BLOCK_RE)) {
+    const text = block[1];
+    const dateMatch = MEETING_DATETIME_RE.exec(text);
+    if (!dateMatch) continue;
+    const date = new Date(`${dateMatch[1]} ${dateMatch[2]}`);
+    if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+
+    const docMatch = MEETING_DOC_LINK_RE.exec(text);
+    const link = docMatch ? docMatch[1] : MEETINGS_URL;
+
+    for (const caseMatch of text.matchAll(MEETING_CASE_RE)) {
+      const caseNumber = normalizeCaseNumber(caseMatch[1]);
+      const existing = map.get(caseNumber);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(caseNumber, { date, link });
+      }
+    }
+  }
+  return map;
 }
 
 interface CaseListing {
@@ -312,13 +399,17 @@ function extractCapacity(text: string): { value: number | null; unit: string | n
   return { value: null, unit: null };
 }
 
-async function normalizeCandidate(listing: CaseListing): Promise<NormalizedProject> {
+async function normalizeCandidate(
+  listing: CaseListing,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
   const detailHtml = await getPage(`pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}`);
   const entries = parseDocketEntries(detailHtml);
   const currentStage = await resolveStageFromOrders(listing.getId, listing.getId2, entries);
 
   const matchKey = resolveMatchKey("nd-psc", listing.caseNumber);
+  const hearing = upcomingHearings.get(listing.caseNumber);
   const projectType = inferProjectType(listing.category, listing.description);
   const fuelType = inferFuelType(listing.category, listing.description, projectType);
   const { value: capacityValue, unit: capacityUnit } = extractCapacity(listing.description);
@@ -376,6 +467,9 @@ async function normalizeCandidate(listing: CaseListing): Promise<NormalizedProje
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility siting permit from the North Dakota Public Service Commission, pursuant to N.D.C.C. Ch. 49-22 — Case No. ${listing.caseNumber}, "${listing.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `ND PSC Case No. ${listing.caseNumber}`,
@@ -424,10 +518,14 @@ export async function ingestNdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   for (const listing of selected) {
     try {
-      const normalized = await normalizeCandidate(listing);
+      const normalized = await normalizeCandidate(listing, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(listing)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

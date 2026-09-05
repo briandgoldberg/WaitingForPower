@@ -106,6 +106,63 @@
 // not MW, same convention as the other transmission-siting modules in this
 // series, which also leave capacityValue null for lines).
 //
+// DOAH ("Division of Administrative Hearings") HEARING LOOKUP — confirmed
+// live 2026-09-05. Both of Florida's real siting-certificate candidates
+// (JEA's PA81-13A2 power-plant application and FPL's TA26-21 transmission-
+// line application) are ALSO cross-filed with DOAH as a formal
+// administrative case, because Florida's Power Plant Siting Act /
+// Transmission Line Siting Act certification hearings are actually
+// conducted by a DOAH Administrative Law Judge, not the DEP or PSC
+// directly — confirmed by hand: each DEP project detail page itself cites
+// this DOAH case number in plain text right alongside its own "Relevant
+// Project Information" links, e.g. "Division of Administrative Hearings
+// Case No. 26-2894EPP (Type 26-2894 in Case No. or Search Box)" for JEA and
+// "Division of Administrative Hearings - Case No. 26-002609TL (Type in
+// 26-002609 in Search Box)" for FPL — DEP's own page even tells a human
+// user the exact abbreviated string (the case's full number minus its
+// trailing type-suffix letters) to type into DOAH's search box, which this
+// module reuses verbatim (DOAH_CASE_NO_RE below captures exactly that
+// substring).
+//   DOAH's own public case-search site (doah.state.fl.us) is a plain,
+// unauthenticated, no-CAPTCHA ASP-classic (IIS) site — confirmed live via a
+// real 3-request chain: (1) POST caseNum=<abbreviated number> to
+// /ALJ/SearchDOAH/searchAction.asp?sT=byCase, which 302-redirects and sets
+// a fresh ASPSESSIONID cookie (a second cookie, "siteCookies", is also set
+// but confirmed live NOT required for the next two requests to work); (2) a
+// bare GET of /ALJ/searchDOAH/includes/caseInfoQuery.asp with that cookie
+// forwarded (also 302s); (3) a GET of /ALJ/searchDOAH/docket.asp, still with
+// the same cookie, which finally returns that one case's real Docket tab —
+// a plain-HTML, chronological (confirmed live: newest-filing-first) table
+// of every filing in the case, each row's own free-text "Proceedings"
+// description. For BOTH of this module's real live candidates, the most
+// recent such description is a genuine "Notice of Hearing (hearing set for
+// <date(s)>; <time>, <time zone>; <city>)" line with the actual scheduled
+// date spelled out in plain prose ON THE PAGE ITSELF — not a filing TITLE
+// pointing at a PDF, unlike the "hit or miss" dead-end pattern seen
+// elsewhere in this series. Confirmed live 2026-09-05: JEA (DOAH Case
+// 26-002894EPP) "hearing set for March 22 through 26, 2027" and FPL (DOAH
+// Case 26-002609TL) "hearing set for October 22, 23, and 26 through 29,
+// 2026" — both real, both still in the future as of this writing, 2 of 2
+// currently-tracked candidates. HEARING_DATE_IN_TEXT_RE takes the first
+// (month, day) pair and the year that follows it as the representative
+// start date for what is often a multi-day hearing, matching this
+// project's standing convention (see e.g. vtPucDockets.ts) of never
+// modeling commentPeriodEnd as anything other than null.
+//   Architecturally this differs from this series' single-calendar states
+// (e.g. coPucDockets.ts's one Google Calendar covering every docket): DOAH
+// has no equivalent bulk hearing calendar, only a per-case search, and each
+// case's own DOAH number is only knowable after that candidate's own DEP
+// project-detail page (already fetched per-candidate for capacity/county/
+// applicant, see parseDepProjectDetail) has been read. So instead of a
+// single upfront Map keyed by docket number, the DOAH lookup here runs
+// per-candidate, right alongside the existing per-candidate DEP detail
+// fetch, wrapped so a DOAH failure for one candidate never blocks another
+// or the run overall. A case whose Docket tab carries no "Notice of
+// Hearing" line yet (not yet scheduled, or a case this module hasn't
+// matched a DOAH number for) simply yields no hearing — the same honest-
+// null handling this module already gives every other DEP/PSC field it
+// can't find a value for.
+//
 // Wired to Vercel Cron weekly, 22:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-fl-psc/route.ts) — a real run's timing was
 // measured (2 candidates, the entire current universe for this docket type)
@@ -131,6 +188,25 @@ export const MAX_CANDIDATES = 25;
 // freezing whatever falls outside a plain top-N-by-recency window.
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
+
+// See module header DOAH HEARING LOOKUP.
+const DOAH_BASE = "https://www.doah.state.fl.us";
+const DOAH_SEARCH_ACTION_URL = `${DOAH_BASE}/ALJ/SearchDOAH/searchAction.asp?sT=byCase`;
+const DOAH_CASE_INFO_URL = `${DOAH_BASE}/ALJ/searchDOAH/includes/caseInfoQuery.asp`;
+const DOAH_DOCKET_URL = `${DOAH_BASE}/ALJ/searchDOAH/docket.asp`;
+
+// The exact abbreviated search string DEP's own project page tells a human
+// user to type (full DOAH case number minus its trailing type-suffix
+// letters, e.g. "26-2894EPP" -> "26-2894", "26-002609TL" -> "26-002609") —
+// confirmed live both forms are accepted by DOAH's own search.
+const DOAH_CASE_NO_RE = /Division of Administrative Hearings<\/a>[\s\S]{0,60}?Case No\.\s*(\d{2}-\d{3,6})[A-Z]{0,6}/i;
+const DOAH_SESSION_COOKIE_RE = /ASPSESSIONID[A-Z0-9]*=[^;]+/i;
+const NOTICE_OF_HEARING_RE = /Notice of Hearing\s*\(hearing set for ([^)]+)\)/i;
+const HEARING_DATE_IN_TEXT_RE = /([A-Z][a-z]+\.?\s+\d{1,2})(?:[^;]*?),\s*(\d{4})/;
+
+interface DoahHearing {
+  date: Date;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -303,6 +379,7 @@ interface DepProjectDetail {
   filedDate: Date | null;
   capacityMw: number | null;
   counties: string[];
+  doahSearchCaseNum: string | null;
 }
 
 const CASE_NUMBER_RE = /\(([A-Z]{2}\d{2,3}-[A-Z0-9]+)\)/;
@@ -320,6 +397,7 @@ export function parseDepProjectDetail(html: string): DepProjectDetail {
   const applicant = applicantRaw ? decodeHtmlEntities(applicantRaw).trim() : null;
   const filedDateRaw = FILED_DATE_RE.exec(body)?.[1] ?? null;
   const filedDate = filedDateRaw ? parseIsoDate(filedDateRaw) : null;
+  const doahSearchCaseNum = DOAH_CASE_NO_RE.exec(body)?.[1] ?? null;
   const capacityRaw = CAPACITY_MW_RE.exec(body)?.[1];
   const capacityMw = capacityRaw ? Number(capacityRaw.replace(/,/g, "")) : null;
 
@@ -332,7 +410,45 @@ export function parseDepProjectDetail(html: string): DepProjectDetail {
     filedDate,
     capacityMw: capacityMw != null && Number.isFinite(capacityMw) ? capacityMw : null,
     counties,
+    doahSearchCaseNum,
   };
+}
+
+// --- DOAH ("Division of Administrative Hearings") hearing lookup --------
+// See module header DOAH HEARING LOOKUP for the confirmed-live 3-request
+// chain and why this runs per-candidate rather than as a single upfront map.
+async function fetchDoahHearingDate(searchCaseNum: string): Promise<DoahHearing | null> {
+  const postRes = await fetch(DOAH_SEARCH_ACTION_URL, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ caseNum: searchCaseNum }).toString(),
+  });
+  const cookie = DOAH_SESSION_COOKIE_RE.exec(postRes.headers.get("set-cookie") ?? "")?.[0];
+  if (!cookie) {
+    throw new Error(
+      `DOAH case search didn't return the expected ASPSESSIONID cookie for case ${searchCaseNum} — the site's session mechanism likely changed. Check fetchDoahHearingDate in src/lib/ingest/flPscDockets.ts against a fresh response.`,
+    );
+  }
+  // Real, confirmed-live 3-hop chain: the search POST alone doesn't render
+  // results — the site's own follow-up GET (caseInfoQuery.asp) must be
+  // replayed with the same session cookie before docket.asp will reflect
+  // this search's matched case.
+  await fetch(DOAH_CASE_INFO_URL, { headers: { Cookie: cookie } });
+  const docketRes = await fetch(DOAH_DOCKET_URL, { headers: { Cookie: cookie } });
+  if (!docketRes.ok) throw new Error(`DOAH docket request failed (${docketRes.status}) for case ${searchCaseNum}`);
+  const html = await docketRes.text();
+
+  // Docket rows are newest-filing-first (confirmed live) — the first
+  // "Notice of Hearing" line found is therefore the current, not-yet-
+  // superseded schedule, not a stale/rescheduled one.
+  const noticeMatch = NOTICE_OF_HEARING_RE.exec(html);
+  if (!noticeMatch) return null;
+  const dateMatch = HEARING_DATE_IN_TEXT_RE.exec(noticeMatch[1]);
+  if (!dateMatch) return null;
+  const date = new Date(`${dateMatch[1]}, ${dateMatch[2]}`);
+  if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) return null; // a past hearing isn't upcoming
+  return { date };
 }
 
 // --- PSC <-> DEP matching -------------------------------------------------
@@ -405,6 +521,7 @@ interface Candidate {
   pscDocket: PscDocketCandidate | null;
   currentStage: ProjectStage;
   resolutionNote: string;
+  doahHearing: DoahHearing | null;
 }
 
 function normalizeCandidate(c: Candidate): NormalizedProject | null {
@@ -443,15 +560,26 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
     dataQualityNoteParts.push("No matching Florida PSC docket was found for this DEP siting application (expected for e.g. a solar facility, which Florida law does not require to go through a PSC determination-of-need proceeding); only DEP's own siting-case record is cited.");
   }
   dataQualityNoteParts.push(c.resolutionNote);
+  if (c.doahHearing) {
+    dataQualityNoteParts.push(
+      "A Division of Administrative Hearings (DOAH) certification-hearing date was found for this project's own DOAH case — see the ingestion module header for how this was matched and confirmed live.",
+    );
+  }
 
+  const depDetailUrl = c.depHref ? (c.depHref.startsWith("http") ? c.depHref : `${DEP_BASE}${c.depHref}`) : null;
   const sources = [
-    ...(c.depHref
-      ? [{ label: `FL DEP Siting Coordination Office: ${c.name}`, url: c.depHref.startsWith("http") ? c.depHref : `${DEP_BASE}${c.depHref}` }]
-      : []),
+    ...(depDetailUrl ? [{ label: `FL DEP Siting Coordination Office: ${c.name}`, url: depDetailUrl }] : []),
     ...(c.pscDocket
       ? [{ label: `FL PSC Docket No. ${c.pscDocket.docketnum}`, url: `${PSC_BASE}/clerks-office-dockets-level2?DocketNo=${c.pscDocket.docketnum}` }]
       : []),
   ];
+  // See module header DOAH HEARING LOOKUP — DOAH's own case page requires a
+  // live session cookie to load correctly, so it isn't a stable public link
+  // to hand a reader; the project's own DEP/PSC source page is used instead,
+  // matching this series' standing convention (see e.g. ctCscDockets.ts) of
+  // falling back to the candidate's own source URL when the discovered
+  // hearing event has no independently shareable page of its own.
+  const commentLink = c.doahHearing ? (depDetailUrl ?? sources[0]?.url ?? null) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
   const caseLabel = c.depDetail?.caseNumber ?? (c.pscDocket ? `PSC Docket ${c.pscDocket.docketnum}` : sourceId);
@@ -475,6 +603,9 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
     causeSlugs,
     causeDetail: `Waiting on Power Plant Siting Act / Transmission Line Siting Act certification from the Florida DEP Siting Coordination Office (and, where applicable, a determination of need from the Florida PSC) — ${caseLabel}, "${c.name}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: c.doahHearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink,
     sources,
     externalIds: {
       ...(c.depDetail?.caseNumber ? { flDepSiting: c.depDetail.caseNumber } : {}),
@@ -518,6 +649,7 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       pscDocket,
       currentStage: "agency_permitting",
       resolutionNote: "Currently listed on DEP's Applications-in-Process page (fetched at ingestion time) as an active siting application.",
+      doahHearing: null, // filled in below, alongside depDetail, after a politeness-delayed fetch
     });
   }
 
@@ -541,6 +673,7 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       resolutionNote: certified
         ? "No longer listed on DEP's Applications-in-Process page and a name-matching entry was found on DEP's Certified-Facilities list — treated as certified/approved."
         : "No longer listed on DEP's Applications-in-Process page and no matching entry was found on DEP's Certified-Facilities list — treated as no longer active (withdrawn, dismissed, or otherwise resolved) rather than left as a stale 'still waiting' row.",
+      doahHearing: null, // no DEP detail page is fetched for this pass (see loop below) — no DOAH case number to look up, and an already-resolved/cancelled project has no upcoming hearing to show regardless.
     });
   }
 
@@ -558,6 +691,14 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
         const detailHtml = await fetchText(detailUrl);
         candidate.depDetail = parseDepProjectDetail(detailHtml);
         await sleep(REQUEST_DELAY_MS);
+        if (candidate.depDetail.doahSearchCaseNum) {
+          // A failure here shouldn't block this candidate's own DEP/PSC data
+          // over a feature this supplementary — degrades to "no hearing
+          // data this run" for this one project, see module header DOAH
+          // HEARING LOOKUP.
+          candidate.doahHearing = await fetchDoahHearingDate(candidate.depDetail.doahSearchCaseNum).catch(() => null);
+          await sleep(REQUEST_DELAY_MS);
+        }
       }
       const normalized = normalizeCandidate(candidate);
       if (normalized) {

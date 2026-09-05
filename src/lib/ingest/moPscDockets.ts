@@ -183,6 +183,33 @@
 // MAX_CANDIDATES is set above (not capped down to) the current real
 // population within LOOKBACK_YEARS, unlike ny-dps's module.
 //
+// PUBLIC HEARINGS: psc.mo.gov (a separate, plain server-rendered Sitecore
+// page — NOT efis.psc.mo.gov above) hand-maintains a real
+// "/General/Upcoming_Local_Public_Hearings" page, confirmed live 2026-09-05,
+// listing every currently-scheduled "Local Public Hearing" (the PSC's own
+// term for a hearing held specifically to take public comment/testimony on
+// a pending case, distinct from a routine evidentiary hearing before the
+// Commission) with the exact same "Case No. EA-YYYY-NNNN" format this
+// module already matches on, each linked back to its own
+// efis.psc.mo.gov/Case/Display/{id} page, plus a plain-text "Date:
+// {Month D, YYYY}" / "Time: ..." / "Location: ..." block. Confirmed live
+// real example: Case EA-2026-0154 (Evergy Metro's natural-gas generation
+// CCN case, already tracked by this module) has a real scheduled Local
+// Public Hearing on September 10, 2026. As of this writing only one hearing
+// is listed at a time (the page is genuinely hand-maintained, not a
+// database view), so this is a real "hit or miss" source, same caveat as
+// every other hearing-calendar source in this series — most runs will find
+// zero matches, and that's an honest, expected outcome, not a bug. Parsed by
+// splitting the page's HTML on each "Case No." occurrence (so a future
+// second/third simultaneous hearing listing is handled the same way, not
+// just the current single-entry case) and reading the first "Date: ..."
+// text that follows each case number — confirmed live this ordering (case
+// number immediately followed by its own Date/Time/Location block) holds
+// for the one real entry on the page. commentLink points at the hearings
+// page itself (not the bare docket page, which this module already
+// surfaces as its own `sources` entry) since that page carries the actual
+// call-in/registration details a real commenter needs.
+//
 // Wired to Vercel Cron weekly, 03:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-mo-psc/route.ts).
 
@@ -233,6 +260,52 @@ function decodeHtmlEntities(s: string): string {
 
 function stripTags(html: string): string {
   return decodeHtmlEntities(html.replace(/<[^>]+>/g, "")).trim();
+}
+
+// See module header PUBLIC HEARINGS.
+const HEARINGS_PAGE_URL = "https://psc.mo.gov/General/Upcoming_Local_Public_Hearings";
+const HEARING_CASE_LINK_RE = /^<a[^>]*>\s*([A-Z]{2}-\d{4}-\d{4})\s*<\/a>/i;
+const HEARING_DATE_RE = /Date:\s*([^<\r\n]+)/i;
+
+interface UpcomingLocalHearing {
+  date: Date;
+}
+
+function parseHearingDate(raw: string): Date | null {
+  const d = new Date(raw.trim());
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Splits the page's HTML on each "Case No." occurrence so every listed
+// hearing is picked up, not just the current single real entry — see module
+// header PUBLIC HEARINGS. Each resulting chunk starts right after one
+// "Case No." label and runs up to (not including) the next one, so the
+// first case-number link and first "Date:" text found within it are always
+// that same hearing's own — confirmed live against the one real entry on
+// the page as of 2026-09-05.
+async function fetchUpcomingLocalHearingsByCase(): Promise<Map<string, UpcomingLocalHearing>> {
+  const res = await fetch(HEARINGS_PAGE_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) {
+    throw new Error(`MO PSC Upcoming Local Public Hearings request failed (${res.status})`);
+  }
+  const html = await res.text();
+  const now = Date.now();
+  const map = new Map<string, UpcomingLocalHearing>();
+
+  const chunks = html.split(/Case No\.\s*/i).slice(1);
+  for (const chunk of chunks) {
+    const caseMatch = HEARING_CASE_LINK_RE.exec(chunk);
+    const dateMatch = HEARING_DATE_RE.exec(chunk);
+    if (!caseMatch || !dateMatch) continue;
+    const date = parseHearingDate(dateMatch[1]);
+    if (!date || date.getTime() <= now) continue;
+    const caseNo = caseMatch[1].toUpperCase();
+    const existing = map.get(caseNo);
+    if (!existing || date.getTime() < existing.date.getTime()) {
+      map.set(caseNo, { date });
+    }
+  }
+  return map;
 }
 
 // --- Manual cookie jar --------------------------------------------------
@@ -506,8 +579,13 @@ function extractCounty(style: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-function normalizeCase(candidate: CaseSearchResult, resolution: Resolution): NormalizedProject {
+function normalizeCase(
+  candidate: CaseSearchResult,
+  resolution: Resolution,
+  upcomingHearings: Map<string, UpcomingLocalHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("mo-psc", candidate.caseNo);
+  const hearing = upcomingHearings.get(candidate.caseNo);
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.styleOfCase);
   const applicant = extractApplicant(candidate.styleOfCase);
   const county = extractCounty(candidate.styleOfCase);
@@ -552,6 +630,9 @@ function normalizeCase(candidate: CaseSearchResult, resolution: Resolution): Nor
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Missouri Public Service Commission — Case No. ${candidate.caseNo}, "${candidate.styleOfCase}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? HEARINGS_PAGE_URL : null,
     sources: [
       {
         label: `MO PSC Case No. ${candidate.caseNo}`,
@@ -589,6 +670,10 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingLocalHearingsByCase().catch(() => new Map<string, UpcomingLocalHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
@@ -596,7 +681,7 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     try {
       const filings = await fetchFilings(session, candidate.caseId);
       const resolution = resolveDocket(filings);
-      const normalized = normalizeCase(candidate, resolution);
+      const normalized = normalizeCase(candidate, resolution, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

@@ -245,6 +245,37 @@
 //
 // Wired to Vercel Cron weekly, 05:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-wv-psc/route.ts).
+//
+// PUBLIC HEARING DATES — confirmed live 2026-09-05: psc.state.wv.us runs a
+// SEPARATE, real "Meetings by Case" search (independent of WebDocket
+// itself), reachable via the site's own homepage "Hearing Schedule" link ->
+// Hearing_Info/default.htm -> a frameset whose NavBarFr lists "Meetings by
+// Case" (scripts/hearing_info/tblHEARING_CASESSearch.cfm). It's the exact
+// same decades-old ColdFusion stack as WebDocket — a plain, cookie-less GET
+// with `CaseNoOperator=EQUAL&CaseNo=<case>` against
+// tblHEARING_CASESList.cfm returns every scheduled meeting for that case
+// number, with a genuine plain-text Date (M/D/YY), Meeting Type (confirmed
+// real values include "Evidentiary Hearing" and "Public Comment Hearing"),
+// Location, and a per-meeting "Details" link
+// (viewInternetBrowseMeetingsViewForm.cfm?intHearingID=N, itself a
+// cookie-less real page giving the full date/time/location/ALJ). Confirmed
+// live against all 3 real currently-open candidates: Case 26-0075-E-CN
+// returned 10 real scheduled meetings (a mix of October/November 2026
+// Evidentiary Hearings and several already-past June 2026 Public Comment
+// Hearings); Case 26-0108-E-CN returned 3, all already in the past
+// (July 2026) as of this writing; Case 26-0135-E-CN-PW returned "No Records
+// Found" — confirmed this exact page renders that literal string for a
+// case with no scheduled meetings, not an error. A case number with no
+// hearings at all (or not found) is handled the same way. Only the
+// earliest FUTURE meeting date (of any meeting type — an evidentiary
+// hearing is exactly as real and public as a "Public Comment Hearing" one)
+// is kept per case; commentLink points at that specific meeting's own
+// Details page (not the WebDocket case page already used for `sources`).
+// One request per real (post-filter) candidate — this source has no
+// single sitewide calendar page, only a per-case search — politeness-
+// delayed the same as every other per-candidate request in this module,
+// and individually try/caught so one case's lookup failing doesn't blank
+// out every other case's real hearing data.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
@@ -280,6 +311,12 @@ export const MAX_CANDIDATES = 50;
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const PAGE_SIZE = 25;
+
+// See module header PUBLIC HEARING DATES — a separate real search system
+// from WebDocket above, confirmed live 2026-09-05.
+const HEARING_INFO_BASE_URL = "https://www.psc.state.wv.us/scripts/hearing_info";
+const HEARING_LIST_URL = `${HEARING_INFO_BASE_URL}/tblHEARING_CASESList.cfm`;
+const HEARING_DETAIL_URL = (hearingId: string) => `${HEARING_INFO_BASE_URL}/viewInternetBrowseMeetingsViewForm.cfm?intHearingID=${hearingId}`;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -420,6 +457,77 @@ const CLOSED_FALLBACK_RE = /\bcase\s+final\b|\bremoving\s+from\s+open\s+docket\b
 const ORDER_ROW_RE =
   /<td valign="bottom" height="25">([^<]*)&nbsp;<\/td>\s*<td valign="bottom" height="25">Order&nbsp;<\/td>[\s\S]*?<p>([\s\S]*?)<\/p>/g;
 
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+function parseMDYShortYear(raw: string): Date | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(raw.trim());
+  if (!m) return null;
+  const d = new Date(2000 + Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Matches each scheduled meeting's own "main" row (Case No / Date / Start
+// Time / Details link) — see module header PUBLIC HEARING DATES. Confirmed
+// live 2026-09-05 against real responses for Case 26-0075-E-CN (10 real
+// rows) and Case 26-0108-E-CN (3 real rows); a case with none at all (Case
+// 26-0135-E-CN-PW) renders the literal string "No Records Found" instead of
+// any row, which this regex simply fails to match (zero results), same as
+// a genuine network/parse miss — no special-casing needed.
+const HEARING_ROW_RE =
+  /<td valign="bottom" height="25">[^<]*&nbsp;<\/td>\s*<td valign="bottom" height="25">([^<]*)&nbsp;<\/td>\s*<td valign="bottom" height="25">&nbsp;&nbsp;[^<]*&nbsp;<\/td>[\s\S]*?intHearingID=(\d+)/g;
+
+// One request per real (post-filter) candidate — this source has no single
+// sitewide calendar page, only a per-case "Meetings by Case" search (see
+// module header). Only the earliest FUTURE meeting is kept.
+async function fetchUpcomingHearingForCase(caseNumber: string): Promise<UpcomingHearing | null> {
+  const params = new URLSearchParams({
+    CaseNoOperator: "EQUAL",
+    CaseNo: caseNumber,
+    CaseDescOperator: "BEGINS_WITH",
+    CaseDesc: "",
+    intLocation_ID: "",
+    HearingCaseSearchSortOrder: "1",
+  });
+  const res = await fetch(`${HEARING_LIST_URL}?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`WV PSC hearing-by-case search failed (${res.status}) for case ${caseNumber}`);
+  }
+  const html = await res.text();
+  const now = Date.now();
+  let earliest: UpcomingHearing | null = null;
+  for (const m of html.matchAll(HEARING_ROW_RE)) {
+    const date = parseMDYShortYear(m[1]);
+    if (!date || date.getTime() <= now) continue;
+    if (!earliest || date.getTime() < earliest.date.getTime()) {
+      earliest = { date, link: HEARING_DETAIL_URL(m[2]) };
+    }
+  }
+  return earliest;
+}
+
+// Looked up per real candidate, not per every raw search hit — see the
+// orchestrator below. Each case's own lookup is individually try/caught so
+// one bad response doesn't blank out every other case's real hearing data;
+// the whole function is additionally wrapped in .catch(() => new Map()) at
+// the call site as this series' standard defense for a supplementary
+// (non-core) feature.
+async function fetchUpcomingHearingsByCase(caseNumbers: string[]): Promise<Map<string, UpcomingHearing>> {
+  const map = new Map<string, UpcomingHearing>();
+  for (const caseNumber of caseNumbers) {
+    try {
+      const hearing = await fetchUpcomingHearingForCase(caseNumber);
+      if (hearing) map.set(caseNumber, hearing);
+    } catch {
+      // One case's hearing lookup failing shouldn't block the others.
+    }
+    await sleep(REQUEST_DELAY_MS);
+  }
+  return map;
+}
+
 async function fetchOrderTexts(caseNumber: string): Promise<string[]> {
   const params = new URLSearchParams({
     txtCaseNumberOperator: "EQUAL",
@@ -555,12 +663,18 @@ const CONTENT_RE = /\bcertificate\b/i;
 const CONSTRUCTION_RE = /\bconstruct\b|\bconstruction\b|\brebuild\b|\bsiting\b|\bextension\b|\bgenerat|\btransmission\b/i;
 const EXCLUDE_RE = /\bcooling tower\b|\bgeneral investigation\b/i;
 
-function normalizeCase(record: CaseListRecord, docketLabel: string, resolution: Resolution): NormalizedProject {
+function normalizeCase(
+  record: CaseListRecord,
+  docketLabel: string,
+  resolution: Resolution,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("wv-psc", record.caseNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(record.description, record.applicant);
   const capacityMw = extractCapacityMw(record.description);
   const counties = extractCounties(record.description);
   const county = counties.length > 0 ? counties.join(", ") : null;
+  const hearing = upcomingHearings.get(record.caseNumber);
 
   let currentStage: ProjectStage;
   if (resolution === "granted") currentStage = "approved_awaiting_construction";
@@ -605,6 +719,9 @@ function normalizeCase(record: CaseListRecord, docketLabel: string, resolution: 
     causeSlugs,
     causeDetail: `Waiting on a ${docketLabel} from the West Virginia Public Service Commission — Case No. ${record.caseNumber}, "${record.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `WV PSC Case No. ${record.caseNumber}`,
@@ -644,10 +761,18 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(rotatedCandidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  const isRealCandidate = (record: CaseListRecord) =>
+    CONTENT_RE.test(record.description) && CONSTRUCTION_RE.test(record.description) && !EXCLUDE_RE.test(record.description);
+  const realCaseNumbers = rotatedCandidates.filter((entry) => isRealCandidate(entry.record)).map((entry) => entry.record.caseNumber);
+  // See module header PUBLIC HEARING DATES. A failure here shouldn't block
+  // the whole ingestion run over a feature this supplementary — degrades to
+  // "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByCase(realCaseNumbers).catch(() => new Map<string, UpcomingHearing>());
+
   for (const entry of rotatedCandidates) {
     const { record, docketLabel } = entry;
     try {
-      if (!CONTENT_RE.test(record.description) || !CONSTRUCTION_RE.test(record.description) || EXCLUDE_RE.test(record.description)) {
+      if (!isRealCandidate(record)) {
         // Not a real generation/storage/transmission construction project —
         // see module header EXCLUDE_RE/CONTENT_RE.
         continue;
@@ -655,7 +780,7 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       realApplicationCandidates += 1;
       const orderTexts = await fetchOrderTexts(record.caseNumber);
       const resolution = detectResolution(orderTexts);
-      const normalized = normalizeCase(record, docketLabel, resolution);
+      const normalized = normalizeCase(record, docketLabel, resolution, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(entry)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

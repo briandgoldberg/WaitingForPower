@@ -326,6 +326,26 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     return incoming ?? existingValue ?? null;
   }
 
+  // For the comment-period fields: only a handful of source modules (WA
+  // EFSEC, OH OPSB, AZ ACC, OR EFSC, VA SCC — see each module's own header)
+  // actually compute these every run, and for those an explicit `null` is
+  // real signal ("checked, nothing open right now") that must be allowed to
+  // clear a stale value — unlike keepExistingIfNull above, which would
+  // wrongly keep resurrecting a closed comment period forever. Every other
+  // module simply never sets these fields at all, leaving them `undefined`
+  // (not `null`) on its own NormalizedProject — for those, a real
+  // undefined must preserve whatever's already there, since that's either
+  // a one-time manual lookup (comment date/location/link found by hand for
+  // a project this site otherwise has no automated way to check) or a
+  // still-open period one of the five real modules found on a prior run.
+  // The distinction this makes possible — undefined ("I don't manage this
+  // field") vs. null ("I checked, there's nothing") — is exactly why this
+  // is a separate function from keepExistingIfNull rather than a shared one.
+  function keepExistingIfUnmanaged<T>(incoming: T | null | undefined, existingValue: T | null | undefined): T | null {
+    if (incoming === undefined) return existingValue ?? null;
+    return incoming;
+  }
+
   const fields = {
     name: p.name,
     projectType: p.projectType,
@@ -354,9 +374,9 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     primeMoverCode: keepIfMergedAndNull(p.primeMoverCode, existing?.primeMoverCode),
     queueCluster: keepIfMergedAndNull(p.queueCluster, existing?.queueCluster),
     pointOfInterconnection: keepIfMergedAndNull(p.pointOfInterconnection, existing?.pointOfInterconnection),
-    commentPeriodStart: keepIfMergedAndNull(p.commentPeriodStart, existing?.commentPeriodStart),
-    commentPeriodEnd: keepIfMergedAndNull(p.commentPeriodEnd, existing?.commentPeriodEnd),
-    commentLink: keepIfMergedAndNull(p.commentLink, existing?.commentLink),
+    commentPeriodStart: keepExistingIfUnmanaged(p.commentPeriodStart, existing?.commentPeriodStart),
+    commentPeriodEnd: keepExistingIfUnmanaged(p.commentPeriodEnd, existing?.commentPeriodEnd),
+    commentLink: keepExistingIfUnmanaged(p.commentLink, existing?.commentLink),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,

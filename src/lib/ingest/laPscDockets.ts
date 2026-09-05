@@ -289,6 +289,41 @@
 // candidates each requiring an OrderSearch fetch) completed in ~151s,
 // comfortably inside the 300s cron budget.
 //
+// HEARING CALENDAR: LPSC's own "Calendar" tab
+// (lpscpubvalence.lpsc.louisiana.gov/portal/lpsc-web-portal?tab=calendar) is
+// a genuine Kendo Scheduler widget, confirmed live 2026-09-05 by reading its
+// own inline initializer, backed by a real, separate JSON endpoint —
+// `POST /portal/PSC/ReadScheduledEvents` — not the docket-search system used
+// above at all. Same real gotcha as fetchDocketSearchPage/fetchOrders above:
+// the bracket-form `sort[0][field]=...` Kendo POST body 500s
+// ("ArgumentNullException ... GetSorts"); a flat `sort=Start-asc` string
+// works, confirmed live. Each returned event carries a structured
+// `SchedulerEventTypeId` — confirmed live via `GET /portal/PSC/
+// ReadScheduleEventTypes`, which returns the full, small, real enum: 1
+// =Hearing, 2=Holiday, 3=Meeting, 4=Status Conference, 5=Technical
+// Conference. Only SchedulerEventTypeId=1 ("Hearing") is used here — Status
+// Conferences and Technical Conferences are real, separate, more
+// procedural event types LPSC schedules for the same dockets (confirmed
+// live: Docket U-38035 has a real upcoming "Status Conference", Docket
+// U-37964 too) that this module deliberately does not surface as a
+// hearing/comment-period date, matching this project's standing "hearing"
+// framing (see vtPucDockets.ts/ctCscDockets.ts). Each real Hearing event's
+// own `Title` field is a plain, consistently-formatted string, "Hearing:
+// {docketNumber}" (e.g. "Hearing: U-37812", confirmed live against the same
+// exact docket-number format ("U-NNNNN") this module already tracks via
+// MatterNumber/docketNumber elsewhere) — the event's own structured
+// `Dockets` array field is confirmed live to always be empty ([]) despite
+// existing in the schema, so the Title string is the only real way to
+// recover which docket a hearing belongs to, not a defensive fallback.
+// Real confirmed-live examples as of 2026-09-05: Docket U-37812 (Entergy
+// Louisiana, tracked in this module's live candidate set) has a real
+// upcoming Hearing on 2026-09-29; Docket U-37882 (also tracked) has THREE
+// separate upcoming Hearing entries (2026-10-07, 2026-10-12, 2026-10-19) —
+// the earliest is kept, same "earliest upcoming wins" convention as every
+// other module in this series with a hearing calendar. A 12-month forward
+// window (today..+12 months) was confirmed live to return real hearings
+// scheduled as far out as 2027-02-23, comfortably inside that window.
+//
 // Wired to Vercel Cron weekly, 08:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-la-psc/route.ts).
 
@@ -301,6 +336,7 @@ const BASE_URL = "https://lpscpubvalence.lpsc.louisiana.gov";
 const DOCKET_SEARCH_URL = `${BASE_URL}/portal/PSC/DocketSearch`;
 const DOCKET_DETAILS_URL = (matterId: string) => `${BASE_URL}/portal/PSC/DocketDetails?docketId=${matterId}`;
 const ORDER_SEARCH_URL = `${BASE_URL}/portal/PSC/OrderSearch`;
+const SCHEDULED_EVENTS_URL = `${BASE_URL}/portal/PSC/ReadScheduledEvents`;
 
 // Real live "U-" (Utility) docket population is ~45-50/year (confirmed via
 // a live 2023-01-01..2026-08-24 sample: 191 dockets). Comfortably below this
@@ -442,6 +478,79 @@ async function searchUDockets(startDate: Date, endDate: Date): Promise<DocketLis
     description: decodeHtmlEntities(r.Description ?? ""),
     dateFiled: parseMsDate(r.DateFiled),
   }));
+}
+
+// See module header HEARING CALENDAR — SchedulerEventTypeId=1 is "Hearing"
+// per the live ReadScheduleEventTypes enum; the docket number is recovered
+// from the event's own Title text ("Hearing: U-37812"), not the (always
+// empty, confirmed live) Dockets array field.
+const HEARING_EVENT_TITLE_RE = /^Hearing:\s*([A-Z]-\d+)/;
+const HEARING_LOOKAHEAD_MONTHS = 12;
+
+interface UpcomingHearing {
+  date: Date;
+}
+
+interface ScheduledEventRow {
+  Title: string | null;
+  SchedulerEventTypeId: number;
+  Start: string | null;
+}
+interface ScheduledEventsResponse {
+  Data: ScheduledEventRow[];
+}
+
+// See module header HEARING CALENDAR for the `sort=Start-asc` flat-string
+// requirement (same server-side Kendo-sort gotcha as fetchDocketSearchPage/
+// fetchOrders above).
+async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, UpcomingHearing>> {
+  const now = new Date();
+  const end = new Date(now);
+  end.setMonth(end.getMonth() + HEARING_LOOKAHEAD_MONTHS);
+
+  const params = new URLSearchParams();
+  params.set("startDate", formatDateParam(now));
+  params.set("endDate", formatDateParam(end));
+  params.set("page", "1");
+  params.set("pageSize", "1000");
+  params.set("skip", "0");
+  params.set("take", "1000");
+  params.set("sort", "Start-asc");
+
+  const res = await fetch(SCHEDULED_EVENTS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-Requested-With": "XMLHttpRequest",
+      "User-Agent": "Mozilla/5.0",
+    },
+    body: params.toString(),
+  });
+  if (!res.ok) {
+    throw new Error(`LA PSC ReadScheduledEvents request failed (${res.status})`);
+  }
+  const json = (await res.json()) as ScheduledEventsResponse;
+  if (!Array.isArray(json.Data)) {
+    throw new Error(
+      "LA PSC ReadScheduledEvents response didn't contain a recognizable Data array — the API shape likely changed. Check fetchUpcomingHearingsByDocketNumber in src/lib/ingest/laPscDockets.ts against a fresh response.",
+    );
+  }
+
+  const nowMs = now.getTime();
+  const map = new Map<string, UpcomingHearing>();
+  for (const ev of json.Data) {
+    if (ev.SchedulerEventTypeId !== 1) continue; // not a real "Hearing" event — see module header
+    const m = HEARING_EVENT_TITLE_RE.exec(ev.Title ?? "");
+    if (!m) continue;
+    const date = parseMsDate(ev.Start);
+    if (!date || date.getTime() <= nowMs) continue;
+    const docketNumber = m[1];
+    const existing = map.get(docketNumber);
+    if (!existing || date.getTime() < existing.date.getTime()) {
+      map.set(docketNumber, { date });
+    }
+  }
+  return map;
 }
 
 interface DocketDetail {
@@ -666,8 +775,14 @@ function extractApplicant(description: string): string {
     .trim();
 }
 
-function normalizeDocket(record: DocketListRecord, detail: DocketDetail, resolution: Resolution): NormalizedProject {
+function normalizeDocket(
+  record: DocketListRecord,
+  detail: DocketDetail,
+  resolution: Resolution,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("la-psc", record.docketNumber);
+  const hearing = upcomingHearings.get(record.docketNumber);
   const synopsis = detail.synopsis ?? "";
   const description = detail.description ?? record.description;
   const combinedText = `${synopsis} ${description}`;
@@ -720,6 +835,9 @@ function normalizeDocket(record: DocketListRecord, detail: DocketDetail, resolut
     causeSlugs,
     causeDetail: `Waiting on certification from the Louisiana Public Service Commission — Docket No. ${record.docketNumber}, "${synopsis || description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? DOCKET_DETAILS_URL(record.matterId) : null,
     sources: [
       {
         label: `LA PSC Docket No. ${record.docketNumber}`,
@@ -754,6 +872,10 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByDocketNumber().catch(() => new Map<string, UpcomingHearing>());
+
   for (const record of selected) {
     const matchKey = resolveMatchKey("la-psc", record.docketNumber);
     if (rotatingTier.has(record)) rotatingMatchKeys.add(matchKey);
@@ -773,7 +895,7 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       const orders = await fetchOrders(record.docketNumber);
       await sleep(REQUEST_DELAY_MS);
       const resolution = detectResolution(orders);
-      const normalized = normalizeDocket(record, detail, resolution);
+      const normalized = normalizeDocket(record, detail, resolution, upcomingHearings);
       toUpsert.push(normalized);
     } catch (err) {
       errors.push({ matchKey, message: String(err) });

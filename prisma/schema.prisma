@@ -463,21 +463,19 @@ model Submission {
   publishedProjectId String?
 }
 
-// One row per answer to the "What brings you to WaitingForPower today?"
-// one-question intent widget (src/components/IntentWidget.tsx) — shown once
-// per browser (a localStorage flag), never re-prompted. `intent` is one of
-// a small fixed set of button choices (see INTENT_OPTIONS in the widget),
-// not free text, so this stays cheap to summarize in the daily digest email
-// rather than becoming a pile of unstructured survey responses.
+// One row per submission of the feedback widget (src/components/
+// FeedbackWidget.tsx, shown once per browser via a localStorage flag,
+// never re-prompted) — a single optional-comment-and-email screen, only
+// ever written when the visitor actually enters something; closing the
+// widget without typing anything writes nothing.
 //
-// feedbackText/contactEmail are a second, optional step shown right after
-// the intent buttons ("anything else? want us to reach out?") — both null
-// on the row created at intent-selection time, filled in by a follow-up
-// PATCH (src/app/api/feedback/[id]) only if the visitor actually adds
-// something, never required to close the widget.
+// `intent` predates this shape (this widget used to open with a "what
+// brings you here" multiple-choice question first) — kept nullable rather
+// than dropped so historical answers aren't destroyed, but no longer
+// written by anything; always null on a new row.
 model VisitorFeedback {
   id           String   @id @default(cuid())
-  intent       String
+  intent       String?
   path         String
   feedbackText String?
   contactEmail String?

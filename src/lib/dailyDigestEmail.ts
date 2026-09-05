@@ -17,11 +17,8 @@ export interface DailyDigestData {
   windowLabel: string;
   apiCalls: { endpoint: string; count: number }[];
   apiUserAgents: string[];
-  feedback: { intent: string; count: number }[];
   feedbackTotal: number;
-  // Rows where the visitor actually filled in the widget's optional
-  // second step — a subset of feedbackTotal, not a separate count.
-  feedbackDetails: { intent: string; feedbackText: string | null; contactEmail: string | null; path: string }[];
+  feedbackDetails: { feedbackText: string | null; contactEmail: string | null; path: string }[];
   contactSubmissions: { topic: string; name: string; email: string; organization: string | null; message: string }[];
   // scope is already the human label ("California" or "All states") — see
   // src/app/api/cron/daily-digest/route.ts.
@@ -30,14 +27,6 @@ export interface DailyDigestData {
   // GreenlightVote.tsx / ProjectVerdict in schema.prisma) in this window.
   votes: { projectName: string; projectSlug: string; vote: "green" | "red" }[];
 }
-
-const INTENT_LABELS: Record<string, string> = {
-  researcher_journalist: "Researcher / journalist",
-  developer_consultant: "Energy developer / consultant",
-  investor: "Investor",
-  policy_advocacy: "Policy / advocacy",
-  just_exploring: "Just exploring",
-};
 
 function section(title: string, bodyHtml: string): string {
   return `<div style="margin-bottom:24px;"><h2 style="font-size:15px;margin:0 0 8px;">${escapeHtml(title)}</h2>${bodyHtml}</div>`;
@@ -64,18 +53,12 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     data.feedbackTotal === 0
       ? "<p>No responses.</p>"
       : `<p><strong>${data.feedbackTotal}</strong> total.</p>
-         <ul>${data.feedback.map((f) => `<li>${escapeHtml(INTENT_LABELS[f.intent] ?? f.intent)}: ${f.count}</li>`).join("")}</ul>
-         ${
-           data.feedbackDetails.length > 0
-             ? `<p style="margin:8px 0 4px;"><strong>With a message or contact email:</strong></p>
-                <ul>${data.feedbackDetails
-                  .map(
-                    (d) =>
-                      `<li>${escapeHtml(INTENT_LABELS[d.intent] ?? d.intent)}${d.contactEmail ? ` — ${escapeHtml(d.contactEmail)}` : ""}${d.feedbackText ? `<br>${escapeHtml(d.feedbackText)}` : ""}</li>`,
-                  )
-                  .join("")}</ul>`
-             : ""
-         }`;
+         <ul>${data.feedbackDetails
+           .map(
+             (d) =>
+               `<li>${d.contactEmail ? `${escapeHtml(d.contactEmail)}` : "(no email)"}${d.feedbackText ? `<br>${escapeHtml(d.feedbackText)}` : ""}</li>`,
+           )
+           .join("")}</ul>`;
 
   const contactSectionHtml =
     data.contactSubmissions.length === 0
@@ -126,16 +109,9 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     "",
     "VISITOR FEEDBACK",
     data.feedbackTotal === 0 ? "No responses." : `${data.feedbackTotal} total.`,
-    ...data.feedback.map((f) => `- ${INTENT_LABELS[f.intent] ?? f.intent}: ${f.count}`),
-    ...(data.feedbackDetails.length > 0
-      ? [
-          "With a message or contact email:",
-          ...data.feedbackDetails.map(
-            (d) =>
-              `- ${INTENT_LABELS[d.intent] ?? d.intent}${d.contactEmail ? ` — ${d.contactEmail}` : ""}${d.feedbackText ? `\n  ${d.feedbackText}` : ""}`,
-          ),
-        ]
-      : []),
+    ...data.feedbackDetails.map(
+      (d) => `- ${d.contactEmail ?? "(no email)"}${d.feedbackText ? `\n  ${d.feedbackText}` : ""}`,
+    ),
     "",
     "CONTACT FORM SUBMISSIONS",
     data.contactSubmissions.length === 0

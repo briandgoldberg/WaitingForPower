@@ -51,8 +51,7 @@ export function GreenlightVote({
     const stored = localStorage.getItem(votedKey(slug));
     if (stored !== "green" && stored !== "red") return;
     // Deferred via setTimeout rather than called synchronously in the
-    // effect body — same pattern IntentWidget.tsx already uses for its own
-    // localStorage-gated setState, to avoid a cascading-render lint error.
+    // effect body, to avoid a cascading-render lint error.
     const t = setTimeout(() => setMyVote(stored), 0);
     return () => clearTimeout(t);
   }, [slug]);

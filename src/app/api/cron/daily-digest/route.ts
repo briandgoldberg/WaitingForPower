@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.visitorFeedback.findMany({
       where: { createdAt: { gte: since } },
-      select: { intent: true, feedbackText: true, contactEmail: true, path: true },
+      select: { feedbackText: true, contactEmail: true, path: true },
     }),
     prisma.contactSubmission.findMany({
       where: { createdAt: { gte: since } },
@@ -63,22 +63,14 @@ export async function GET(req: NextRequest) {
     if (log.userAgent) userAgentSet.add(log.userAgent);
   }
 
-  const feedbackByIntent = new Map<string, number>();
-  for (const row of feedbackRows) {
-    feedbackByIntent.set(row.intent, (feedbackByIntent.get(row.intent) ?? 0) + 1);
-  }
-
   const result = await sendDailyDigestEmail({
     windowLabel,
     apiCalls: [...apiCallsByEndpoint.entries()].map(([endpoint, count]) => ({ endpoint, count })),
     // Capped — a runaway crawler shouldn't blow up the email with hundreds
     // of near-duplicate UA strings.
     apiUserAgents: [...userAgentSet].slice(0, 20),
-    feedback: [...feedbackByIntent.entries()].map(([intent, count]) => ({ intent, count })),
     feedbackTotal: feedbackRows.length,
-    feedbackDetails: feedbackRows
-      .filter((r) => r.feedbackText || r.contactEmail)
-      .map((r) => ({ intent: r.intent, feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
+    feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     contactSubmissions,
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
     votes: voteRows.map((v) => ({ projectName: v.project.name, projectSlug: v.project.slug, vote: v.vote as "green" | "red" })),

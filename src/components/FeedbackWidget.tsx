@@ -2,23 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "wfp_intent_answered";
+const STORAGE_KEY = "wfp_feedback_answered";
 const SHOW_AFTER_MS = 15000;
 
-const INTENT_OPTIONS: { value: string; label: string }[] = [
-  { value: "researcher_journalist", label: "Researcher / journalist" },
-  { value: "developer_consultant", label: "Energy developer / consultant" },
-  { value: "investor", label: "Investor" },
-  { value: "policy_advocacy", label: "Policy / advocacy" },
-  { value: "just_exploring", label: "Just exploring" },
-];
+type Step = "form" | "thanks";
 
-type Step = "prompt" | "detail" | "thanks";
-
-export function IntentWidget() {
+// A single optional-comment-and-email screen — shown once per browser (a
+// localStorage flag), never re-prompted. Closing it without typing
+// anything writes nothing; see src/app/api/feedback/route.ts.
+export function FeedbackWidget() {
   const [visible, setVisible] = useState(false);
-  const [step, setStep] = useState<Step>("prompt");
-  const [feedbackId, setFeedbackId] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("form");
   const [feedbackText, setFeedbackText] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [sending, setSending] = useState(false);
@@ -48,54 +42,32 @@ export function IntentWidget() {
   }
 
   function close() {
+    markAnswered();
     setVisible(false);
   }
 
-  async function selectIntent(intent: string) {
-    // Set the moment an intent is picked, not only on final send/skip — a
-    // visitor who closes the widget mid-detail-step (or just refreshes)
-    // should never see the initial prompt again either.
-    markAnswered();
-    setStep("detail");
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ intent, path: window.location.pathname }),
-      });
-      const data = await res.json();
-      if (res.ok && data.id) setFeedbackId(data.id);
-    } catch {
-      // Best-effort — the detail step below just quietly can't attach to a
-      // row if this failed; see sendDetail's own id guard.
-    }
-  }
-
-  async function sendDetail() {
+  async function send() {
     const text = feedbackText.trim();
     const email = contactEmail.trim();
     if (!text && !email) {
       close();
       return;
     }
-    if (!feedbackId) {
-      close();
-      return;
-    }
     setSending(true);
     try {
-      await fetch(`/api/feedback/${feedbackId}`, {
-        method: "PATCH",
+      await fetch("/api/feedback", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedbackText: text, contactEmail: email }),
+        body: JSON.stringify({ feedbackText: text, contactEmail: email, path: window.location.pathname }),
       });
     } catch {
       // Best-effort — a visitor shouldn't see an error for an optional,
-      // already-dismissible extra step.
+      // already-dismissible widget.
     }
     setSending(false);
+    markAnswered();
     setStep("thanks");
-    setTimeout(close, 1400);
+    setTimeout(() => setVisible(false), 1400);
   }
 
   if (!visible) return null;
@@ -110,28 +82,9 @@ export function IntentWidget() {
         ✕
       </button>
 
-      {step === "prompt" && (
+      {step === "form" && (
         <>
-          <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-3">
-            What brings you to WaitingForPower today?
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {INTENT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => selectIntent(opt.value)}
-                className="text-left text-sm rounded-md border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--accent)] hover:text-white transition-colors"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {step === "detail" && (
-        <>
-          <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">Anything else? (optional)</p>
+          <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">Got feedback?</p>
           <p className="text-xs text-[var(--text-secondary)] mb-2">
             Leave a note or an email if you&rsquo;d like us to reach out.
           </p>
@@ -154,7 +107,7 @@ export function IntentWidget() {
               Skip
             </button>
             <button
-              onClick={sendDetail}
+              onClick={send}
               disabled={sending}
               className="rounded-md bg-[var(--accent)] text-white px-3 py-1.5 text-sm font-medium disabled:opacity-60"
             >

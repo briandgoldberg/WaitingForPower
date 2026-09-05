@@ -65,6 +65,37 @@
 // from the caption text is fairly reliable, same approach and same caveats
 // as Texas.
 //
+// HEARING CALENDAR: the same DMS site (dms.psc.sc.gov) that hosts docket
+// search also publishes a real "Search Hearings And Events" calendar at
+// /Web/Calendar/Search (linked from the main psc.sc.gov site's own
+// navigation, confirmed live 2026-09-05) — a plain server-rendered HTML
+// table, separate from the docket-search system used above, with one row
+// per scheduled hearing/meeting: a Date/Status column ("9/24/2026 10:00 AM" /
+// "Scheduled"), a Docket# column whose anchor text is the EXACT same docket-
+// number format this module already matches on ("2026-3-E", "2026-192-E",
+// etc. — hyperlinked to the same /Web/Dockets/Detail/{id} page fetched
+// above), and a free-text Summary/Notes column. `?StartDate=MM/DD/YYYY&
+// EndDate=MM/DD/YYYY` (GET, no auth) controls the window; this module
+// requests today through +400 days to comfortably cover anything already
+// scheduled (confirmed live: the unfiltered default view already showed
+// hearings dated into April 2027, so 400 days is not aggressively tight).
+// Matched back to a tracked docket by its exact docket-number anchor text,
+// never by fuzzy name matching. A docket can appear on more than one future
+// row (e.g. 2026-192-E showed up 3 times in one real pull, at 10/29, 11/18,
+// and 11/19) — the earliest future date is kept, same "soonest upcoming"
+// convention ctCscDockets.ts/vtPucDockets.ts both use. Only rows whose
+// Docket# column links to /Web/Dockets/Detail/ are used — the same calendar
+// also lists NDI matters (/Web/Ndi/Detail/, a different filing type outside
+// this module's scope) and non-docket items (PSC training classes, "N/A" in
+// the Docket# column), both correctly skipped since they don't match that
+// href pattern. Real, confirmed-live 2026-09-05: of this module's own real
+// tracked candidate population, 0 currently have an upcoming row on this
+// calendar within the fetched window — a real, honest null result, not a
+// sign the mechanism doesn't work (the same extraction pattern correctly
+// pulled 32 real future hearing rows across 21 distinct dockets from the
+// live page, none of which happened to be a currently-open siting-
+// certificate candidate at the moment this was checked).
+//
 // Wired to Vercel Cron weekly, 20:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-sc-psc/route.ts) — a real run's timing was
 // measured (34 candidates, ~35s) before scheduling this. Also
@@ -87,6 +118,46 @@ export const MAX_CANDIDATES = 100;
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 const LOOKBACK_YEARS = 8;
+
+// See module header HEARING CALENDAR. Confirmed live 2026-09-05.
+const HEARING_CALENDAR_LOOKAHEAD_DAYS = 400;
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+const CALENDAR_ROW_RE =
+  /<tr>\s*<td class="nowrap">\s*<span>([^<]+)<\/span>\s*<br \/>\s*<span class="\w+">([^<]*)<\/span>\s*<\/td>\s*<td class="nowrap">\s*(?:<a href="(\/Web\/Dockets\/Detail\/\d+)">([^<]+)<\/a>)?[\s\S]*?<\/tr>/g;
+
+export function parseHearingCalendar(html: string): Map<string, UpcomingHearing> {
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+  for (const m of html.matchAll(CALENDAR_ROW_RE)) {
+    const href = m[3];
+    const docketNumber = m[4];
+    if (!href || !docketNumber) continue; // an NDI row, a non-docket calendar item, or "N/A" — see module header
+    const status = m[2].trim();
+    if (!/^scheduled$/i.test(status)) continue; // defensive — only "Scheduled" has been observed live, see module header
+    const date = new Date(m[1].trim());
+    if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+    const existing = map.get(docketNumber);
+    if (!existing || date.getTime() < existing.date.getTime()) {
+      map.set(docketNumber, { date, link: `${BASE_URL}${href}` });
+    }
+  }
+  return map;
+}
+
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+  const from = new Date();
+  const to = new Date();
+  to.setDate(to.getDate() + HEARING_CALENDAR_LOOKAHEAD_DAYS);
+  const url = `${BASE_URL}/Web/Calendar/Search?StartDate=${formatDate(from)}&EndDate=${formatDate(to)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`SC PSC hearing calendar request failed (${res.status}): ${url}`);
+  return parseHearingCalendar(await res.text());
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -280,13 +351,18 @@ function extractApplicant(caption: string): string {
   return m ? m[1].trim() : caption.slice(0, 80);
 }
 
-function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): NormalizedProject {
+function normalizeDocket(
+  search: DocketSearchResult,
+  detail: DocketDetail,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("sc-psc", search.docketNumber);
   const projectType = inferProjectType(search.caption);
   const fuelType = inferFuelType(search.caption, projectType);
   const capacityMw = extractCapacityMw(search.caption);
   const county = extractCounty(search.caption);
   const applicant = extractApplicant(search.caption);
+  const hearing = upcomingHearings.get(search.docketNumber);
 
   let currentStage: ProjectStage;
   if (detail.resolution === "granted") currentStage = "approved_awaiting_construction";
@@ -330,6 +406,9 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the South Carolina Public Service Commission — Docket No. ${search.docketNumber}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `SC PSC Docket No. ${search.docketNumber}`,
@@ -359,13 +438,17 @@ export async function ingestScPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const candidate of candidates) {
     try {
       const detail = await fetchDetail(candidate.docketId);
-      const normalized = normalizeDocket(candidate, detail);
+      const normalized = normalizeDocket(candidate, detail, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

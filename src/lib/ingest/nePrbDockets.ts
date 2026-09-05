@@ -271,6 +271,36 @@
 // catching a genuine multi-meeting contested case is exactly the kind of
 // "still waiting" project this site exists to surface.
 //
+// HEARING CALENDAR: powerreview.nebraska.gov/agenda — confirmed live
+// 2026-09-05 — is a real, separate single-page agenda for the Board's own
+// NEXT scheduled public meeting (replaced wholesale each time a new one is
+// posted; not an archive, and not the same page as the Minutes this module
+// otherwise scans). Its header states the exact meeting date in plain text
+// ("Friday, September 18, 2026 beginning at 9:00 a.m."), and — critically —
+// a live-confirmed real example shows it ALSO calls out, in its own
+// trailing "NOTE:" paragraph, any case-specific evidentiary hearing
+// scheduled to piggyback on that meeting: "...The other is on PRB-4082-G,
+// an application filed by the Nebraska Public Power District for authority
+// to construct a 717-megawatt generation facility in Lancaster County."
+// Routine numbered agenda items (roll call, minutes approval, expense
+// report, executive director's report, etc.) never mention a PRB-NNNN case
+// number at all — confirmed live against the full real page text — so
+// scanning the whole page for CASE_NUMBER_RE-style mentions is a clean
+// signal here, unlike Minutes (which requires the facts/resolution-mention
+// disambiguation documented above). A real limitation, accepted rather than
+// worked around: this page only ever shows the SINGLE next meeting, so a
+// hearing scheduled for a meeting further out than that isn't visible until
+// its own turn comes up as "next." Real, confirmed-live caveat: PRB-4082-G
+// itself was NOT found in this module's own Minutes-derived candidate set as
+// of this writing (its own August 21, 2026 minutes — the most recent posted
+// — never mention it), so this feature's real live population is 0 of the
+// current tracked candidates at this exact point in time; the mechanism
+// itself is real and verified (a real upcoming hearing, a real case number,
+// a real date), and is expected to start populating once a case like this
+// gets its own Minutes mention (see STATUS above for the real confirmed
+// "tabled ... scheduled for an evidentiary hearing" pattern that
+// historically precedes one) while its hearing is still upcoming.
+//
 // Wired to Vercel Cron weekly, 08:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ne-prb/route.ts).
 
@@ -378,6 +408,40 @@ function parseLongDate(raw: string, fallbackYear: number, notAfter: Date): Date 
     return Number.isNaN(d.getTime()) ? null : d;
   }
   return null;
+}
+
+// See module header HEARING CALENDAR — the Board's own single, always-
+// current "next meeting" agenda page, confirmed live 2026-09-05.
+const AGENDA_URL = `${BASE_URL}/agenda`;
+const AGENDA_MEETING_DATE_RE = /([A-Za-z]+\s+\d{1,2},?\s*\d{4})\s*beginning at/i;
+// Same shape as CASE_NUMBER_RE further below, but global (`g`) since a real
+// agenda can name more than one case's hearing (confirmed live: the same
+// September 18, 2026 agenda names both PRB-4082-G and a separate Formal
+// Complaint in its own "NOTE:" paragraph — only the PRB- form is a tracked
+// ProjectType here, same scoping this module's own candidate loop applies).
+const AGENDA_CASE_NUMBER_RE = /PRB-(\d{3,6})(-[A-Za-z]{1,4})?/g;
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing>> {
+  const map = new Map<string, UpcomingHearing>();
+  const html = await fetchText(AGENDA_URL);
+  const text = stripTags(html);
+
+  const dateMatch = AGENDA_MEETING_DATE_RE.exec(text);
+  if (!dateMatch) return map;
+  const now = new Date();
+  const date = parseLongDate(dateMatch[1], now.getFullYear(), now);
+  if (!date || date.getTime() <= Date.now()) return map;
+
+  for (const m of text.matchAll(AGENDA_CASE_NUMBER_RE)) {
+    const key = `${m[1]}${m[2] ? m[2].toUpperCase() : ""}`;
+    map.set(key, { date, link: AGENDA_URL });
+  }
+  return map;
 }
 
 interface MeetingRef {
@@ -729,10 +793,12 @@ function normalizeCase(
   suffix: string | null,
   sortedMentions: CaseMention[],
   projectType: ProjectType,
+  upcomingHearings: Map<string, UpcomingHearing>,
 ): NormalizedProject {
   const sourceId = `${caseNumber}${suffix ?? ""}`;
   const matchKey = resolveMatchKey("ne-prb", sourceId);
   const caseDisplay = `PRB-${sourceId}`;
+  const hearing = upcomingHearings.get(sourceId);
 
   const facts = pickFactsMention(sortedMentions);
   const { mention: resolutionMention, resolution } = pickResolutionMention(sortedMentions);
@@ -808,6 +874,9 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on approval from the Nebraska Power Review Board under Neb. Rev. Stat. §§70-1013 to 70-1014.01 — ${caseDisplay}, "${facts.text.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources,
     externalIds: { nePrb: sourceId },
   };
@@ -852,6 +921,10 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing>());
+
   const toUpsert: NormalizedProject[] = [];
 
   for (const entry of selected) {
@@ -865,7 +938,7 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
     const projectType = classifyBySuffix(sorted[0].suffix);
     if (!projectType) continue; // defensive; already filtered above
     try {
-      const normalized = normalizeCase(sorted[0].caseNumber, sorted[0].suffix, sorted, projectType);
+      const normalized = normalizeCase(sorted[0].caseNumber, sorted[0].suffix, sorted, projectType, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(entry)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

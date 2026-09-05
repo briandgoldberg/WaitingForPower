@@ -138,6 +138,35 @@
 // "grain-belt-express-phase-1") rather than excluded here, so the site
 // shows one merged row carrying both sources' links.
 //
+// HEARING SCHEDULE: unlike VT/CT (a site-wide hearings calendar) or OH (a
+// hearing-date paragraph on the case's own detail page), ICC publishes each
+// docket's own scheduled events on a dedicated per-docket "Schedule"
+// sub-page — e.g. /docket/P2026-0156/schedule — confirmed live 2026-09-05,
+// plain server-rendered HTML, no CAPTCHA (same eDocket navigation sidebar as
+// Case Details/Docket Sheet/Staff Assigned/Service List, already referenced
+// in the module header FETCHING). Each scheduled event renders as its own
+// card: an `<h3>` event type ("Evidentiary for ", "Status for ", "Prehearing
+// for ", "Oral Argument for ", or "Deadline") and an `<h4>` date/time (e.g.
+// "October 9, 2026 5:00 PM"), sorted newest-first, with no pagination
+// encountered even on a 24-result docket (P2015-0277) — confirmed live
+// against several real dockets. Confirmed live against the one real
+// currently-open candidate as of 2026-09-05 (docket 26-0156, ComEd's GRIT
+// transmission project — every other real candidate's own CaseStatus reads
+// "Initial - Closed", see STATUS above): 9 real scheduled events, including
+// a genuinely upcoming "Deadline" entry (October 9, 2026) and two already-
+// past Evidentiary hearings (June 24/25, 2026). "Deadline" entries are the
+// Commission's own internal decision deadline, not a hearing or conference
+// the public attends, so they're excluded here; every other entry type
+// (Evidentiary/Status/Prehearing/Oral Argument, and any future type ICC
+// adds) is a real ALJ hearing/conference open to the public and counts.
+// Only the earliest still-future, non-"Cancelled" entry is kept (a real
+// live example of a cancelled entry was confirmed on this same docket: "Jun
+// - 2026 25 ... Cancelled"). Fetched only for candidates not already known
+// resolved via CaseStatus (see fetchDetail/parseDetail), matching this
+// module's existing one-detail-fetch-per-open-candidate cost discipline —
+// a closed docket's schedule is all in the past by construction and isn't
+// worth the extra request.
+//
 // Wired to Vercel Cron weekly, 22:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-il-icc/route.ts) — a real run's timing was
 // measured (64 candidates, 59 real applications) before scheduling this.
@@ -173,6 +202,46 @@ async function fetchText(url: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`IL ICC request failed (${res.status}): ${url}`);
   return res.text();
+}
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+// See module header HEARING SCHEDULE. Each card is a `<li
+// class="soi-icc-card-list-item ...">` block containing an `<h3>` event
+// type and an `<h4>` date/time — matched as a block first (not a single
+// combined regex) so a "Cancelled" marker or an unrelated page footer `<h3>`
+// (this page's own "Office Locations"/"Stay Connected"/"Useful Links"
+// sidebar headers, confirmed live to also be plain `<h3>` tags, just outside
+// any `soi-icc-card-list-item` li) can't be mistaken for a real entry.
+const SCHEDULE_ITEM_RE = /<li class="soi-icc-card-list-item[^"]*">([\s\S]*?)<\/li>/g;
+const SCHEDULE_TYPE_RE = /<h3>([^<]*)<\/h3>/;
+const SCHEDULE_DATE_RE = /<h4>([\s\S]*?)<\/h4>/;
+// The Commission's own internal decision deadline, not a hearing/conference
+// the public attends — see module header HEARING SCHEDULE.
+const SCHEDULE_DEADLINE_RE = /^deadline/i;
+
+async function fetchNextScheduledEvent(docketId: string): Promise<UpcomingHearing | null> {
+  const url = `${BASE_URL}/docket/${docketId}/schedule`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const html = await res.text();
+  const now = Date.now();
+  let earliest: Date | null = null;
+  for (const m of html.matchAll(SCHEDULE_ITEM_RE)) {
+    const block = m[1];
+    const type = SCHEDULE_TYPE_RE.exec(block)?.[1]?.trim();
+    if (!type || SCHEDULE_DEADLINE_RE.test(type)) continue;
+    const rawDate = SCHEDULE_DATE_RE.exec(block)?.[1];
+    if (!rawDate || /cancell?ed/i.test(rawDate)) continue;
+    const dateText = decodeHtmlEntities(rawDate.replace(/<[^>]+>/g, " "));
+    const d = new Date(dateText);
+    if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
+    if (!earliest || d.getTime() < earliest.getTime()) earliest = d;
+  }
+  return earliest ? { date: earliest, link: url } : null;
 }
 
 // Small, hand-confirmed set actually observed in real responses — same
@@ -364,7 +433,7 @@ function extractCounties(description: string): string | null {
   return m ? m[1] : null;
 }
 
-function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): NormalizedProject {
+function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, hearing: UpcomingHearing | null): NormalizedProject {
   const matchKey = resolveMatchKey("il-icc", search.docketId);
   const projectType = inferProjectType(search.description);
   const fuelType = inferFuelType(search.description, projectType);
@@ -416,6 +485,9 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Illinois Commerce Commission — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `IL ICC Docket No. ${search.docketNumber}`,
@@ -451,7 +523,11 @@ export async function ingestIlIccDockets(maxCandidates = MAX_CANDIDATES): Promis
   for (const candidate of candidates) {
     try {
       const detail = await fetchDetail(candidate.docketId);
-      const normalized = normalizeDocket(candidate, detail);
+      // See module header HEARING SCHEDULE — a closed docket's schedule is
+      // all in the past by construction, so the extra request is skipped
+      // for candidates already known resolved.
+      const hearing = detail.resolved ? null : await fetchNextScheduledEvent(candidate.docketId).catch(() => null);
+      const normalized = normalizeDocket(candidate, detail, hearing);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

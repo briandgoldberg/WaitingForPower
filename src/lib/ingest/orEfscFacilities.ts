@@ -217,6 +217,54 @@ async function fetchJson(url: string): Promise<Record<string, unknown>> {
   return parsed as Record<string, unknown>;
 }
 
+// ODOE's own "Siting Public Comment" portal (a Power Pages/Dynamics 365
+// site, separate host from the SharePoint facility list above) — confirmed
+// live 2026-09-05: a plain server-rendered <select> lists every project
+// currently open for a formal comment period, with an explicit note that
+// "If no projects show up ... it is because no projects have a formal
+// comment period open at this time." This is a genuinely live, real-time
+// "is this project open for comment right now" signal — better than
+// inferring it from anything on the facility list itself, which has no
+// comment-period field at all. The SAME portal URL is also the actual
+// comment-submission form, so it doubles as commentLink whenever a match
+// is found; no start/end dates are published here, only "open now," so
+// commentPeriodStart/End are left null — see normalizeFacility.
+const COMMENT_PORTAL_URL = "https://odoe.powerappsportals.us/en-US/SitingPublicComment/";
+
+// Strips filing-stage suffixes ("NOI" = Notice of Intent, "Energy
+// Facility", "Project") and non-alphanumerics so the portal's own project
+// label ("Big River NOI") can be compared against the facility list's
+// display name ("Big River Energy Facility") — confirmed live 2026-09-05
+// these two names for the same real project share only their "Big River"
+// core after this normalization.
+function coreProjectName(s: string): string {
+  return s
+    .replace(/\bNOI\b/gi, " ")
+    .replace(/\benergy facility\b/gi, " ")
+    .replace(/\bproject\b/gi, " ")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .toLowerCase();
+}
+
+async function fetchOpenCommentProjectNames(): Promise<string[]> {
+  const res = await fetch(COMMENT_PORTAL_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`ODOE siting comment portal request failed (${res.status})`);
+  const html = await res.text();
+  const names: string[] = [];
+  for (const m of html.matchAll(/<option value="[^"]+"[^>]*>([^<]+)<\/option>/g)) {
+    const name = m[1].trim();
+    if (name && name.toLowerCase() !== "select") names.push(name);
+  }
+  return names;
+}
+
+function hasOpenCommentPeriod(facilityTitle: string, openCoreNames: string[]): boolean {
+  const facilityCore = coreProjectName(facilityTitle);
+  if (!facilityCore) return false;
+  return openCoreNames.some((core) => core && (facilityCore.includes(core) || core.includes(facilityCore)));
+}
+
 interface RawFacility {
   Id: number;
   Title: string;
@@ -377,7 +425,7 @@ function cleanCounties(raw: string | null): string | null {
     .join(", ");
 }
 
-function normalizeFacility(facility: RawFacility): NormalizedProject {
+function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]): NormalizedProject {
   const sourceId = String(facility.Id);
   const matchKey = resolveMatchKey("or-efsc", sourceId);
 
@@ -426,6 +474,7 @@ function normalizeFacility(facility: RawFacility): NormalizedProject {
   }
 
   const pageUrl = facility.Page_x0020_URL ? `${PAGE_BASE}/${facility.Page_x0020_URL}` : `${SITE_BASE}/Pages/facilities-under-efsc.aspx`;
+  const openForComment = hasOpenCommentPeriod(facility.Title, openCommentCoreNames);
 
   return {
     matchKey,
@@ -445,6 +494,9 @@ function normalizeFacility(facility: RawFacility): NormalizedProject {
     causeSlugs,
     causeDetail: `Waiting on a site certificate decision from the Oregon Energy Facility Siting Council, administered by the Oregon Department of Energy — ${facility.Title}${detailsText ? `, "${detailsText.slice(0, 300)}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: null,
+    commentPeriodEnd: null,
+    commentLink: openForComment ? COMMENT_PORTAL_URL : null,
     sources: [
       {
         label: `OR EFSC Facility Page: ${facility.Title}`,
@@ -465,6 +517,10 @@ export interface IngestSummary {
 
 export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const allFacilities = await fetchAllFacilities();
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no comment-period data this run."
+  const openCommentNames = await fetchOpenCommentProjectNames().catch(() => [] as string[]);
+  const openCommentCoreNames = openCommentNames.map(coreProjectName);
 
   const candidates = selectWithRotation(
     allFacilities.filter((f) => isPendingCandidate(f.Status_x0020_details)),
@@ -480,7 +536,7 @@ export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Pr
 
   for (const candidate of candidates) {
     try {
-      const normalized = normalizeFacility(candidate);
+      const normalized = normalizeFacility(candidate, openCommentCoreNames);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

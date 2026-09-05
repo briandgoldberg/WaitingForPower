@@ -151,6 +151,43 @@
 // fuelType "other" and county null rather than guessing, consistent with
 // this module's/this series' "confirm, don't guess" rule.
 //
+// HEARING SCHEDULE: the same docketed-case-details page's own client-side JS
+// (see FETCHING above) also renders a "Hearing Schedules" DataTable by
+// calling a second, separate real JSON endpoint on the same companion Azure
+// App Service — confirmed live 2026-09-05:
+//   POST https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/list/hearings
+//   Content-Type: application/json
+//   body: {"txtPageNumber":"1","Id":"<legalCaseId>"}
+// returns a plain JSON array, e.g. (real response for Cause 46443, Indiana
+// Michigan Power's pending CPCN, fetched live 2026-09-05):
+//   [{"iurc_hearingstartdate":"11/20/2026 9:30 AM","iurc_hearingenddate":
+//     "11/20/2026 4:30 PM","iurc_hearingroom":"222","iurc_length":"7.50",
+//     "iurc_hearingtype":"Evidentiary Hearing","iurc_remarks":""}, ...]
+// No CAPTCHA, no auth — same unauthenticated companion API this module
+// already relies on for the search itself. Real hearingtype values
+// confirmed live across several real dockets: "Evidentiary Hearing",
+// "Field Hearing" (an in-person public hearing held in the affected
+// community, e.g. Cause 46193's real Bloomington/Terre Haute field
+// hearings), "Settlement Hearing", and "Attorney Conference" (a private
+// scheduling/status conference between counsel, confirmed NOT open to the
+// public the way the other three are) — EXCLUDED_HEARING_TYPES below
+// excludes only that last one. Fetched only for the same small New/Pending/
+// Appealed subset this module already fetches a Caption for (see FETCHING
+// above), not the full candidate list — matches this module's existing
+// cost discipline, and a resolved docket's hearing history is all in the
+// past by construction anyway. Real live check confirmed both hit and miss:
+// Cause 46443 (Pending) has two genuinely upcoming hearings (11/20/2026,
+// 12/1/2026); Cause 46389 (Pending) has one real hearing on file but it's
+// already in the past (8/17/2026, before this writing's 2026-09-05 "today");
+// Cause 46193 (Appealed) has seven real hearings on file, all in the past
+// (the case's own IURC hearing record ended when its Final Order issued —
+// see module header STATUS — even though the case remains open on appeal in
+// court). Only the earliest still-future entry (of a non-excluded type) is
+// kept, matching this project's standard "only upcoming dates are useful"
+// rule; commentLink points at the docket's own detail page (no per-hearing
+// notice URL is published) since that's the only page a visitor could use
+// to find the hearing's exact room/format.
+//
 // Wired to Vercel Cron weekly, 03:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-in-iurc/route.ts). A real full run (27 candidates
 // within the 6-year lookback, 3 requiring a detail fetch) completed in
@@ -166,6 +203,9 @@ import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } 
 const SEARCH_API_URL =
   "https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/search/advanced";
 const DETAIL_BASE_URL = "https://iurc.portal.in.gov/docketed-case-details/";
+// See module header HEARING SCHEDULE.
+const HEARINGS_API_URL =
+  "https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/list/hearings";
 
 // Confirmed live 2026-08-23 via GET /api/list/petitiontypes and
 // GET /api/list/industrytypes/all on the companion API host above — see
@@ -335,6 +375,45 @@ async function fetchCaption(legalCaseId: string): Promise<string> {
   return stripTags(m[1]);
 }
 
+interface UpcomingHearing {
+  date: Date;
+}
+
+interface HearingApiRow {
+  iurc_hearingstartdate?: string;
+  iurc_hearingtype?: string;
+}
+
+// See module header HEARING SCHEDULE — a private attorney-only scheduling
+// conference, confirmed live not open to the public the way every other
+// real hearingtype value observed (Evidentiary Hearing/Field Hearing/
+// Settlement Hearing) is.
+const EXCLUDED_HEARING_TYPES = new Set(["Attorney Conference"]);
+
+// Real observed format: "11/20/2026 9:30 AM" — parseable directly by the
+// JS Date constructor (confirmed live), unlike this module's own parseMDY
+// (date-only, no time component).
+async function fetchUpcomingHearing(legalCaseId: string): Promise<UpcomingHearing | null> {
+  const res = await fetch(HEARINGS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ txtPageNumber: "1", Id: legalCaseId }),
+  });
+  if (!res.ok) return null;
+  const rows = (await res.json()) as HearingApiRow[];
+  if (!Array.isArray(rows)) return null;
+
+  const now = Date.now();
+  let earliest: Date | null = null;
+  for (const row of rows) {
+    if (!row.iurc_hearingstartdate || EXCLUDED_HEARING_TYPES.has(row.iurc_hearingtype ?? "")) continue;
+    const d = new Date(row.iurc_hearingstartdate);
+    if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
+    if (!earliest || d.getTime() < earliest.getTime()) earliest = d;
+  }
+  return earliest ? { date: earliest } : null;
+}
+
 // Confirmed against real captions of both forms: "VERIFIED PETITION OF X
 // FOR...", "VERIFIED JOINT PETITION OF X AND Y FOR...", and "IN THE MATTER
 // OF THE VERIFIED PETITION OF X FOR...". Parenthetical asides (nicknames,
@@ -494,12 +573,15 @@ function buildCleanupPlaceholder(row: SearchResultRow): NormalizedProject {
     currentStage: "completed",
     causeSlugs: ["local_state_opposition"],
     causeDetail: `Indiana IURC Cause No. ${row.docketNumber} is no longer an open Certificate of Public Convenience and Necessity application awaiting a Commission determination.`,
+    commentPeriodStart: null,
+    commentPeriodEnd: null,
+    commentLink: null,
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };
 }
 
-function buildActiveProject(row: SearchResultRow, caption: string): NormalizedProject {
+function buildActiveProject(row: SearchResultRow, caption: string, hearing: UpcomingHearing | null): NormalizedProject {
   const matchKey = resolveMatchKey("in-iurc", row.docketNumber);
   const applicant = extractApplicant(caption, row.parties.split(",")[0]?.trim() || "Unknown Applicant");
   const projectType = inferProjectType(caption);
@@ -556,6 +638,9 @@ function buildActiveProject(row: SearchResultRow, caption: string): NormalizedPr
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Indiana Utility Regulatory Commission — Cause No. ${row.docketNumber}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? detailUrl(row.legalCaseId) : null,
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };
@@ -593,7 +678,11 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
       const caption = await fetchCaption(row.legalCaseId);
       let normalized: NormalizedProject;
       if (isGenuineNewCpcnApplication(caption)) {
-        normalized = buildActiveProject(row, caption);
+        // See module header HEARING SCHEDULE — a failure here shouldn't
+        // block tracking the underlying application over this
+        // supplementary feature.
+        const hearing = await fetchUpcomingHearing(row.legalCaseId).catch(() => null);
+        normalized = buildActiveProject(row, caption, hearing);
         realApplicationsTracked += 1;
       } else {
         normalized = buildCleanupPlaceholder(row);

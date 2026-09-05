@@ -218,38 +218,45 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
       )}
 
-      {(p.commentPeriodStart || p.commentPeriodEnd || p.commentLink) && (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public comment period</h2>
-          {(p.commentPeriodStart || p.commentPeriodEnd) && (
-            <p className="text-sm text-[var(--text-secondary)]">
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public comment period</h2>
+        <p className="text-sm text-[var(--text-secondary)]">
+          {p.commentPeriodStart || p.commentPeriodEnd ? (
+            <>
               {p.commentPeriodStart &&
                 new Date(p.commentPeriodStart).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
               {p.commentPeriodStart && p.commentPeriodEnd && " – "}
               {p.commentPeriodEnd &&
                 new Date(p.commentPeriodEnd).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
-            </p>
+            </>
+          ) : (
+            "Unknown"
           )}
-          {p.commentLink && (
-            <p className="text-sm mt-2">
-              {/^https?:\/\//.test(p.commentLink) ? (
-                <a href={p.commentLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
-                  Submit a comment
-                </a>
-              ) : (
-                <>
-                  <span className="text-[var(--muted)]">How to comment: </span>
-                  {p.commentLink}
-                </>
-              )}
-            </p>
+        </p>
+        <p className="text-sm mt-2">
+          {p.commentLink ? (
+            /^https?:\/\//.test(p.commentLink) ? (
+              <a href={p.commentLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                Submit a comment
+              </a>
+            ) : (
+              <>
+                <span className="text-[var(--muted)]">How to comment: </span>
+                {p.commentLink}
+              </>
+            )
+          ) : (
+            <>
+              <span className="text-[var(--muted)]">How to comment: </span>Unknown
+            </>
           )}
-          <p className="text-xs text-[var(--muted)] mt-3">
-            Pulled from this project&rsquo;s own docket source. Check the sources below for the
-            latest.
-          </p>
-        </section>
-      )}
+        </p>
+        <p className="text-xs text-[var(--muted)] mt-3">
+          {p.commentPeriodStart || p.commentPeriodEnd || p.commentLink
+            ? "Pulled from this project’s own docket source. Check the sources below for the latest."
+            : "Not available from this project’s data source yet. Check the sources below directly."}
+        </p>
+      </section>
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Sources</h2>

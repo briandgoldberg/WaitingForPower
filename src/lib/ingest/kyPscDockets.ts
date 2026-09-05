@@ -207,6 +207,55 @@ export const MAX_CANDIDATES = 75;
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 
+// psc.ky.gov/Home/_hearings?iMonth={1-12}&iYr={year} is the partial-view
+// endpoint backing the public Hearings calendar page's own AJAX month
+// picker (confirmed live 2026-09-05 by reading that page's own inline
+// script) — a plain table of every hearing/conference that month across
+// ALL case types (water, gas, telecom, etc., not just the electric-siting
+// cases this module tracks), each row already carrying a real
+// "Month D, YYYY H:MM AM/PM" date/time, a Location, and a
+// /Case/ViewCaseFilings/{caseNumber} link. Matched back to a tracked case
+// by its exact case number. Current month + the next 2 are checked each
+// run for reasonable lead time on a hearing scheduled a bit further out.
+const HEARINGS_CALENDAR_URL = (month: number, year: number) => `${BASE_URL}/Home/_hearings?iMonth=${month}&iYr=${year}`;
+const HEARING_ROW_RE =
+  /<td>([^<]+)<\/td>\s*<td[^>]*>\s*<a href='[^']*'>\s*([\d-]+)\s*<\/a>\s*<\/td>\s*<td>([\s\S]*?)<\/td>/g;
+
+interface UpcomingHearing {
+  date: Date;
+  location: string;
+}
+
+function parseHearingDateTime(raw: string): Date | null {
+  const d = new Date(raw.trim());
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, UpcomingHearing>> {
+  const now = new Date();
+  const map = new Map<string, UpcomingHearing>();
+  for (let offset = 0; offset < 3; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const res = await fetch(HEARINGS_CALENDAR_URL(d.getMonth() + 1, d.getFullYear()), {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (!res.ok) continue;
+    const html = await res.text();
+    for (const m of html.matchAll(HEARING_ROW_RE)) {
+      const [, dateRaw, caseNumberRaw, locationRaw] = m;
+      const caseNumber = caseNumberRaw.trim();
+      const date = parseHearingDateTime(dateRaw);
+      if (!date || date.getTime() <= now.getTime()) continue;
+      const location = locationRaw.replace(/<br\s*\/?>/gi, ", ").replace(/\s+/g, " ").trim();
+      const existing = map.get(caseNumber);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(caseNumber, { date, location });
+      }
+    }
+  }
+  return map;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -416,7 +465,7 @@ function extractCounty(nature: string): string | null {
 const EXCLUDE_RE =
   /\bHEADQUARTERS\b|\bCOOLING TOWER\b|\bADVANCED METERING INFRASTRUCTURE\b|\bFIBER NETWORK\b|\bBROADBAND\b|\bDISPOSE OF PROPERTY\b|\bSELL(?:ING)? ITS EXISTING\b|\bDEMAND-SIDE MANAGEMENT\b|\bENVIRONMENTAL (?:COMPLIANCE PLAN|SURCHARGE)\b/i;
 
-function normalizeCase(detail: CaseDetail): NormalizedProject {
+function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, UpcomingHearing>): NormalizedProject {
   const matchKey = resolveMatchKey("ky-psc", detail.caseNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(detail.nature);
   const capacityMw = extractCapacityMw(detail.nature);
@@ -430,6 +479,7 @@ function normalizeCase(detail: CaseDetail): NormalizedProject {
   } else currentStage = "local_review";
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const hearing = upcomingHearings.get(detail.caseNumber);
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Kentucky Public Service Commission's public case search and case detail pages (Certificate of Public Convenience and Necessity / Certificate of Construction dockets).",
@@ -469,6 +519,9 @@ function normalizeCase(detail: CaseDetail): NormalizedProject {
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity / Certificate of Construction from the Kentucky Public Service Commission — Case No. ${detail.caseNumber}, "${detail.nature}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? `${BASE_URL}/Case/ViewCaseFilings/${detail.caseNumber}` : null,
     sources: [
       {
         label: `KY PSC Case No. ${detail.caseNumber}`,
@@ -498,6 +551,9 @@ export async function ingestKyPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const selected = selectWithRotation(allCaseNumbers, maxCandidates, ROTATING_RECENT_SLOTS);
   const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing>());
 
   for (const caseNumber of selected) {
     try {
@@ -509,7 +565,7 @@ export async function ingestKyPscDockets(maxCandidates = MAX_CANDIDATES): Promis
         continue;
       }
       realApplicationCandidates += 1;
-      const normalized = normalizeCase(detail);
+      const normalized = normalizeCase(detail, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(caseNumber)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

@@ -204,7 +204,7 @@ export function MethodologyPanel() {
         </p>
       </section>
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+      <section id="data-sources" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-lg font-semibold mb-2">Data &amp; sourcing</h2>
         <p className="text-sm mb-4">
           Every project on this site comes from one of the public data sources below, refreshed on

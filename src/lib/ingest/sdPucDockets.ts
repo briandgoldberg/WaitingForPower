@@ -66,6 +66,44 @@
 // years) — well under a minute end-to-end, negligible against the 300s
 // cron budget.
 //
+// HEARING/MEETING CALENDAR: SD PUC has no separate technical-hearing
+// process the way CT CSC or VT PUC do — the three commissioners themselves
+// take up (and, per the docket's own "Orders:" history, ultimately grant or
+// deny) each pending matter at the Commission's own regular biweekly
+// "Commission Meeting," confirmed live 2026-09-05 by reading a real posted
+// agenda (puc.sd.gov/agendas/2026/0908.aspx: "South Dakota Public Utilities
+// Commission Meeting, September 8, 2026, at 1:30 p.m. CDT," with the site's
+// own text inviting docket participants to "participate in docket
+// discussion at the Commission Meeting" by phone or in person) — this is SD
+// PUC's own real, practical equivalent of a public hearing/comment-period
+// date for this module's purposes, not a separate distinct event type.
+// puc.sd.gov/agendas/{year}/default.aspx (a plain server-rendered index,
+// separate from the docket system fetched above) hand-lists every
+// Commission Meeting date for that year as a plain-text link ("<a
+// href="0908.aspx">September 8, 2026, Agenda of Commission Meeting</a>") —
+// the meeting date itself is right there in the index's own link text, no
+// need to parse each agenda page's title separately. Only entries dated
+// after "now" are fetched (see fetchUpcomingAgendaHearings); confirmed live
+// this index only ever lists a meeting once its agenda has actually been
+// posted (as of 2026-09-05, the index for 2026 ends at 0908.aspx, the very
+// next meeting — there is no batch of not-yet-real placeholder future dates
+// to accidentally fetch), so this stays cheap (typically 1-2 extra GETs)
+// without any explicit cap. Each such agenda page lists every docket up for
+// discussion that day as a plain `<a href="https://puc.sd.gov/Dockets/
+// Electric/{year}/{docketNumber}.aspx"><strong>{docketNumber}</strong></a>`
+// — the exact same "EL{YY}-{NNN}" docket-number format this module already
+// matches on, confirmed live against real past agendas: EL26-014 (Crowned
+// Ridge Energy Storage I, one of this module's own real tracked candidates)
+// appeared on both the 2026-07-28 and 2026-08-11 agendas, proving this
+// mechanism finds a real tracked candidate's real meeting date when one is
+// actually scheduled. Matched back to a tracked candidate by that exact
+// docket-number text, never by fuzzy name matching. Real, confirmed-live
+// 2026-09-05: of this module's own real tracked candidate population, 0
+// currently appear on the one agenda page posted at fetch time (2026/
+// 0908.aspx, which only covered EL24-027 and EL26-024 — neither a real
+// construction-permit candidate this module tracks) — a real, honest null
+// result for this run, not a sign the mechanism doesn't work.
+//
 // Wired to Vercel Cron weekly (see vercel.json and
 // src/app/api/cron/ingest-sd-puc/route.ts — left for the maintainer to
 // finalize the schedule and route).
@@ -120,6 +158,62 @@ async function fetchText(url: string): Promise<string> {
     throw new Error(`SD PUC request failed (${res.status}): ${url}`);
   }
   return res.text();
+}
+
+// See module header HEARING/MEETING CALENDAR. A separate site section
+// (puc.sd.gov/agendas/, not puc.sd.gov/Dockets/ above) hand-lists every
+// Commission Meeting date for a given year as a plain link — confirmed live
+// 2026-09-05 against a real puc.sd.gov/agendas/2026/default.aspx response.
+const AGENDA_BASE_URL = "https://puc.sd.gov/agendas";
+const AGENDA_INDEX_RE = /<a href="([^"]+\.aspx)">([A-Za-z]+ \d{1,2}, \d{4}),[^<]*Agenda of Commission Meeting<\/a>/g;
+// Confirmed live 2026-09-05 against real posted agenda pages (e.g.
+// 2026/0908.aspx) — each docket up for discussion that day is a plain
+// anchor whose href is this exact absolute URL shape and whose own link
+// text is the docket number.
+const AGENDA_DOCKET_RE = /<a href="https:\/\/puc\.sd\.gov\/Dockets\/Electric\/\d{4}\/(EL\d{2}-\d{3})\.aspx"><strong>\1<\/strong><\/a>/g;
+
+interface UpcomingAgendaHearing {
+  date: Date;
+  link: string;
+}
+
+async function fetchUpcomingAgendaHearings(): Promise<Map<string, UpcomingAgendaHearing>> {
+  const now = Date.now();
+  const currentYear = new Date().getFullYear();
+  const map = new Map<string, UpcomingAgendaHearing>();
+
+  for (const year of [currentYear, currentYear + 1]) {
+    let indexHtml: string;
+    try {
+      indexHtml = await fetchText(`${AGENDA_BASE_URL}/${year}/default.aspx`);
+    } catch {
+      continue; // next year's index folder may not exist yet — not an error
+    }
+    const futureAgendaUrls: { url: string; date: Date }[] = [];
+    for (const m of indexHtml.matchAll(AGENDA_INDEX_RE)) {
+      const [, href, dateText] = m;
+      const date = new Date(dateText);
+      if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+      futureAgendaUrls.push({ url: `${AGENDA_BASE_URL}/${year}/${href}`, date });
+    }
+    for (const { url, date } of futureAgendaUrls) {
+      await sleep(REQUEST_DELAY_MS);
+      let agendaHtml: string;
+      try {
+        agendaHtml = await fetchText(url);
+      } catch {
+        continue;
+      }
+      for (const m of agendaHtml.matchAll(AGENDA_DOCKET_RE)) {
+        const docketNumber = m[1];
+        const existing = map.get(docketNumber);
+        if (!existing || date.getTime() < existing.date.getTime()) {
+          map.set(docketNumber, { date, link: url });
+        }
+      }
+    }
+  }
+  return map;
 }
 
 interface DocketListing {
@@ -262,7 +356,10 @@ function extractApplicant(rawTitleHtml: string): string | null {
   return names.join(" and ");
 }
 
-async function normalizeCandidate(listing: DocketListing): Promise<NormalizedProject> {
+async function normalizeCandidate(
+  listing: DocketListing,
+  upcomingAgendaHearings: Map<string, UpcomingAgendaHearing>,
+): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
   const ordersText = await fetchOrdersSectionText(listing.year, listing.docketNumber);
   const currentStage = resolveStage(ordersText);
@@ -274,6 +371,7 @@ async function normalizeCandidate(listing: DocketListing): Promise<NormalizedPro
   const counties = extractCounties(listing.rawTitle);
   const applicant = extractApplicant(listing.rawTitleHtml);
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const hearing = upcomingAgendaHearings.get(listing.docketNumber);
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the South Dakota Public Utilities Commission's public docket pages, scoped to Energy Conversion and Transmission Facility permit applications (SDCL 49-41B) filed in the Electric docket series — see the ingestion module header for the real caption phrasings this is scoped to.",
@@ -308,6 +406,9 @@ async function normalizeCandidate(listing: DocketListing): Promise<NormalizedPro
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility permit from the South Dakota Public Utilities Commission, pursuant to SDCL 49-41B — Docket No. ${listing.docketNumber}, "${listing.rawTitle.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `SD PUC Docket No. ${listing.docketNumber}`,
@@ -354,10 +455,14 @@ export async function ingestSdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingAgendaHearings = await fetchUpcomingAgendaHearings().catch(() => new Map<string, UpcomingAgendaHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   for (const listing of realApplications) {
     try {
-      const normalized = await normalizeCandidate(listing);
+      const normalized = await normalizeCandidate(listing, upcomingAgendaHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(listing)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

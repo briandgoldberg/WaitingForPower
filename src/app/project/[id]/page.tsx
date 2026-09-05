@@ -245,7 +245,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </p>
           )}
           <p className="text-xs text-[var(--muted)] mt-3">
-            Pulled from this project&rsquo;s own docket source — check the sources below for the
+            Pulled from this project&rsquo;s own docket source. Check the sources below for the
             latest.
           </p>
         </section>

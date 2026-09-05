@@ -170,6 +170,38 @@
 // capacity — flagged in dataQualityNote like every other approximate
 // figure in this series, not specially distinguished.
 //
+// HEARING CALENDAR: a separate, plain (non-Cloudflare) page on the
+// Commission's own public-facing site — www.ncuc.gov/Hearings/hearings.html,
+// NOT starw1.ncuc.gov above — publishes a real "Select Proceedings with
+// Hearings Scheduled" table, confirmed live 2026-09-05 via a plain `fetch()`
+// (no Cloudflare challenge on this host, unlike starw1.ncuc.gov). Each row
+// gives a real M/D/YYYY hearing date, one or more docket-number links in
+// EXACTLY this module's own `docketNumber` format (confirmed live:
+// "EMP-127 Sub 0", a real EGC-type candidate — Merry Hill PV I, LLC's 110 MW
+// solar CPCN — appears twice, a 9/24/2026 Public Witness Hearing and a
+// 10/12/2026 Expert Witness Hearing, both real, both still upcoming as of
+// this writing), and a link to that hearing's own notice
+// (starw1.ncuc.gov/NCUC/ViewFile.aspx?Id=...). A real, confirmed gotcha: the
+// page's HTML is littered with past hearings wrapped in real `<!-- -->` HTML
+// comments (the Commission's own way of "removing" an old row without
+// deleting it) interleaved with live, uncommented rows for current/future
+// hearings — comments are stripped first, before this module's own row
+// parsing runs, or those dead rows would be read as real. A second real
+// gotcha: some real rows mark themselves `<span style="color:red">Canceled
+// </span>` inside the date cell rather than being removed — these are
+// skipped explicitly, not just filtered by date, since a canceled hearing's
+// own date can still be in the future at the time this module runs. Rows are
+// sliced between consecutive date matches (rather than trusted `<tr>...
+// </tr>` boundaries) specifically because a real stray, contentless extra
+// `<tr>` was found live sitting between two real rows (immediately before
+// the 9/09/2026 W-1264... row) — a `<tr>`-bounded parse would have been one
+// row off from that point on. Matched back to this module's own candidates
+// by exact docket number (e.g. "EMP-127 Sub 0"), never by name — see
+// fetchUpcomingHearingsByDocket below. The second table further down the
+// same page ("Proceedings Awaiting Decision") has no date column at all and
+// is deliberately excluded by bounding the parse to end where that second
+// heading begins.
+//
 // NOT WIRED TO CRON YET, same as the other per-state modules. Also
 // politeness-delayed between per-candidate Orders requests.
 
@@ -237,6 +269,65 @@ const BROWSER_HEADERS: Record<string, string> = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
   "Accept-Language": "en-US,en;q=0.9",
 };
+
+// See module header HEARING CALENDAR — a plain, non-Cloudflare page on the
+// Commission's public site, separate from the starw1.ncuc.gov docket portal.
+const HEARINGS_URL = "https://www.ncuc.gov/Hearings/hearings.html";
+const HEARING_NOTICE_RE = /<a href="(https:\/\/starw1\.ncuc\.gov\/NCUC\/ViewFile\.aspx\?Id=[^"]+)"/;
+const HEARING_DOCKET_RE = /DocketDetails\.aspx\?DocketId=[^"]+">([^<]+)<\/a>/g;
+const HEARING_DATE_RE = /\d{1,2}\/\d{1,2}\/\d{4}/g;
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+function stripHtmlComments(html: string): string {
+  return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+// See module header HEARING CALENDAR for the real row-boundary and
+// HTML-comment gotchas this parsing approach was built to survive.
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(HEARINGS_URL, { headers: BROWSER_HEADERS });
+  if (!res.ok) throw new Error(`NCUC hearings page request failed (${res.status})`);
+  const html = await res.text();
+
+  const startIdx = html.indexOf("Select Proceedings with Hearings Scheduled");
+  const endIdx = html.indexOf("Proceedings Awaiting Decision", startIdx);
+  if (startIdx === -1 || endIdx === -1) {
+    throw new Error(
+      "NCUC hearings page didn't contain the expected section headers — the page structure likely changed. Check fetchUpcomingHearingsByDocket in src/lib/ingest/ncNcucDockets.ts against a fresh response.",
+    );
+  }
+  const tableHtml = stripHtmlComments(html.slice(startIdx, endIdx));
+
+  const map = new Map<string, UpcomingHearing>();
+  const now = Date.now();
+  const dateMatches = [...tableHtml.matchAll(HEARING_DATE_RE)];
+  for (let i = 0; i < dateMatches.length; i++) {
+    const m = dateMatches[i];
+    const rowStart = m.index ?? 0;
+    const rowEnd = i + 1 < dateMatches.length ? (dateMatches[i + 1].index ?? tableHtml.length) : tableHtml.length;
+    const row = tableHtml.slice(rowStart, rowEnd);
+    if (/Canceled/i.test(row)) continue;
+
+    const date = parseShortDate(m[0]);
+    if (!date || date.getTime() <= now) continue;
+
+    const noticeMatch = HEARING_NOTICE_RE.exec(row);
+    const link = noticeMatch ? noticeMatch[1] : HEARINGS_URL;
+
+    for (const docketMatch of row.matchAll(HEARING_DOCKET_RE)) {
+      const docketNumber = decodeHtmlEntities(docketMatch[1]);
+      const existing = map.get(docketNumber);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(docketNumber, { date, link });
+      }
+    }
+  }
+  return map;
+}
 
 type FormFields = [string, string][];
 
@@ -540,8 +631,13 @@ function extractApplicant(caption: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-function normalizeDocket(candidate: DocketCandidate, resolution: DocketResolution): NormalizedProject {
+function normalizeDocket(
+  candidate: DocketCandidate,
+  resolution: DocketResolution,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("nc-ncuc", candidate.docketNumber);
+  const hearing = upcomingHearings.get(candidate.docketNumber);
   const projectType = inferProjectType(candidate.caption);
   const fuelType = inferFuelType(candidate.caption, projectType);
   const capacityMw = extractCapacityMw(candidate.caption);
@@ -594,6 +690,9 @@ function normalizeDocket(candidate: DocketCandidate, resolution: DocketResolutio
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the North Carolina Utilities Commission — Docket No. ${candidate.docketNumber}, "${candidate.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `NC NCUC Docket No. ${candidate.docketNumber}`,
@@ -620,13 +719,17 @@ export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promi
   const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const candidate of candidates) {
     try {
       const resolution = await fetchResolution(session, candidate.docketNumber);
-      const normalized = normalizeDocket(candidate, resolution);
+      const normalized = normalizeDocket(candidate, resolution, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

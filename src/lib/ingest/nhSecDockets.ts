@@ -90,6 +90,34 @@
 //     both the earliest date (application filed date) and any resolution
 //     language (STATUS), never assuming strict order.
 //
+// HEARING CALENDAR: puc.nh.gov (the same site hosting the Virtual File Room
+// above, not a separate agency) also publishes a real, structured public
+// hearing calendar at /public-participation/public-utilities-commission-
+// calendar — confirmed live 2026-09-05. The page itself renders its event
+// list client-side via a Tabulator JS table; reading that page's own
+// events-upcoming.js revealed the real data source: a plain,
+// unauthenticated JSON endpoint, GET /content/api/events, requiring no
+// cookie/session bootstrap (confirmed: a cookieless fetch succeeds first
+// try). Its response is a flat, single-page array (115 events total as of
+// this writing, no pagination needed) of every scheduled PUC/SEC event —
+// each with a real event title (e.g. "SEC 26-005 Nautilus Generation, LLC
+// and Vistra Operations Company - Hearing & Public Mtg") and a genuine Unix
+// `start_time` (verified against the same event's own `fields.field_date_
+// range` ISO string that the rendered page displays — the two agree once
+// timezone is accounted for, confirming `start_time` is a real UTC instant,
+// not a display artifact). Matched back to a tracked docket by extracting
+// any "SEC NN-NNN" substring from the event's own title (the same
+// docketNumber format this module already uses), never by fuzzy applicant-
+// name matching. As of 2026-09-05 the only SEC-prefixed event in this feed's
+// entire history is that one "SEC 26-005 ... Hearing & Public Mtg" —
+// already in the past (2026-04-17), and for a docket this module already
+// excludes from scoping anyway (SEC 26-005 is the ownership-transfer
+// petition, see SCOPING below) — so a real run against this module's one
+// actual tracked candidate (SEC 25-072) correctly finds zero upcoming
+// hearings today. Kept wired, not removed, for the next SEC docket that gets
+// a hearing scheduled while still genuinely open — see
+// fetchUpcomingSecHearings.
+//
 // LOOKBACK / SEC_ERA_START_YEAR: this module only ever fetches
 // DocketBook.aspx for years from SEC_ERA_START_YEAR (2025) through the
 // current year — not a volume-control measure but a correctness one,
@@ -290,6 +318,49 @@ function stripHtml(html: string): string {
   return decodeHtmlEntities(html.replace(/<[^>]+>/g, " "));
 }
 
+// See module header HEARING CALENDAR.
+const EVENTS_API_URL = "https://www.puc.nh.gov/content/api/events?sort=field_date_range|desc";
+const SEC_DOCKET_IN_TITLE_RE = /\bSEC\s+\d{2}-\d{3}\b/g;
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+interface PucEventItem {
+  title: string;
+  start_time: number;
+}
+
+async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(EVENTS_API_URL, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`NH PUC events API request failed (${res.status})`);
+  const json = (await res.json()) as { data?: PucEventItem[] };
+  if (!Array.isArray(json.data)) {
+    throw new Error(
+      'NH PUC events API response had no "data" array -- the endpoint shape likely changed. Check fetchUpcomingSecHearings in src/lib/ingest/nhSecDockets.ts against a fresh response.',
+    );
+  }
+
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+  for (const item of json.data) {
+    const date = new Date(item.start_time * 1000);
+    if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+    for (const m of item.title.matchAll(SEC_DOCKET_IN_TITLE_RE)) {
+      const docketNumber = m[0];
+      const existing = map.get(docketNumber);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(docketNumber, {
+          date,
+          link: `${BASE_URL}/Docket.aspx?DocketNumber=${encodeURIComponent(docketNumber)}`,
+        });
+      }
+    }
+  }
+  return map;
+}
+
 interface DocketBookRow {
   docketNumber: string;
   petitioner: string;
@@ -479,8 +550,13 @@ function extractCounties(text: string): string[] {
   return found;
 }
 
-function normalizeCandidate(row: DocketBookRow, filings: DocketFiling[]): NormalizedProject {
+function normalizeCandidate(
+  row: DocketBookRow,
+  filings: DocketFiling[],
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("nh-sec", row.docketNumber);
+  const hearing = upcomingHearings.get(row.docketNumber);
 
   const filingTitles = filings.map((f) => f.title).join(" ");
   const combinedText = `${row.description} ${filingTitles}`;
@@ -538,6 +614,9 @@ function normalizeCandidate(row: DocketBookRow, filings: DocketFiling[]): Normal
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Site and Facility (or related siting approval) from the New Hampshire Site Evaluation Committee — Docket ${row.docketNumber}, "${row.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `NH Docket ${row.docketNumber}`,
@@ -574,13 +653,17 @@ export async function ingestNhSecDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary -- degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingSecHearings().catch(() => new Map<string, UpcomingHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const row of realCandidates) {
     try {
       const filings = await fetchDocketFilings(row.docketNumber);
-      const normalized = normalizeCandidate(row, filings);
+      const normalized = normalizeCandidate(row, filings, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

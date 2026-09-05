@@ -94,6 +94,10 @@ export interface NormalizedProject {
   queueCluster?: string | null;
   /** LBNL Queued Up's own point-of-interconnection name — see schema.prisma. */
   pointOfInterconnection?: string | null;
+  /** Structured public-comment-window/how-to-comment fields — see schema.prisma. */
+  commentPeriodStart?: Date | null;
+  commentPeriodEnd?: Date | null;
+  commentLink?: string | null;
   isAggregateExample?: boolean;
   estimatedMwDelayed?: number | null;
   dataQualityNote?: string | null;
@@ -350,6 +354,9 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     primeMoverCode: keepIfMergedAndNull(p.primeMoverCode, existing?.primeMoverCode),
     queueCluster: keepIfMergedAndNull(p.queueCluster, existing?.queueCluster),
     pointOfInterconnection: keepIfMergedAndNull(p.pointOfInterconnection, existing?.pointOfInterconnection),
+    commentPeriodStart: keepIfMergedAndNull(p.commentPeriodStart, existing?.commentPeriodStart),
+    commentPeriodEnd: keepIfMergedAndNull(p.commentPeriodEnd, existing?.commentPeriodEnd),
+    commentLink: keepIfMergedAndNull(p.commentLink, existing?.commentLink),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,

@@ -199,36 +199,23 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // One-time editorial synthesis from src/lib/research/projectResearch.ts —
-  // an LLM reads this project's own docket filings (via ProjectSource
-  // below) and pulls out the arguments actually on the record, both for and
-  // against. Deliberately never refreshed after the first pass (see
-  // researchedAt) — the record accretes new filings constantly and keeping
-  // this current would mean re-running the LLM pass forever; a one-time
-  // snapshot sourced from the real filings is still more useful than
-  // nothing. String arrays, stored as Json since Postgres text[] can't hold
-  // Prisma's Json type and these are small, display-only lists.
-  reasonsFor     Json?
-  reasonsAgainst Json?
-
-  // The most recently on-record public comment window this same research
-  // pass could find in the docket filings, if any. Likely to go stale
-  // between the research pass and a visitor reading it — this is a
-  // one-time extraction, not a live-tracked field like currentStage — so
-  // always paired with a link back to the real docket rather than treated
-  // as authoritative on its own.
+  // Public comment window and how to submit a comment, straight from the
+  // project's own docket source — no LLM, no separate research pass. Only
+  // populated for sources whose own ingestion module parses structured
+  // comment-period/hearing data off the page it already fetches every
+  // regular run (currently: src/lib/ingest/waEfsecFacilities.ts,
+  // src/lib/ingest/ohOpsbCases.ts — see each module's header for exactly
+  // what it parses). Null for every other source until a module adds
+  // support for it. Refreshed on every normal ingestion run for a
+  // supporting source, same as currentStage — NOT a one-time snapshot, so
+  // a closed comment window disappears on the next run rather than
+  // lingering stale.
   commentPeriodStart DateTime?
   commentPeriodEnd   DateTime?
   // How to actually submit a comment, exactly as the docket itself
   // publishes it — an email address, a web form URL, or a mailing address.
   // Free text (not a URL type) because the shape varies by agency.
   commentLink String?
-
-  // When the one-time research pass above ran — also the gate that keeps
-  // it from ever re-running: the research cron only picks up rows where
-  // this is null, so a project that had no reasons/comment info to find
-  // still gets marked done and isn't retried every run.
-  researchedAt DateTime?
 
   causes     ProjectCause[]
   sources    ProjectSource[]
@@ -241,7 +228,6 @@ model Project {
   @@index([currentStage])
   @@index([verificationStatus])
   @@index([noLongerReported])
-  @@index([researchedAt])
 }
 
 // A visitor's "green-light or red-light this" call on one project — do you

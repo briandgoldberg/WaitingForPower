@@ -192,10 +192,6 @@
     {
       "path": "/api/cron/ingest-wy-isc",
       "schedule": "30 14 * * *"
-    },
-    {
-      "path": "/api/cron/research-projects",
-      "schedule": "45 * * * *"
     }
   ]
 }

@@ -138,6 +138,40 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
+interface CommentPeriod {
+  start: Date;
+  end: Date;
+  link: string;
+}
+
+// EFSEC's own sitewide /hearings-and-meetings page (a single Drupal View,
+// confirmed by hand 2026-09-05) lists every hearing/comment-period event
+// across all facilities, each row classed "views-row comment-{status}" or
+// "views-row event-{status}" (status observed so far: "past", "upcoming" —
+// "current" is inferred from the same naming convention but not yet seen
+// live). Far cheaper than checking each facility's own detail page for
+// this: one fetch covers every facility at once. Only non-"past" comment
+// rows are kept — a closed comment period isn't something to surface as
+// open. Matched back to a facility by the row's own bold facility-name
+// prefix (before " - [Comment period]"), trailing "*" stripped — EFSEC
+// marks every facility name with a trailing asterisk in this feed,
+// confirmed against "Cascade Renewable Transmission*".
+const COMMENT_ROW_RE =
+  /<div class="views-row comment-(?!past)[a-z]+">[\s\S]*?<strong>([^<]+?)\*?<\/strong>\s*-\s*\[Comment period\][\s\S]*?<time datetime="([^"]+)"[\s\S]*?<time datetime="([^"]+)"[\s\S]*?<h6 class="field-content"><a href="([^"]+)"/g;
+
+async function fetchActiveCommentPeriodsByFacilityName(): Promise<Map<string, CommentPeriod>> {
+  const html = await fetchText(`${BASE_URL}/hearings-and-meetings`);
+  const map = new Map<string, CommentPeriod>();
+  for (const m of html.matchAll(COMMENT_ROW_RE)) {
+    const [, facilityName, startIso, endIso, href] = m;
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    map.set(facilityName.trim(), { start, end, link: `${BASE_URL}${href}` });
+  }
+  return map;
+}
+
 interface FacilitySummary {
   slug: string;
   nodeId: string | null;
@@ -334,7 +368,11 @@ function cleanCounty(raw: string | null): string | null {
     .join(", ");
 }
 
-function normalizeFacility(summary: FacilitySummary, detail: FacilityDetail): NormalizedProject {
+function normalizeFacility(
+  summary: FacilitySummary,
+  detail: FacilityDetail,
+  commentPeriodsByFacilityName: Map<string, CommentPeriod>,
+): NormalizedProject {
   const sourceId = summary.nodeId ?? summary.slug;
   const matchKey = resolveMatchKey("wa-efsec", sourceId);
 
@@ -349,6 +387,7 @@ function normalizeFacility(summary: FacilitySummary, detail: FacilityDetail): No
   const fuelType = inferFuelType(summary.types);
   const county = cleanCounty(summary.county);
   const filedDate = parseMonthYear(detail.filedRaw);
+  const commentPeriod = commentPeriodsByFacilityName.get(summary.name);
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -400,6 +439,9 @@ function normalizeFacility(summary: FacilitySummary, detail: FacilityDetail): No
     causeSlugs,
     causeDetail: `Waiting on a site certification decision from the Washington Energy Facility Site Evaluation Council — ${summary.name}${detail.description ? `, "${detail.description}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: commentPeriod?.start ?? null,
+    commentPeriodEnd: commentPeriod?.end ?? null,
+    commentLink: commentPeriod?.link ?? null,
     sources: [
       {
         label: `EFSEC Facility Page: ${summary.name}`,
@@ -421,6 +463,12 @@ export interface IngestSummary {
 export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const listHtml = await fetchText(`${BASE_URL}/facilities`);
   const allFacilities = parseFacilityList(listHtml);
+  // One fetch covers every facility's active comment periods — see
+  // fetchActiveCommentPeriodsByFacilityName's header. A failure here
+  // shouldn't block the whole ingestion run over a feature this
+  // supplementary, so it degrades to "no comment period data this run"
+  // rather than failing every candidate.
+  const commentPeriodsByFacilityName = await fetchActiveCommentPeriodsByFacilityName().catch(() => new Map<string, CommentPeriod>());
 
   const candidates = selectWithRotation(
     allFacilities.filter((f) => f.status === "Application review"),
@@ -436,7 +484,7 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   for (const candidate of candidates) {
     try {
       const detail = await fetchFacilityDetail(candidate.slug);
-      const normalized = normalizeFacility(candidate, detail);
+      const normalized = normalizeFacility(candidate, detail, commentPeriodsByFacilityName);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

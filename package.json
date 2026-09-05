@@ -9,7 +9,6 @@
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "research:projects": "tsx src/lib/research/projectResearch.ts",
     "ingest:eia": "tsx src/lib/ingest/eia860mPlanned.ts",
     "ingest:permitting-dashboard": "tsx src/lib/ingest/permittingDashboard.ts",
     "ingest:lbnl": "tsx src/lib/ingest/lbnlQueuedUp.ts",

@@ -76,8 +76,6 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     pointOfInterconnection: p.pointOfInterconnection,
     greenVotes: p.verdicts?.filter((v) => v.vote === "green").length ?? 0,
     redVotes: p.verdicts?.filter((v) => v.vote === "red").length ?? 0,
-    reasonsFor: Array.isArray(p.reasonsFor) ? (p.reasonsFor as string[]) : [],
-    reasonsAgainst: Array.isArray(p.reasonsAgainst) ? (p.reasonsAgainst as string[]) : [],
     commentPeriodStart: p.commentPeriodStart ? p.commentPeriodStart.toISOString() : null,
     commentPeriodEnd: p.commentPeriodEnd ? p.commentPeriodEnd.toISOString() : null,
     commentLink: p.commentLink,

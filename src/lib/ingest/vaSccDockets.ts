@@ -17,6 +17,14 @@
 //   - Search: {Host}/CASES_ESTABDATE/GetCasesEstDate — OData $filter/$select/
 //     $orderby/$top all work. See src/lib/ingest/README.md for the exact
 //     search-source discovery trail.
+//   - Activities (per case): {Host}/CaseDetails/GetActivities returns a
+//     Hearing_Time/Location/Web_Cast field alongside each activity —
+//     confirmed live 2026-09-05 real and populated (not just present in
+//     the schema) on several past "Hearing"/"Hearing Continued" entries
+//     (e.g. Case PUR-2021-00085: "10:00 AM" at "SCC 2nd Floor Court
+//     Room"), null on every non-hearing activity type. Used to surface
+//     the next still-upcoming hearing as commentPeriodStart/commentLink —
+//     see findNextHearing below.
 //   - Detail (per case, via MATTER_NO): {Host}/CaseDetails/GetDetail,
 //     GetActivities, GetParticipants, GetDocuments.
 // IMPORTANT — confirmed the hard way 2026-08-23: these detail endpoints do
@@ -153,6 +161,12 @@ interface CaseActivity {
   Activity: string;
   Activity_Status: string;
   Activity_Date: string;
+  // Real, confirmed-live 2026-09-05 against several past hearings (e.g.
+  // Case PUR-2021-00085: "10:00 AM" / "SCC 2nd Floor Court Room") — only
+  // populated on an "Activity" whose name contains "Hearing", null on
+  // every other activity type. See findNextHearing below.
+  Hearing_Time: string | null;
+  Location: string | null;
 }
 
 interface CaseParticipant {
@@ -281,6 +295,7 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     if (!date) continue;
     milestones.push({ date, dateConfidence: "exact", stage: a.Activity_Status, description: a.Activity });
   }
+  const nextHearing = findNextHearing(activities, new Date());
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Virginia State Corporation Commission's public docket search — an \"unofficial\" copy per the SCC's own disclaimer, provided for public convenience.",
@@ -314,6 +329,9 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Virginia State Corporation Commission — case ${search.Case_Number}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: nextHearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: nextHearing ? `https://scc.virginia.gov/docketsearch/#/caseDetails/${search.MATTER_NO}` : null,
     sources: [
       {
         label: `Virginia SCC Case ${search.Case_Number}`,
@@ -335,6 +353,45 @@ function parseUsDate(raw: string | null | undefined): Date | null {
   const [, mm, dd, yyyy] = m;
   const d = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// "10:00 AM" / "10:00AM " (no space, trailing space — both confirmed live)
+// combined onto Activity_Date's own UTC-midnight Date. No timezone stated
+// (SCC is implicitly Eastern); same wall-clock-as-literal tradeoff every
+// other source in this series makes where full precision isn't published.
+function combineDateAndHearingTime(dateOnly: Date, hearingTime: string): Date | null {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(hearingTime.trim());
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = Number(m[2]);
+  const isPM = /pm/i.test(m[3]);
+  if (isPM && hour !== 12) hour += 12;
+  if (!isPM && hour === 12) hour = 0;
+  return new Date(Date.UTC(dateOnly.getUTCFullYear(), dateOnly.getUTCMonth(), dateOnly.getUTCDate(), hour, minute));
+}
+
+interface NextHearing {
+  date: Date;
+  location: string | null;
+}
+
+// Only an activity whose name contains "Hearing" AND has a real
+// Hearing_Time counts — Activity_Status isn't used to distinguish
+// upcoming from past (both "No Action" and "Completed" were observed on
+// real future-dated hearings in this series' own research — see module
+// header), so the date itself (still in the future) is the only reliable
+// signal.
+function findNextHearing(activities: CaseActivity[], now: Date): NextHearing | null {
+  let next: NextHearing | null = null;
+  for (const a of activities) {
+    if (!/hearing/i.test(a.Activity) || !a.Hearing_Time) continue;
+    const dateOnly = parseUsDate(a.Activity_Date);
+    if (!dateOnly) continue;
+    const dt = combineDateAndHearingTime(dateOnly, a.Hearing_Time);
+    if (!dt || dt.getTime() <= now.getTime()) continue;
+    if (!next || dt.getTime() < next.date.getTime()) next = { date: dt, location: a.Location };
+  }
+  return next;
 }
 
 export interface IngestSummary {

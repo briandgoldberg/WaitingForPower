@@ -163,11 +163,6 @@ function parseHearingDateTime(raw: string, now: Date): Date | null {
   return candidate;
 }
 
-// OPSB's generic case contact form — confirmed by hand: every case detail
-// page carries the same "Have questions or comments about this Case? Send
-// us a message!" link to this same URL, not a per-case submission portal.
-const OPSB_CONTACT_URL = "https://opsb.ohio.gov/wps/wcm/connect/gov/ohio+content+english/opsb/help-center/contact-us";
-
 // Only the earliest still-upcoming hearing is surfaced — a case can list
 // both a past "Local public hearing" and a future "Evidentiary hearing" (or
 // vice versa once the local hearing is rescheduled), and only a future date
@@ -285,7 +280,7 @@ function normalizeCase(c: OpsbCase, nextHearing: Date | null): NormalizedProject
     dataQualityNote: dataQualityNoteParts.join(" "),
     commentPeriodStart: nextHearing,
     commentPeriodEnd: null,
-    commentLink: nextHearing ? OPSB_CONTACT_URL : null,
+    commentLink: nextHearing ? `https://opsb.ohio.gov${c.url}` : null,
     sources: [
       {
         label: `Ohio OPSB Case ${c.caseNumber}`,

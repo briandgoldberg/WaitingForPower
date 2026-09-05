@@ -207,6 +207,61 @@ export const MAX_CANDIDATES = 50;
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
 
+// The CSC's own "Calendar of Events" page — confirmed live 2026-09-05 —
+// is one long server-rendered page (no pagination) mixing regular
+// biweekly business-meeting agendas with real scheduled hearings, months
+// in each direction. Each date is an `<h3>`; within a date's own section
+// (up to the next `<h3>`), an `<h4>` names that session's actual type
+// ("1PM - Agenda for Regular Energy/Telecommunications Meeting" for a
+// routine business meeting, vs. "2PM - Enforcement Action Public Hearing
+// via Zoom Conferencing" for a real hearing — only the latter counts,
+// checked by requiring "hearing" in the h4 text) and, when it's a real
+// hearing, the body text names the specific "PETITION NO. {n}" or
+// "DOCKET NO. {n}" it's for. Matched back to a tracked case by that exact
+// number + kind, same `${kind}-${number}` shape as this module's own
+// sourceId.
+const CALENDAR_URL = `${BASE_URL}/CSC/4_CSC_CalendarofEvents/CSC-Calendar-of-Events`;
+const DATE_SECTION_RE = /<h3>[\s\S]*?<\/h3>([\s\S]*?)(?=<h3>|$)/g;
+const DATE_TEXT_RE = /<h3>(?:<strong>)?([A-Za-z]+day, [A-Za-z]+ \d{1,2}, \d{4})/;
+const HEARING_H4_RE = /<h4[^>]*>(?:<strong>)?[^<]*hearing/i;
+
+interface UpcomingHearing {
+  date: Date;
+}
+
+function parseCtCalendarDate(raw: string): Date | null {
+  const d = new Date(raw.trim());
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(CALENDAR_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`CT CSC calendar request failed (${res.status})`);
+  const html = await res.text();
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+
+  for (const m of html.matchAll(DATE_SECTION_RE)) {
+    const fullMatch = m[0];
+    const dateText = DATE_TEXT_RE.exec(fullMatch)?.[1];
+    if (!dateText || !HEARING_H4_RE.test(fullMatch)) continue;
+    const date = parseCtCalendarDate(dateText);
+    if (!date || date.getTime() <= now) continue;
+
+    // A date's own section can name more than one case (rare, but not
+    // impossible) — every "PETITION NO. n" / "DOCKET NO. n" mention in
+    // this section is recorded against this same date.
+    const caseRefRe = /\b(PETITION|DOCKET)\s+NO\.?\s*(\d+)/gi;
+    for (const ref of fullMatch.matchAll(caseRefRe)) {
+      const kind = ref[1].toLowerCase();
+      const key = `${kind}-${ref[2]}`;
+      const existing = map.get(key);
+      if (!existing || date.getTime() < existing.date.getTime()) map.set(key, { date });
+    }
+  }
+  return map;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -282,10 +337,20 @@ function extractSectionEntries(sectionHtml: string, kind: CandidateKind): Pendin
     if (!labelMatch) continue;
     const number = labelMatch[1].toUpperCase();
     const matchIndex = m.index ?? sectionHtml.indexOf(m[0]);
+    // Each entry's enclosing tag changed from `<p>` to `<li>` at some point
+    // after this module was last verified (confirmed live 2026-09-05: the
+    // real page now wraps every entry in a `<ul><li>`, no `<p>` tags at
+    // all in these sections) — both are checked so this survives either.
+    const liStart = sectionHtml.lastIndexOf("<li", matchIndex);
+    const liEndContentIndex = sectionHtml.indexOf("</li>", matchIndex);
     const pStart = sectionHtml.lastIndexOf("<p", matchIndex);
     const pEndContentIndex = sectionHtml.indexOf("</p>", matchIndex);
-    if (pStart === -1 || pEndContentIndex === -1) continue;
-    const descriptionHtml = sectionHtml.slice(pStart, pEndContentIndex + 4);
+    const useLi = liStart !== -1 && liEndContentIndex !== -1 && liStart > pStart;
+    const start = useLi ? liStart : pStart;
+    const endContentIndex = useLi ? liEndContentIndex : pEndContentIndex;
+    const closeTagLength = useLi ? 5 : 4;
+    if (start === -1 || endContentIndex === -1) continue;
+    const descriptionHtml = sectionHtml.slice(start, endContentIndex + closeTagLength);
     entries.push({
       kind,
       number,
@@ -522,8 +587,13 @@ function extractApplicant(desc: string): string {
 // `detail.decidedOnDetailPage` to consult; `filedDate` simply comes back
 // null for that candidate (irrelevant, since a resolved project is deleted
 // rather than displayed — see below).
-function normalizeCandidate(candidate: PendingCandidate, detail: CandidateDetail | null): NormalizedProject {
+function normalizeCandidate(
+  candidate: PendingCandidate,
+  detail: CandidateDetail | null,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const sourceId = `${candidate.kind}-${candidate.number}`;
+  const hearing = upcomingHearings.get(sourceId);
   const matchKey = resolveMatchKey("ct-csc", sourceId);
 
   const rawDesc = stripHtml(candidate.descriptionHtml);
@@ -587,6 +657,9 @@ function normalizeCandidate(candidate: PendingCandidate, detail: CandidateDetail
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need (or related declaratory ruling) from the Connecticut Siting Council — ${label} No. ${candidate.number}, "${desc.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? candidate.url : null,
     sources: [
       {
         label: `CT CSC ${label} No. ${candidate.number}`,
@@ -616,6 +689,9 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
   );
 
   const decidedNumbers = await buildDecidedNumberSet(realCandidates);
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing>());
 
   const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
@@ -630,13 +706,13 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
         // module header STATUS — so its own detail page is never fetched
         // (saves a request); still pushed through normalizeCandidate(...,
         // null) so upsertNormalizedProjects deletes any existing row.
-        const normalized = normalizeCandidate(candidate, null);
+        const normalized = normalizeCandidate(candidate, null, upcomingHearings);
         toUpsert.push(normalized);
         if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
         continue;
       }
       const detail = await fetchCandidateDetail(candidate.url);
-      const normalized = normalizeCandidate(candidate, detail);
+      const normalized = normalizeCandidate(candidate, detail, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
       await sleep(REQUEST_DELAY_MS);

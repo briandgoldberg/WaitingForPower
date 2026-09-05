@@ -53,6 +53,45 @@
 // own major utilities (Xcel/Public Service Co, Black Hills, Tri-State) are
 // simply fewer than Texas's, not a sign of a scoping problem.
 //
+// HEARING CALENDAR: puc.colorado.gov (a separate, newer Drupal site — NOT
+// www.dora.state.co.us above) embeds a real Google Calendar on its own
+// /puccalendar page — confirmed live 2026-09-05 by reading the page's own
+// `<iframe title="PUC Calendar" src="https://calendar.google.com/calendar/
+// embed?...">` and decoding its `src` query param, whose calendar ID
+// (state.co.us_mie9aqkvh15rk34shmhs6mnfq8@group.calendar.google.com) has a
+// real, public, unauthenticated iCalendar export at
+// calendar.google.com/calendar/ical/<id>/public/basic.ics — no API key
+// needed. That page's own legend (also read live) confirms this is the
+// PUC's real hearing-scheduling calendar, not a generic office calendar:
+// "HRG = Hearing: ... to take testimony and evidence in a proceeding",
+// "PHC = Pre-Hearing Conference", "PCH = Public Comment Hearing". Every
+// real event's own SUMMARY is titled with the PUC's own Proceeding Number
+// in the exact same format this module's search endpoint returns (e.g.
+// "HRG: 24A-0560E Public Service Company - CPCN Denver Metro Transmission,
+// ALJ Farley (HW)") — matched back to a tracked docket by that exact
+// docket ID, never fuzzy name-matching. CONFIRMED LIVE GOTCHA: a
+// rescheduled/cancelled hearing is NOT deleted from the calendar — the PUC
+// republishes the SAME entry with a "VACATED:" prefix instead (e.g. "PUC:
+// VACATED: HRG: 24A-0560E ..."), still under its original, now-stale
+// DTSTART, so this module drops any event whose summary contains the literal
+// word "VACATED". This does NOT catch the calendar's separate "V & R (<new
+// date>)" ("Vacated & Reset") convention (e.g. "V & R (10.29.2026) Remote:
+// HRG: Pro. No. 26F-0268EG ...") — confirmed live those entries carry a
+// FRESH DTSTART that already IS the rescheduled date and do not contain the
+// literal word "VACATED", so they're correctly kept. REAL LIVE CHECK
+// (2026-09-05) against every one of this module's 22 currently-tracked CPCN
+// dockets: 16 of 22 appear on the calendar at all, but every single
+// appearance is either a past DTSTART or carries a "VACATED" prefix — 0 of
+// 22 currently have a real, confirmed, still-upcoming hearing. This is an
+// honest zero-population result, not evidence the mechanism is broken: the
+// SAME feed carries plenty of real FUTURE-dated events for OTHER (non-CPCN,
+// e.g. formal-complaint "F") docket types as of this writing (confirmed
+// live for 2026-09-08, 2026-09-15, and 2026-09-28), proving the feed itself
+// is live, current, and rolling forward — it simply doesn't happen to cover
+// any of this module's tracked CPCN dockets' hearings *right now*. The
+// mechanism will populate commentPeriodStart/commentLink the next time PUC
+// schedules (and doesn't vacate) a hearing for one of them.
+//
 // Wired to Vercel Cron weekly, 19:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-co-puc/route.ts) — a real run's timing was
 // measured (22 candidates, ~41s) before scheduling this.
@@ -78,6 +117,70 @@ const REQUEST_DELAY_MS = 250;
 // 2026-08-23) — a several-year window still comfortably bounds candidate
 // volume without needing a tight recent-only cutoff the way Texas did.
 const LOOKBACK_YEARS = 5;
+
+// See module header HEARING CALENDAR. The calendar ID was read live off
+// puc.colorado.gov/puccalendar's own embedded-Google-Calendar iframe src.
+const HEARING_CALENDAR_ICS_URL =
+  "https://calendar.google.com/calendar/ical/state.co.us_mie9aqkvh15rk34shmhs6mnfq8%40group.calendar.google.com/public/basic.ics";
+// Matches the PUC's own Proceeding Number format wherever it appears inside
+// an event SUMMARY (e.g. "22A-0145E", "23M-0472E", "26F-0281CP") — this
+// module only ever looks up docket IDs it already knows about (its own
+// search results' docketId), so a generic pattern here is safe.
+const DOCKET_NUMBER_IN_SUMMARY_RE = /\b\d{2}[A-Z]-\d{3,4}[A-Z]{1,3}\b/g;
+
+interface UpcomingHearing {
+  date: Date;
+}
+
+// Minimal RFC5545 unfolding (continuation lines start with a single space)
+// + VEVENT extraction — real observed shape only (DTSTART;VALUE=DATE:
+// YYYYMMDD for these all-day hearing entries), not a full iCalendar parser.
+function parseIcsEvents(ics: string): { dateStr: string; summary: string }[] {
+  const unfolded = ics.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "");
+  const events: { dateStr: string; summary: string }[] = [];
+  for (const m of unfolded.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)) {
+    const block = m[1];
+    const dtstartMatch = /DTSTART[^:\n]*:(\d{8})/.exec(block);
+    const summaryMatch = /SUMMARY:(.*)/.exec(block);
+    if (!dtstartMatch || !summaryMatch) continue;
+    events.push({
+      dateStr: dtstartMatch[1],
+      summary: summaryMatch[1].replace(/\\,/g, ",").replace(/\\;/g, ";"),
+    });
+  }
+  return events;
+}
+
+function parseIcsDate(dateStr: string): Date | null {
+  const y = Number(dateStr.slice(0, 4));
+  const mo = Number(dateStr.slice(4, 6));
+  const d = Number(dateStr.slice(6, 8));
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// See module header HEARING CALENDAR for the VACATED-filtering rationale
+// and the real, confirmed-live 0-of-22 current population.
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(HEARING_CALENDAR_ICS_URL);
+  if (!res.ok) throw new Error(`CO PUC hearing calendar ICS request failed (${res.status})`);
+  const ics = await res.text();
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+  for (const { dateStr, summary } of parseIcsEvents(ics)) {
+    if (/vacated/i.test(summary)) continue;
+    const date = parseIcsDate(dateStr);
+    if (!date || date.getTime() <= now) continue;
+    for (const docketMatch of summary.matchAll(DOCKET_NUMBER_IN_SUMMARY_RE)) {
+      const docketNo = docketMatch[0];
+      const existing = map.get(docketNo);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(docketNo, { date });
+      }
+    }
+  }
+  return map;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -251,8 +354,9 @@ function buildMilestones(docs: DocketDocument[]): NormalizedMilestone[] {
   return milestones;
 }
 
-function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[]): NormalizedProject {
+function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upcomingHearings: Map<string, UpcomingHearing>): NormalizedProject {
   const matchKey = resolveMatchKey("co-puc", search.docketId);
+  const hearing = upcomingHearings.get(search.docketId);
   const currentStage = stageForStatus(search.status);
   const filedDate = parseUsDate(search.date);
   const capacityMw = extractCapacityMw(search.title);
@@ -296,6 +400,9 @@ function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[]): No
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Colorado Public Utilities Commission — Docket No. ${search.docketId}, "${search.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? `${DETAIL_URL}?p_docket_id=${encodeURIComponent(search.docketId)}` : null,
     sources: [
       {
         label: `Colorado PUC Docket No. ${search.docketId}`,
@@ -323,6 +430,10 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+
   for (const candidate of candidates) {
     try {
       // Only fetch detail (for milestones) on still-active dockets — a
@@ -330,7 +441,7 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
       // so its filing history is never displayed; skipping the fetch saves
       // a request per resolved candidate.
       const docs = stageForStatus(candidate.status) === "local_review" ? parseDocuments(await fetchDetail(candidate.docketId)) : [];
-      const normalized = normalizeDocket(candidate, docs);
+      const normalized = normalizeDocket(candidate, docs, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

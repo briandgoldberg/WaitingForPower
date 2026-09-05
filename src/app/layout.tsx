@@ -86,19 +86,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </div>
         </header>
-        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-1.5 text-xs text-center">
-            🚧 We&rsquo;re always adding to our data sources.{" "}
-            <Link href="/methodology#data-sources" className="underline">
-              See them here
-            </Link>{" "}
-            or{" "}
-            <Link href="/contact?topic=data" className="underline">
-              ask us to add a new one
-            </Link>
-            .
-          </div>
-        </div>
         <main className="flex-1 flex flex-col">{children}</main>
         <IntentWidget />
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">

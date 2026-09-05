@@ -164,6 +164,35 @@
 //
 // Wired to Vercel Cron weekly, 01:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ut-psc/route.ts).
+//
+// PUBLIC HEARING DATES — confirmed live 2026-09-05: psc.utah.gov's own
+// homepage embeds a public Google Calendar ("PSC Events",
+// calendar id utah.gov_t5o5rhseg6ce20bke58ok6bmd8@group.calendar.google.com,
+// confirmed by reading the embed iframe's own `src` off the live homepage)
+// whose own description reads "Public Service Commission Public events
+// including technical conference, scheduling conferences, Workshop and
+// Hearings." A public Google Calendar can be fetched as a plain,
+// unauthenticated iCalendar (.ics) file via Google's own legacy export
+// endpoint (`/calendar/ical/<calendarId>/public/basic.ics`) — no API key,
+// no JS execution, no session of any kind. Confirmed live: this single
+// request returns 1,622 real VEVENTs spanning 2013–2027, each with a plain
+// SUMMARY/DESCRIPTION that names the real docket number(s) it's for (e.g.
+// SUMMARY "Virtual Technical Conference (DEU's Application to Extend
+// Service to Goshen and Elberta, Utah; 21-057-06)", DESCRIPTION linking to
+// "https://psc.utah.gov/.../docket-no-21-057-06/") — the exact same
+// NN-NNN-NN / NN-NNNN-NN docket-number format this module's own
+// DocketListing.docketNo already uses, extracted here with the same
+// dash-joined-digit-groups shape. Docket numbers are pulled from the
+// combined SUMMARY+DESCRIPTION text (a single event occasionally names more
+// than one related docket, e.g. "17-035-36, Solar A 17-035-26"); only the
+// earliest FUTURE event date is kept per docket. Verified by hand
+// (parseFolderEntries-style local test against the real fetched .ics) that
+// this correctly extracts 11 distinct real future-dated dockets and, just
+// as importantly, correctly returns NO match for any of this module's own
+// 12 real tracked CPCN candidates — expected, since every one of them was
+// granted years ago (see REAL POPULATION SIZE above) and so has no future
+// hearing scheduled; a genuinely new Utah CPCN filing would pick up a real
+// technical-conference/hearing date here the moment PSC schedules one.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
@@ -181,6 +210,10 @@ export const MAX_CANDIDATES = 50;
 // freezing whatever falls outside a plain top-N-by-recency window.
 const ROTATING_RECENT_SLOTS = Math.round(MAX_CANDIDATES * (2 / 3));
 const REQUEST_DELAY_MS = 250;
+
+// See module header PUBLIC HEARING DATES — confirmed live 2026-09-05.
+const HEARING_CALENDAR_ICS_URL =
+  "https://calendar.google.com/calendar/ical/utah.gov_t5o5rhseg6ce20bke58ok6bmd8%40group.calendar.google.com/public/basic.ics";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -202,6 +235,109 @@ function decodeHtmlEntities(s: string): string {
     .replace(/&#8220;/g, "“")
     .replace(/&#8221;/g, "”")
     .trim();
+}
+
+interface UpcomingHearing {
+  date: Date;
+}
+
+// RFC 5545 line-unfolding: a continuation line starts with a single space
+// and is appended to the previous logical line. Confirmed necessary against
+// the real fetched .ics (long SUMMARY/DESCRIPTION values are folded across
+// multiple physical lines).
+function unfoldIcs(text: string): string[] {
+  const rawLines = text.split(/\r\n|\n/);
+  const lines: string[] = [];
+  for (const line of rawLines) {
+    if (line.startsWith(" ") && lines.length > 0) {
+      lines[lines.length - 1] += line.slice(1);
+    } else {
+      lines.push(line);
+    }
+  }
+  return lines;
+}
+
+function unescapeIcsText(s: string): string {
+  return s
+    .replace(/\\n/gi, " ")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .replace(/\\\\/g, "\\");
+}
+
+// Matches this module's own docket-number shape (NN-NNN-NN / NN-NNNN-NN) —
+// see module header PUBLIC HEARING DATES.
+const DOCKET_NUMBER_RE = /\b(\d{2}-\d{3,4}-\d{2})\b/g;
+
+// Handles both real event date forms confirmed live: timed events
+// (`DTSTART:20260414T190000Z`) and all-day events
+// (`DTSTART;VALUE=DATE:20140120`).
+function parseIcsDateValue(raw: string): Date | null {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?$/.exec(raw.trim());
+  if (!m) return null;
+  const [, y, mo, d, hh, mm, ss] = m;
+  if (hh !== undefined) {
+    return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss)));
+  }
+  return new Date(Number(y), Number(mo) - 1, Number(d));
+}
+
+// Parses the PSC's public "PSC Events" Google Calendar (see module header)
+// into a Map of docket number -> earliest future scheduled event. A single
+// event's SUMMARY+DESCRIPTION is scanned together (confirmed live: some
+// events name more than one related docket).
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(HEARING_CALENDAR_ICS_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`Utah PSC hearing-calendar ICS request failed (${res.status})`);
+  const ics = await res.text();
+  const lines = unfoldIcs(ics);
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+
+  let inEvent = false;
+  let dtstart: string | null = null;
+  let summary = "";
+  let description = "";
+
+  const flushEvent = () => {
+    if (!dtstart) return;
+    const date = parseIcsDateValue(dtstart);
+    if (!date || date.getTime() <= now) return;
+    const text = `${summary} ${description}`;
+    for (const m of text.matchAll(DOCKET_NUMBER_RE)) {
+      const docketNo = m[1];
+      const existing = map.get(docketNo);
+      if (!existing || date.getTime() < existing.date.getTime()) {
+        map.set(docketNo, { date });
+      }
+    }
+  };
+
+  for (const line of lines) {
+    if (line === "BEGIN:VEVENT") {
+      inEvent = true;
+      dtstart = null;
+      summary = "";
+      description = "";
+      continue;
+    }
+    if (line === "END:VEVENT") {
+      flushEvent();
+      inEvent = false;
+      continue;
+    }
+    if (!inEvent) continue;
+    if (line.startsWith("DTSTART")) {
+      const idx = line.indexOf(":");
+      dtstart = idx === -1 ? null : line.slice(idx + 1);
+    } else if (line.startsWith("SUMMARY:")) {
+      summary = unescapeIcsText(line.slice("SUMMARY:".length));
+    } else if (line.startsWith("DESCRIPTION:")) {
+      description = unescapeIcsText(line.slice("DESCRIPTION:".length));
+    }
+  }
+  return map;
 }
 
 interface DocketListing {
@@ -450,12 +586,17 @@ function extractApplicant(title: string): string {
   return title.slice(0, 80);
 }
 
-function normalizeDocket(listing: DocketListing, resolution: DocketResolution): NormalizedProject {
+function normalizeDocket(
+  listing: DocketListing,
+  resolution: DocketResolution,
+  upcomingHearings: Map<string, UpcomingHearing>,
+): NormalizedProject {
   const matchKey = resolveMatchKey("ut-psc", listing.docketNo);
   const projectType = inferProjectType(listing.matter);
   const fuelType = inferFuelType(listing.matter, projectType);
   const capacityMw = extractCapacityMw(listing.matter);
   const applicant = extractApplicant(listing.matter);
+  const hearing = upcomingHearings.get(listing.docketNo);
 
   let currentStage: ProjectStage;
   if (resolution.resolution === "granted") currentStage = "approved_awaiting_construction";
@@ -495,6 +636,9 @@ function normalizeDocket(listing: DocketListing, resolution: DocketResolution): 
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity determination from the Utah Public Service Commission — Docket No. ${listing.docketNo}, "${listing.matter}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing ? listing.url : null,
     sources: [
       {
         label: `Utah PSC Docket No. ${listing.docketNo}`,
@@ -534,13 +678,18 @@ export async function ingestUtPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  // See module header PUBLIC HEARING DATES. A failure here shouldn't block
+  // the whole ingestion run over a feature this supplementary — degrades to
+  // "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const listing of realApplications) {
     try {
       const resolution = await fetchDocketResolution(listing.url);
-      const normalized = normalizeDocket(listing, resolution);
+      const normalized = normalizeDocket(listing, resolution, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(listing)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

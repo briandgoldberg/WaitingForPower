@@ -73,6 +73,15 @@ export interface ProjectDTO {
   // see schema.prisma.
   queueCluster: string | null;
   pointOfInterconnection: string | null;
+  // One-time LLM research pass over this project's own docket filings —
+  // see schema.prisma's Project.reasonsFor/reasonsAgainst/comment* fields.
+  // All null/empty until src/lib/research/projectResearch.ts has processed
+  // this project.
+  reasonsFor: string[];
+  reasonsAgainst: string[];
+  commentPeriodStart: string | null; // ISO date
+  commentPeriodEnd: string | null; // ISO date
+  commentLink: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
 

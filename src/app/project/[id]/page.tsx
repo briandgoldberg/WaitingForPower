@@ -218,6 +218,71 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
       )}
 
+      {(p.commentPeriodStart || p.commentPeriodEnd || p.commentLink) && (
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public comment period</h2>
+          {(p.commentPeriodStart || p.commentPeriodEnd) && (
+            <p className="text-sm text-[var(--text-secondary)]">
+              {p.commentPeriodStart &&
+                new Date(p.commentPeriodStart).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
+              {p.commentPeriodStart && p.commentPeriodEnd && " – "}
+              {p.commentPeriodEnd &&
+                new Date(p.commentPeriodEnd).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
+            </p>
+          )}
+          {p.commentLink && (
+            <p className="text-sm mt-2">
+              {/^https?:\/\//.test(p.commentLink) ? (
+                <a href={p.commentLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                  Submit a comment
+                </a>
+              ) : (
+                <>
+                  <span className="text-[var(--muted)]">How to comment: </span>
+                  {p.commentLink}
+                </>
+              )}
+            </p>
+          )}
+          <p className="text-xs text-[var(--muted)] mt-3">
+            Pulled once from this project&rsquo;s own docket filings — may be out of date. Check the
+            sources below for the current status.
+          </p>
+        </section>
+      )}
+
+      {(p.reasonsFor.length > 0 || p.reasonsAgainst.length > 0) && (
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+          <h2 className="text-base font-semibold text-[var(--accent)] mb-3">Reasons for and against</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {p.reasonsFor.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-green-700 dark:text-green-400 mb-1.5">To build it</h3>
+                <ul className="flex flex-col gap-1.5 text-sm text-[var(--text-secondary)] list-disc pl-4">
+                  {p.reasonsFor.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {p.reasonsAgainst.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-red-700 dark:text-red-400 mb-1.5">Against it</h3>
+                <ul className="flex flex-col gap-1.5 text-sm text-[var(--text-secondary)] list-disc pl-4">
+                  {p.reasonsAgainst.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-[var(--muted)] mt-3">
+            Synthesized once from this project&rsquo;s own docket filings, not an independent
+            assessment — see sources below.
+          </p>
+        </section>
+      )}
+
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Sources</h2>
         <ul className="flex flex-col gap-1.5 text-sm">

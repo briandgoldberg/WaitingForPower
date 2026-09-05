@@ -19,11 +19,21 @@
 //     LBNL queue id Q4821" via a shared `matchKey`. Only projects sharing a
 //     manually-assigned `matchKey` are ever merged into one Project row.
 
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { isMergedMatchKey } from "@/lib/ingest/manualOverrides";
+
+// `seed:` prefix marks a vote this site cast itself (cold-start seeding —
+// see below), not a real visitor — src/app/api/cron/daily-digest/route.ts
+// excludes this prefix from the "Community votes" report so seeded rows
+// never get reported to the site owner as if they were organic engagement.
+// Public-facing tallies (GreenlightVote.tsx) intentionally do NOT
+// distinguish them — the whole point is a new project not showing an
+// empty "no votes yet" state.
+const SEED_VOTER_PREFIX = "seed:";
 
 export interface NormalizedSource {
   label: string;
@@ -388,6 +398,19 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
         stage: m.stage,
         description: m.description,
       })),
+    });
+  }
+
+  // Cold-start seeding: a brand new project starts with one random
+  // support/against vote rather than an empty "no votes yet" state — see
+  // SEED_VOTER_PREFIX above for how this stays distinguishable internally.
+  if (existing == null) {
+    await prisma.projectVerdict.create({
+      data: {
+        projectId: project.id,
+        voterKey: `${SEED_VOTER_PREFIX}${randomUUID()}`,
+        vote: Math.random() < 0.5 ? "green" : "red",
+      },
     });
   }
 

@@ -343,6 +343,43 @@
 //
 // Wired to Vercel Cron weekly (see vercel.json and
 // src/app/api/cron/ingest-ar-psc/route.ts).
+//
+// PUBLIC HEARING DATES (added 2026-09-05): apps.apsc.arkansas.gov/olsv2 also
+// publishes a real, separate "Hearings Calendar" (linked from the site's own
+// main nav — confirmed live, not guessed at) with two views: a per-month
+// grid (calendar/calendar.asp) and a plain flat listing,
+// deskcalendar.asp ("Upcoming Hearings"), which this module uses. Confirmed
+// live 2026-09-05: a single unauthenticated GET of deskcalendar.asp returns
+// EVERY hearing scheduled Commission-wide from today through roughly 4
+// months out (the page's own heading literally states the window, e.g.
+// "Schedule Shown for Dates Between 9/5/2026 and 1/5/2027" — server-computed,
+// not a parameter this module has to pass) in one plain HTML table, one row
+// per hearing: a docket-number link (`?CaseNumber=<docket>`, the EXACT same
+// `YY-NNN-<suffix>` format this module already keys everything on), a
+// "Date/Time" cell (`M/D/YYYY - H:MM AM/PM`, confirmed live, no
+// zero-padding), and a "Details..." link to that hearing's own
+// calendar/Calendar-Detail.asp?ID=<n> page (confirmed live to additionally
+// carry the docket's Initiating Party — not used here, redundant with what
+// fetchDocketDetail's own Company Name/Docket Role table already gives).
+// No pagination, no auth, no postback needed — confirmed live against the
+// real 2026-09-05 response (5 real scheduled hearings, spanning 26-041-U, a
+// real tracked 500kV transmission-line "-U" docket also documented in this
+// module's own SCOPING section above, through 26-006-R and 25-005-U/26-001-U
+// — non-"-U" or not-yet-classified dockets, harmless no-ops here since
+// fetchUpcomingHearingsByDocket's map is only ever consulted for a docket
+// that has ALREADY passed this module's own GATE_RE/CONSTRUCTION_RE/
+// ELECTRIC_RE content filtering in the main loop below).
+// Only a hearing whose own Date/Time is still in the future (checked against
+// `new Date()` at fetch time) is kept — a docket can carry more than one row
+// (multi-day hearings, e.g. 26-001-U's real 11/4 and 11/5/2026 entries in
+// this same response) and this module keeps the EARLIEST still-upcoming one,
+// matching this series' vtPucDockets.ts/ctCscDockets.ts precedent. This is a
+// hearing DATE, not a comment-period window, so commentPeriodEnd is always
+// left null, same as every other state in this series that surfaces this
+// field from a hearing calendar rather than a stated open/close date range.
+// A failure fetching this supplementary calendar never blocks the main
+// docket ingestion run (see ingestArPscDockets's own `.catch()` below) —
+// degrades to "no hearing data this run," same as every other state.
 
 import zlib from "node:zlib";
 import type { CauseSlug } from "@/lib/data/causeCategories";
@@ -356,6 +393,10 @@ const DOCKET_DETAIL_URL = `${BASE_URL}/docket_search_results.asp`;
 const DOC_INTERMEDIATE_URL = (docket: string, docNumVal: string) =>
   `${BASE_URL}/Docket_Search_Documents.asp?Docket=${encodeURIComponent(docket)}&DocNumVal=${encodeURIComponent(docNumVal)}`;
 const DOCKET_SHARE_URL = (docket: string) => `${BASE_URL}/docket_search_results.asp?CaseNumber=${encodeURIComponent(docket)}`;
+// See module header PUBLIC HEARING DATES — a single flat listing of every
+// upcoming hearing Commission-wide, confirmed live 2026-09-05.
+const HEARING_CALENDAR_URL = `${BASE_URL}/deskcalendar.asp`;
+const HEARING_DETAIL_URL = (id: string) => `${BASE_URL}/calendar/Calendar-Detail.asp?ID=${encodeURIComponent(id)}`;
 
 // Real live "-U" open-docket population is 236 as of 2026-08-24, and —
 // per module header FETCHING — this list only ever grows (Arkansas
@@ -408,6 +449,38 @@ function parseMDY(raw: string): Date | null {
   if (!m) return null;
   const d = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+interface UpcomingHearing {
+  date: Date;
+  link: string;
+}
+
+// See module header PUBLIC HEARING DATES — confirmed live 2026-09-05
+// against deskcalendar.asp's own flat "Upcoming Hearings" table. Each row's
+// docket-number link, "Details..." link, and Date/Time cell are pulled
+// together with a single bounded-lookahead regex rather than three separate
+// per-row regexes, since this page (unlike docket_search_results.asp) has no
+// stable per-row wrapper element to split on first.
+const HEARING_ROW_RE =
+  /CaseNumber=(\d{2}-\d{3}-[A-Z]+)"[\s\S]{0,400}?Calendar-Detail\.asp\?ID=(\d+)"[\s\S]{0,200}?>(\d{1,2}\/\d{1,2}\/\d{4}) - \d{1,2}:\d{2}\s*[AP]M</g;
+
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+  const res = await fetch(HEARING_CALENDAR_URL);
+  if (!res.ok) throw new Error(`AR PSC hearing calendar request failed (${res.status})`);
+  const html = await res.text();
+  const now = Date.now();
+  const map = new Map<string, UpcomingHearing>();
+  for (const m of html.matchAll(HEARING_ROW_RE)) {
+    const docket = m[1];
+    const date = parseMDY(m[3]);
+    if (!date || date.getTime() <= now) continue;
+    const existing = map.get(docket);
+    if (!existing || date.getTime() < existing.date.getTime()) {
+      map.set(docket, { date, link: HEARING_DETAIL_URL(m[2]) });
+    }
+  }
+  return map;
 }
 
 // See module header FETCHING — a single embedded <select> in the docket
@@ -784,7 +857,7 @@ function extractApplicant(detail: DocketDetail): string {
   return detail.style.slice(0, 80);
 }
 
-function normalizeDocket(detail: DocketDetail, resolution: Resolution): NormalizedProject {
+function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearing: UpcomingHearing | undefined): NormalizedProject {
   const matchKey = resolveMatchKey("ar-psc", detail.docket);
   const { projectType, fuelType } = inferProjectTypeAndFuel(detail.style);
   const capacityMw = extractCapacityMw(detail.style);
@@ -836,6 +909,9 @@ function normalizeDocket(detail: DocketDetail, resolution: Resolution): Normaliz
     causeSlugs,
     causeDetail: `Waiting on a construction certificate/authority from the Arkansas Public Service Commission — Docket No. ${detail.docket}, "${detail.style}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    commentPeriodStart: hearing?.date ?? null,
+    commentPeriodEnd: null,
+    commentLink: hearing?.link ?? null,
     sources: [
       {
         label: `AR PSC Docket No. ${detail.docket}`,
@@ -864,6 +940,9 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const selected = selectWithRotation(allDockets, maxCandidates, ROTATING_RECENT_SLOTS);
   const rotatingTier = new Set(selected.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
+  // A failure here shouldn't block the whole ingestion run over a feature
+  // this supplementary — degrades to "no hearing data this run."
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
 
   for (const docket of selected) {
     const matchKey = resolveMatchKey("ar-psc", docket);
@@ -904,7 +983,7 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       }
 
       const resolution = await detectResolution(docket, detail.orders);
-      const normalized = normalizeDocket(detail, resolution);
+      const normalized = normalizeDocket(detail, resolution, upcomingHearings.get(docket));
       toUpsert.push(normalized);
     } catch (err) {
       errors.push({ matchKey, message: String(err) });

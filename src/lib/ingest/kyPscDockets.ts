@@ -231,9 +231,11 @@ function parseHearingDateTime(raw: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, UpcomingHearing>> {
+// Every real upcoming hearing found is kept (not just the earliest) — a
+// case can genuinely have more than one on the books at once.
+async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, UpcomingHearing[]>> {
   const now = new Date();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (let offset = 0; offset < 3; offset++) {
     const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
     const res = await fetch(HEARINGS_CALENDAR_URL(d.getMonth() + 1, d.getFullYear()), {
@@ -247,10 +249,9 @@ async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, Upcoming
       const date = parseHearingDateTime(dateRaw);
       if (!date || date.getTime() <= now.getTime()) continue;
       const location = locationRaw.replace(/<br\s*\/?>/gi, ", ").replace(/\s+/g, " ").trim();
-      const existing = map.get(caseNumber);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(caseNumber, { date, location });
-      }
+      const arr = map.get(caseNumber) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
+      map.set(caseNumber, arr);
     }
   }
   return map;
@@ -465,7 +466,7 @@ function extractCounty(nature: string): string | null {
 const EXCLUDE_RE =
   /\bHEADQUARTERS\b|\bCOOLING TOWER\b|\bADVANCED METERING INFRASTRUCTURE\b|\bFIBER NETWORK\b|\bBROADBAND\b|\bDISPOSE OF PROPERTY\b|\bSELL(?:ING)? ITS EXISTING\b|\bDEMAND-SIDE MANAGEMENT\b|\bENVIRONMENTAL (?:COMPLIANCE PLAN|SURCHARGE)\b/i;
 
-function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, UpcomingHearing>): NormalizedProject {
+function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, UpcomingHearing[]>): NormalizedProject {
   const matchKey = resolveMatchKey("ky-psc", detail.caseNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(detail.nature);
   const capacityMw = extractCapacityMw(detail.nature);
@@ -479,7 +480,7 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
   } else currentStage = "local_review";
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
-  const hearing = upcomingHearings.get(detail.caseNumber);
+  const hearings = upcomingHearings.get(detail.caseNumber) ?? [];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Kentucky Public Service Commission's public case search and case detail pages (Certificate of Public Convenience and Necessity / Certificate of Construction dockets).",
@@ -519,9 +520,8 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity / Certificate of Construction from the Kentucky Public Service Commission — Case No. ${detail.caseNumber}, "${detail.nature}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing ? `${BASE_URL}/Case/ViewCaseFilings/${detail.caseNumber}` : null,
+    hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/ViewCaseFilings/${detail.caseNumber}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `KY PSC Case No. ${detail.caseNumber}`,
@@ -553,7 +553,7 @@ export async function ingestKyPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing[]>());
 
   for (const caseNumber of selected) {
     try {

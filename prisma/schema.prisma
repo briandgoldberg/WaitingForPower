@@ -199,27 +199,22 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Public comment window and how to submit a comment, straight from the
-  // project's own docket source — no LLM, no separate research pass. Only
-  // populated for sources whose own ingestion module parses structured
-  // comment-period/hearing data off the page it already fetches every
-  // regular run (currently: src/lib/ingest/waEfsecFacilities.ts,
-  // src/lib/ingest/ohOpsbCases.ts — see each module's header for exactly
-  // what it parses). Null for every other source until a module adds
-  // support for it. Refreshed on every normal ingestion run for a
-  // supporting source, same as currentStage — NOT a one-time snapshot, so
-  // a closed comment window disappears on the next run rather than
-  // lingering stale.
-  commentPeriodStart DateTime?
-  commentPeriodEnd   DateTime?
-  // How to actually submit a comment, exactly as the docket itself
-  // publishes it — an email address, a web form URL, or a mailing address.
-  // Free text (not a URL type) because the shape varies by agency.
-  commentLink String?
+  // Where to learn more about this project's hearings — one link per
+  // project (not per hearing, see ProjectHearing below): almost every
+  // source's own "how to participate" destination is the case/docket's own
+  // detail page, the same URL regardless of which specific hearing you're
+  // asking about, so one shared link is both simpler and more accurate
+  // than pretending each hearing has its own distinct notice page. Null
+  // for every source that hasn't been wired for this yet — see
+  // src/lib/ingest/common.ts's keepExistingIfUnmanaged for why a source
+  // that's never touched this field can't accidentally wipe another
+  // source's value.
+  hearingDetailsLink String?
 
   causes     ProjectCause[]
   sources    ProjectSource[]
   milestones Milestone[]
+  hearings   ProjectHearing[]
   changes    ProjectChange[]
   verdicts   ProjectVerdict[]
 
@@ -418,6 +413,33 @@ model Milestone {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+// One row per real, upcoming hearing this project's own source publishes —
+// deliberately not capped at one, since real docket data regularly shows a
+// project with two or more (e.g. a "Local public hearing" AND a separate
+// "Evidentiary hearing", or several genuinely distinct hearing dates on one
+// Louisiana docket). Only ever populated by the small set of ingest
+// modules that parse structured hearing data — see
+// Project.hearingDetailsLink and src/lib/ingest/common.ts's
+// upsertNormalizedProject, which deletes and recreates every row for a
+// project on each run of a participating source (so a hearing that's
+// passed or been cancelled disappears on the next run, never left stale) —
+// but only for a source that actually passes a `hearings` array at all;
+// every other source's projects are left untouched.
+model ProjectHearing {
+  id        Int      @id @default(autoincrement())
+  projectId String
+  date      DateTime
+  endDate   DateTime?
+  // Free text from the source, e.g. "Local public hearing", "Evidentiary
+  // hearing", "Formal Hearing" — null when the source doesn't name a type.
+  label     String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([date])
 }
 
 // User-submitted projects. Never shown publicly until an admin approves them

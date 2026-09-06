@@ -47,6 +47,13 @@ export interface NormalizedMilestone {
   description: string;
 }
 
+export interface NormalizedHearing {
+  date: Date;
+  endDate?: Date | null;
+  /** e.g. "Local public hearing", "Evidentiary hearing" — see schema.prisma. */
+  label?: string | null;
+}
+
 export interface NormalizedProject {
   /**
    * Stable identity key for this project. If a manual override maps this
@@ -94,15 +101,22 @@ export interface NormalizedProject {
   queueCluster?: string | null;
   /** LBNL Queued Up's own point-of-interconnection name — see schema.prisma. */
   pointOfInterconnection?: string | null;
-  /** Structured public-comment-window/how-to-comment fields — see schema.prisma. */
-  commentPeriodStart?: Date | null;
-  commentPeriodEnd?: Date | null;
-  commentLink?: string | null;
+  /** One link per project for hearing logistics — see schema.prisma. */
+  hearingDetailsLink?: string | null;
   isAggregateExample?: boolean;
   estimatedMwDelayed?: number | null;
   dataQualityNote?: string | null;
   sources: NormalizedSource[];
   milestones?: NormalizedMilestone[];
+  /**
+   * Every real upcoming hearing this run's source could find for this
+   * project — pass an empty array (not undefined) to mean "checked, none
+   * upcoming right now," which correctly clears out any stale hearings a
+   * prior run wrote. Leave undefined entirely for a source that doesn't
+   * support this feature at all, so an unrelated source's own hearings
+   * (if this project is a manual cross-source merge) are never touched.
+   */
+  hearings?: NormalizedHearing[];
   /** e.g. { eia: "plantid-generatorid", permittingDashboard: "71536" } */
   externalIds: Record<string, string>;
 }
@@ -326,21 +340,22 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     return incoming ?? existingValue ?? null;
   }
 
-  // For the comment-period fields: only a handful of source modules (WA
-  // EFSEC, OH OPSB, AZ ACC, OR EFSC, VA SCC — see each module's own header)
-  // actually compute these every run, and for those an explicit `null` is
-  // real signal ("checked, nothing open right now") that must be allowed to
-  // clear a stale value — unlike keepExistingIfNull above, which would
-  // wrongly keep resurrecting a closed comment period forever. Every other
-  // module simply never sets these fields at all, leaving them `undefined`
-  // (not `null`) on its own NormalizedProject — for those, a real
-  // undefined must preserve whatever's already there, since that's either
-  // a one-time manual lookup (comment date/location/link found by hand for
-  // a project this site otherwise has no automated way to check) or a
-  // still-open period one of the five real modules found on a prior run.
-  // The distinction this makes possible — undefined ("I don't manage this
-  // field") vs. null ("I checked, there's nothing") — is exactly why this
-  // is a separate function from keepExistingIfNull rather than a shared one.
+  // For hearingDetailsLink: only the roughly two dozen source modules
+  // wired for hearing extraction (see each module's own "HEARING..."
+  // header comment) actually compute this every run, and for those an
+  // explicit `null` is real signal ("checked, nothing upcoming right now")
+  // that must be allowed to clear a stale value — unlike keepExistingIfNull
+  // above, which would wrongly keep resurrecting a stale link forever.
+  // Every other module simply never sets this field at all, leaving it
+  // `undefined` (not `null`) on its own NormalizedProject — for those, a
+  // real undefined must preserve whatever's already there, since that's
+  // either a one-time manual lookup or a value one of the real modules
+  // found on a prior run. The distinction this makes possible — undefined
+  // ("I don't manage this field") vs. null ("I checked, there's nothing")
+  // — is exactly why this is a separate function from keepExistingIfNull
+  // rather than a shared one. The same undefined-vs-explicit-array
+  // distinction is why the ProjectHearing sync below is gated on
+  // `hearings !== undefined`, not `hearings.length > 0`.
   function keepExistingIfUnmanaged<T>(incoming: T | null | undefined, existingValue: T | null | undefined): T | null {
     if (incoming === undefined) return existingValue ?? null;
     return incoming;
@@ -374,9 +389,7 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     primeMoverCode: keepIfMergedAndNull(p.primeMoverCode, existing?.primeMoverCode),
     queueCluster: keepIfMergedAndNull(p.queueCluster, existing?.queueCluster),
     pointOfInterconnection: keepIfMergedAndNull(p.pointOfInterconnection, existing?.pointOfInterconnection),
-    commentPeriodStart: keepExistingIfUnmanaged(p.commentPeriodStart, existing?.commentPeriodStart),
-    commentPeriodEnd: keepExistingIfUnmanaged(p.commentPeriodEnd, existing?.commentPeriodEnd),
-    commentLink: keepExistingIfUnmanaged(p.commentLink, existing?.commentLink),
+    hearingDetailsLink: keepExistingIfUnmanaged(p.hearingDetailsLink, existing?.hearingDetailsLink),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,
@@ -426,6 +439,27 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
         description: m.description,
       })),
     });
+  }
+
+  // Unlike milestones above, `p.hearings` being an EMPTY array is itself
+  // real information ("this run checked, nothing upcoming right now") that
+  // must still clear out stale rows from a prior run — so the delete isn't
+  // gated on length > 0, only on the source having opted in to this
+  // feature at all (hearings !== undefined). A source that's never wired
+  // for this never sets the property, so its projects' hearings (if any
+  // exist from a manual cross-source merge) are left untouched.
+  if (p.hearings !== undefined) {
+    await prisma.projectHearing.deleteMany({ where: { projectId: project.id } });
+    if (p.hearings.length > 0) {
+      await prisma.projectHearing.createMany({
+        data: p.hearings.map((h) => ({
+          projectId: project.id,
+          date: h.date,
+          endDate: h.endDate ?? null,
+          label: h.label ?? null,
+        })),
+      });
+    }
   }
 
   // Cold-start seeding: a brand new project starts with one random

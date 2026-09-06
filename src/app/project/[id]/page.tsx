@@ -241,7 +241,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           {p.hearingDetailsLink ? (
             /^https?:\/\//.test(p.hearingDetailsLink) ? (
               <a href={p.hearingDetailsLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
-                Full hearing details, including where to go
+                Hearing Details
               </a>
             ) : (
               <>

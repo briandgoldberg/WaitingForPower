@@ -64,7 +64,7 @@ export function PublicHearingsSection({ groups }: { groups: UpcomingHearingGroup
                   rel="noreferrer"
                   className="text-sm text-[var(--accent)] underline"
                 >
-                  Full hearing details, including where to go
+                  Hearing Details
                 </a>
               )}
             </li>

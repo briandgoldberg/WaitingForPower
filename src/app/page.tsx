@@ -85,25 +85,30 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2.5 sm:items-center">
             <p className="text-sm text-[var(--muted)] max-w-2xl">
               Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
             </p>
             <Link
               href="/projects"
-              className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+              className="justify-self-start sm:justify-self-end shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
               style={{ color: "var(--accent)" }}
             >
               {totalProjects.toLocaleString()} projects tracked →
             </Link>
             {upcomingHearings > 0 && (
-              <Link
-                href="/policies?tab=hearings"
-                className="max-w-full text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors"
-                style={{ color: "var(--accent)" }}
-              >
-                Make your voice heard: {upcomingHearings.toLocaleString()} hearings to advocate at →
-              </Link>
+              <>
+                <p className="text-sm text-[var(--muted)] max-w-2xl">
+                  Every public hearing you can attend or comment at, as it&rsquo;s found.
+                </p>
+                <Link
+                  href="/policies?tab=hearings"
+                  className="justify-self-start sm:justify-self-end shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                  style={{ color: "var(--accent)" }}
+                >
+                  {upcomingHearings.toLocaleString()} hearings to advocate at →
+                </Link>
+              </>
             )}
           </div>
         </div>

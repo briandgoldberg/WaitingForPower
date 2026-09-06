@@ -85,30 +85,32 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <div className="grid grid-cols-1 sm:grid-cols-[auto_auto] gap-x-0.5 gap-y-2.5 sm:items-center">
-            <p className="text-sm text-[var(--muted)] max-w-2xl">
-              Every filing and status change as it&rsquo;s detected.
-            </p>
-            <Link
-              href="/projects"
-              className="justify-self-start shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-              style={{ color: "var(--accent)" }}
-            >
-              {totalProjects.toLocaleString()} projects tracked →
-            </Link>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-center gap-1">
+              <p className="text-sm text-[var(--muted)]">
+                Every filing and status change as it&rsquo;s detected.
+              </p>
+              <Link
+                href="/projects"
+                className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                style={{ color: "var(--accent)" }}
+              >
+                {totalProjects.toLocaleString()} projects tracked →
+              </Link>
+            </div>
             {upcomingHearings > 0 && (
-              <>
-                <p className="text-sm text-[var(--muted)] max-w-2xl">
+              <div className="flex flex-wrap items-center gap-1">
+                <p className="text-sm text-[var(--muted)]">
                   Every hearing you can attend or follow as it&rsquo;s found.
                 </p>
                 <Link
                   href="/policies?tab=hearings"
-                  className="justify-self-start shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                  className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
                   style={{ color: "var(--accent)" }}
                 >
                   {upcomingHearings.toLocaleString()} Upcoming Hearings →
                 </Link>
-              </>
+              </div>
             )}
           </div>
         </div>

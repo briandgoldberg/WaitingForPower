@@ -85,7 +85,7 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <div className="grid grid-cols-1 sm:grid-cols-[auto_auto] gap-x-3 gap-y-2.5 sm:items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_auto] gap-x-1.5 gap-y-2.5 sm:items-center">
             <p className="text-sm text-[var(--muted)] max-w-2xl">
               Every filing and status change as it&rsquo;s detected.
             </p>

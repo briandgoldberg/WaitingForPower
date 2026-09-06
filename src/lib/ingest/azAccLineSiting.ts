@@ -144,15 +144,21 @@ async function searchCandidates(): Promise<DocketSearchResult[]> {
 interface DocketDetail {
   resolution: "granted" | "denied" | null;
   // Next upcoming "Public Comment" event on this docket, if any — see
-  // module header EVENTS. Only ever a single point-in-time event (a
-  // physical/virtual hearing session), not a multi-day window.
+  // module header EVENTS.
   nextPublicComment: Date | null;
+  // The same event's own eventEndDateTime, if the API publishes one —
+  // confirmed live 2026-09-05 this is null on every real "Public Comment"
+  // event sampled (a single point-in-time announcement, not a scheduled
+  // window), but the field is real and captured in case a future one sets
+  // it.
+  nextPublicCommentEnd: Date | null;
 }
 
 const DENY_RE = /\bdeny(?:ing|al)?\b|\bdismiss/i;
 
 interface DocketEvent {
   eventDateTime: string;
+  eventEndDateTime: string | null;
   eventType: string;
   public: boolean;
 }
@@ -174,14 +180,19 @@ async function fetchDetail(docketID: number): Promise<DocketDetail> {
   // opportunity.
   const now = Date.now();
   let nextPublicComment: Date | null = null;
+  let nextPublicCommentEnd: Date | null = null;
   for (const e of data.events ?? []) {
     if (!e.public || e.eventType !== "Public Comment") continue;
     const d = new Date(e.eventDateTime);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (!nextPublicComment || d.getTime() < nextPublicComment.getTime()) nextPublicComment = d;
+    if (!nextPublicComment || d.getTime() < nextPublicComment.getTime()) {
+      nextPublicComment = d;
+      const endD = e.eventEndDateTime ? new Date(e.eventEndDateTime) : null;
+      nextPublicCommentEnd = endD && !Number.isNaN(endD.getTime()) ? endD : null;
+    }
   }
 
-  return { resolution, nextPublicComment };
+  return { resolution, nextPublicComment, nextPublicCommentEnd };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [

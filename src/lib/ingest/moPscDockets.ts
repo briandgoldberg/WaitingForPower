@@ -632,7 +632,11 @@ function normalizeCase(
     dataQualityNote: dataQualityNoteParts.join(" "),
     commentPeriodStart: hearing?.date ?? null,
     commentPeriodEnd: null,
-    commentLink: hearing ? HEARINGS_PAGE_URL : null,
+    // Points at this case's own EFIS page, not psc.mo.gov's generic
+    // Upcoming Local Public Hearings list (which has no per-case URL to
+    // deep-link to) — the same case-specific page already used as this
+    // project's own source URL below.
+    commentLink: hearing ? `${BASE_URL}/Case/Display/${candidate.caseId}` : null,
     sources: [
       {
         label: `MO PSC Case No. ${candidate.caseNo}`,

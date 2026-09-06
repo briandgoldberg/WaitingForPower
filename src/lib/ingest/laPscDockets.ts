@@ -489,12 +489,14 @@ const HEARING_LOOKAHEAD_MONTHS = 12;
 
 interface UpcomingHearing {
   date: Date;
+  endDate: Date | null;
 }
 
 interface ScheduledEventRow {
   Title: string | null;
   SchedulerEventTypeId: number;
   Start: string | null;
+  End: string | null;
 }
 interface ScheduledEventsResponse {
   Data: ScheduledEventRow[];
@@ -547,7 +549,8 @@ async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, Upcomi
     const docketNumber = m[1];
     const existing = map.get(docketNumber);
     if (!existing || date.getTime() < existing.date.getTime()) {
-      map.set(docketNumber, { date });
+      const endDate = parseMsDate(ev.End);
+      map.set(docketNumber, { date, endDate });
     }
   }
   return map;
@@ -836,7 +839,7 @@ function normalizeDocket(
     causeDetail: `Waiting on certification from the Louisiana Public Service Commission — Docket No. ${record.docketNumber}, "${synopsis || description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
+    commentPeriodEnd: hearing?.endDate ?? null,
     commentLink: hearing ? DOCKET_DETAILS_URL(record.matterId) : null,
     sources: [
       {

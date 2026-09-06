@@ -186,7 +186,9 @@
 // kept, matching this project's standard "only upcoming dates are useful"
 // rule; commentLink points at the docket's own detail page (no per-hearing
 // notice URL is published) since that's the only page a visitor could use
-// to find the hearing's exact room/format.
+// to find the hearing's exact room/format. This is also the one source in
+// this series with a real structured end time (iurc_hearingenddate) for the
+// SAME hearing, not a separate window — surfaced as commentPeriodEnd.
 //
 // Wired to Vercel Cron weekly, 03:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-in-iurc/route.ts). A real full run (27 candidates
@@ -377,10 +379,12 @@ async function fetchCaption(legalCaseId: string): Promise<string> {
 
 interface UpcomingHearing {
   date: Date;
+  endDate: Date | null;
 }
 
 interface HearingApiRow {
   iurc_hearingstartdate?: string;
+  iurc_hearingenddate?: string;
   iurc_hearingtype?: string;
 }
 
@@ -404,14 +408,17 @@ async function fetchUpcomingHearing(legalCaseId: string): Promise<UpcomingHearin
   if (!Array.isArray(rows)) return null;
 
   const now = Date.now();
-  let earliest: Date | null = null;
+  let earliest: UpcomingHearing | null = null;
   for (const row of rows) {
     if (!row.iurc_hearingstartdate || EXCLUDED_HEARING_TYPES.has(row.iurc_hearingtype ?? "")) continue;
     const d = new Date(row.iurc_hearingstartdate);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (!earliest || d.getTime() < earliest.getTime()) earliest = d;
+    if (!earliest || d.getTime() < earliest.date.getTime()) {
+      const endD = row.iurc_hearingenddate ? new Date(row.iurc_hearingenddate) : null;
+      earliest = { date: d, endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null };
+    }
   }
-  return earliest ? { date: earliest } : null;
+  return earliest;
 }
 
 // Confirmed against real captions of both forms: "VERIFIED PETITION OF X
@@ -639,7 +646,7 @@ function buildActiveProject(row: SearchResultRow, caption: string, hearing: Upco
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Indiana Utility Regulatory Commission — Cause No. ${row.docketNumber}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
+    commentPeriodEnd: hearing?.endDate ?? null,
     commentLink: hearing ? detailUrl(row.legalCaseId) : null,
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },

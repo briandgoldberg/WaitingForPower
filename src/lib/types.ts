@@ -19,6 +19,12 @@ export interface MilestoneDTO {
   description: string;
 }
 
+export interface HearingDTO {
+  date: string; // ISO date
+  endDate: string | null; // ISO date
+  label: string | null;
+}
+
 export interface ProjectDTO {
   id: string;
   slug: string;
@@ -73,14 +79,16 @@ export interface ProjectDTO {
   // see schema.prisma.
   queueCluster: string | null;
   pointOfInterconnection: string | null;
-  // Public comment window + how to comment, parsed straight from the
+  // One link per project for hearing logistics, parsed straight from the
   // project's own docket source by a handful of ingestion modules — see
-  // schema.prisma's Project.commentPeriodStart comment for which ones.
-  commentPeriodStart: string | null; // ISO date
-  commentPeriodEnd: string | null; // ISO date
-  commentLink: string | null;
+  // schema.prisma's Project.hearingDetailsLink comment for which ones.
+  hearingDetailsLink: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
+  // Every real upcoming hearing found for this project, oldest first —
+  // see schema.prisma's ProjectHearing model. Can be more than one (e.g. a
+  // separate local public hearing and evidentiary hearing).
+  hearings: HearingDTO[];
 
   // computed
   daysWaiting: number | null;

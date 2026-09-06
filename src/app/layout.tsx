@@ -86,22 +86,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </div>
         </header>
-        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-1.5 text-xs text-center">
-            We&rsquo;re always adding more data sources. If you know of a project that isn&rsquo;t listed,{" "}
-            <Link href="/contact?topic=data" className="underline">
-              reach out
-            </Link>
-            .
-          </div>
-        </div>
         <main className="flex-1 flex flex-col">{children}</main>
         <FeedbackWidget />
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
-            <p>
-              WaitingForPower tracks U.S. energy projects of every fuel type — structural, sourced.
-            </p>
+            <div>
+              <p>WaitingForPower tracks structural and sourced data on U.S. energy projects of every fuel type.</p>
+              <p className="mt-1">
+                We&rsquo;re always adding more data sources. If you know of a project that isn&rsquo;t listed,{" "}
+                <Link href="/contact?topic=data" className="underline">
+                  reach out
+                </Link>
+                .
+              </p>
+            </div>
             <div className="flex items-center gap-3">
               <a
                 href="https://x.com/WaitingForPower"

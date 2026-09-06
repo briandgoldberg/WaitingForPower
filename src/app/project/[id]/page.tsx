@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 const getProject = cache(async (slug: string) => {
   const project = await prisma.project.findUnique({
     where: { slug },
-    include: { causes: true, sources: true, milestones: true, verdicts: true },
+    include: { causes: true, sources: true, milestones: true, verdicts: true, hearings: true },
   });
   return project ? serializeProject(project) : null;
 });
@@ -219,30 +219,31 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public comment period</h2>
-        <p className="text-sm text-[var(--text-secondary)]">
-          {p.commentPeriodStart || p.commentPeriodEnd ? (
-            <>
-              {p.commentPeriodStart &&
-                new Date(p.commentPeriodStart).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
-              {p.commentPeriodStart && p.commentPeriodEnd && " – "}
-              {p.commentPeriodEnd &&
-                new Date(p.commentPeriodEnd).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
-            </>
-          ) : (
-            "Unknown"
-          )}
-        </p>
+        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Hearings</h2>
+        {p.hearings.length > 0 ? (
+          <ul className="flex flex-col gap-1.5 text-sm text-[var(--text-secondary)]">
+            {p.hearings.map((h, i) => (
+              <li key={i}>
+                {new Date(h.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
+                {h.endDate &&
+                  ` – ${new Date(h.endDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}`}
+                {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-[var(--text-secondary)]">Unknown</p>
+        )}
         <p className="text-sm mt-2">
-          {p.commentLink ? (
-            /^https?:\/\//.test(p.commentLink) ? (
-              <a href={p.commentLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+          {p.hearingDetailsLink ? (
+            /^https?:\/\//.test(p.hearingDetailsLink) ? (
+              <a href={p.hearingDetailsLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
                 Hearing details
               </a>
             ) : (
               <>
                 <span className="text-[var(--muted)]">Hearing details: </span>
-                {p.commentLink}
+                {p.hearingDetailsLink}
               </>
             )
           ) : (
@@ -252,7 +253,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           )}
         </p>
         <p className="text-xs text-[var(--muted)] mt-3">
-          {p.commentPeriodStart || p.commentPeriodEnd || p.commentLink
+          {p.hearings.length > 0 || p.hearingDetailsLink
             ? "Pulled from this project’s own docket source. Check the sources below for the latest."
             : "Not available from this project’s data source yet. Check the sources below directly."}
         </p>

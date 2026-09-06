@@ -1,4 +1,4 @@
-import type { Project, ProjectCause, ProjectSource, Milestone, ProjectVerdict } from "@prisma/client";
+import type { Project, ProjectCause, ProjectSource, Milestone, ProjectVerdict, ProjectHearing } from "@prisma/client";
 import { daysWaiting, yearsWaiting } from "@/lib/calc/dates";
 import { estimateInvestmentWaiting } from "@/lib/calc/investmentWaiting";
 import type { ProjectDTO } from "@/lib/types";
@@ -15,6 +15,8 @@ export type ProjectWithRelations = Project & {
   // Only the project detail page's own fetch (src/app/project/[id]/page.tsx)
   // includes it for real.
   verdicts?: ProjectVerdict[];
+  // Same optional-relation convention as verdicts above.
+  hearings?: ProjectHearing[];
 };
 
 export function serializeProject(p: ProjectWithRelations): ProjectDTO {
@@ -76,9 +78,7 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     pointOfInterconnection: p.pointOfInterconnection,
     greenVotes: p.verdicts?.filter((v) => v.vote === "green").length ?? 0,
     redVotes: p.verdicts?.filter((v) => v.vote === "red").length ?? 0,
-    commentPeriodStart: p.commentPeriodStart ? p.commentPeriodStart.toISOString() : null,
-    commentPeriodEnd: p.commentPeriodEnd ? p.commentPeriodEnd.toISOString() : null,
-    commentLink: p.commentLink,
+    hearingDetailsLink: p.hearingDetailsLink,
     sources: p.sources.map((s) => ({ label: s.label, url: s.url })),
     milestones: p.milestones
       .slice()
@@ -88,6 +88,14 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
         dateConfidence: m.dateConfidence as "exact" | "approximate",
         stage: m.stage,
         description: m.description,
+      })),
+    hearings: (p.hearings ?? [])
+      .slice()
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .map((h) => ({
+        date: h.date.toISOString(),
+        endDate: h.endDate ? h.endDate.toISOString() : null,
+        label: h.label,
       })),
     daysWaiting: days,
     yearsWaiting: years,

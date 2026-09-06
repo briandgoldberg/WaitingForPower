@@ -6,6 +6,7 @@ import { computeAggregateStats } from "@/lib/stats";
 import { STATE_NAMES, stateName } from "@/lib/data/usStates";
 import { StatsHeader } from "@/components/StatsHeader";
 import { ProjectList } from "@/components/ProjectList";
+import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 
 export const dynamic = "force-dynamic";
 
@@ -85,12 +86,23 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
     },
   };
 
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "Home", url: "https://waitingforpower.com" },
+    { name: "Projects", url: "https://waitingforpower.com/projects" },
+    { name },
+  ]);
+
   return (
     <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-2 flex flex-col gap-3 flex-1">
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
+      />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       <div>

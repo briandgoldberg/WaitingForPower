@@ -9,8 +9,9 @@ import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_B
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { GreenlightVote } from "@/components/GreenlightVote";
-import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
+import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
+import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 
 export const dynamic = "force-dynamic";
 
@@ -75,10 +76,24 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     projectUrl: `https://waitingforpower.com/project/${p.slug}`,
     hearingDetailsLink: p.hearingDetailsLink,
     hearings: p.hearings,
+    stateCode: singleStateCode,
   });
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "Home", url: "https://waitingforpower.com" },
+    { name: "Projects", url: "https://waitingforpower.com/projects" },
+    ...(singleStateCode
+      ? [{ name: stateName(singleStateCode), url: `https://waitingforpower.com/state/${singleStateCode}` }]
+      : []),
+    { name: p.name },
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {hearingEventsJsonLd && (
         <script
           type="application/ld+json"

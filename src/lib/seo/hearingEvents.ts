@@ -21,11 +21,49 @@ import type { HearingDTO } from "@/lib/types";
 // teleconferencing" was mis-classified as offline-only before this fix).
 const VIRTUAL_KEYWORDS = /\b(webex|zoom|microsoft teams|teams meeting|virtual|teleconferenc\w*|online)\b/i;
 
+// Real agency names for the states currently wired for hearing extraction
+// (see src/lib/ingest/README.md's per-state notes) — used only to set
+// Event.organizer, a cheap entity-recognition signal for search/AI. Not
+// exhaustive of all 50 states on purpose: only listing ones this site
+// actually sources hearings from, so an unlisted state just gets no
+// organizer field rather than a guessed name.
+const STATE_HEARING_AGENCY: Record<string, string> = {
+  WA: "Washington State Energy Facility Site Evaluation Council",
+  OH: "Ohio Power Siting Board",
+  AZ: "Arizona Corporation Commission",
+  OR: "Oregon Energy Facility Siting Council",
+  VA: "Virginia State Corporation Commission",
+  VT: "Vermont Public Utility Commission",
+  KY: "Kentucky Public Service Commission",
+  CT: "Connecticut Siting Council",
+  NH: "New Hampshire Site Evaluation Committee",
+  IL: "Illinois Commerce Commission",
+  IN: "Indiana Utility Regulatory Commission",
+  AR: "Arkansas Public Service Commission",
+  CA: "California Energy Commission",
+  SC: "South Carolina Public Service Commission",
+  SD: "South Dakota Public Utilities Commission",
+  LA: "Louisiana Public Service Commission",
+  MO: "Missouri Public Service Commission",
+  WV: "West Virginia Public Service Commission",
+  UT: "Utah Public Service Commission",
+  CO: "Colorado Public Utilities Commission",
+  FL: "Florida Division of Administrative Hearings",
+  ND: "North Dakota Public Service Commission",
+  NE: "Nebraska Power Review Board",
+  NC: "North Carolina Utilities Commission",
+};
+
 interface HearingEventInput {
   projectName: string;
   projectUrl: string;
   hearingDetailsLink: string | null;
   hearings: HearingDTO[];
+  // A single unambiguous state code for this project, if there is one — see
+  // callers' own singleStateCode (project page already computes this the
+  // same way for its own display purposes). Omit for multi-state or
+  // unknown-state projects rather than guessing which one applies.
+  stateCode?: string | null;
 }
 
 // Returns a ready-to-embed JSON-LD object (schema.org Event per hearing,
@@ -33,10 +71,11 @@ interface HearingEventInput {
 // should skip rendering the <script> tag entirely in that case rather than
 // emit an empty graph.
 export function buildHearingEventsJsonLd(params: HearingEventInput): Record<string, unknown> | null {
-  const { projectName, projectUrl, hearingDetailsLink, hearings } = params;
+  const { projectName, projectUrl, hearingDetailsLink, hearings, stateCode } = params;
   if (hearings.length === 0) return null;
 
   const url = hearingDetailsLink && /^https?:\/\//.test(hearingDetailsLink) ? hearingDetailsLink : projectUrl;
+  const agency = stateCode ? STATE_HEARING_AGENCY[stateCode] : undefined;
 
   const events = hearings.map((h) => {
     const event: Record<string, unknown> = {
@@ -47,6 +86,7 @@ export function buildHearingEventsJsonLd(params: HearingEventInput): Record<stri
       url,
     };
     if (h.endDate) event.endDate = h.endDate;
+    if (agency) event.organizer = { "@type": "GovernmentOrganization", name: agency };
 
     if (h.location) {
       const hasDigit = /\d/.test(h.location);

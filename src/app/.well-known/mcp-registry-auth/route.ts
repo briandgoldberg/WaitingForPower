@@ -7,7 +7,7 @@
 // login request, never committed.
 export const dynamic = "force-static";
 
-const BODY = "v=MCPv1; k=ed25519; p=50d08c3bec6f4456f28c15d9402e78a7703cb345e103ef0151f8ec43690f4056";
+const BODY = "v=MCPv1; k=ed25519; p=UNCMO+xvRFbyjBXZQC54p3A8s0XhA+8BUfjsQ2kPQFY=";
 
 export async function GET() {
   return new Response(BODY, { headers: { "Content-Type": "text/plain" } });

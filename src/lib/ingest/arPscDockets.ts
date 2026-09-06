@@ -454,16 +454,35 @@ function parseMDY(raw: string): Date | null {
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
 }
 
 // See module header PUBLIC HEARING DATES — confirmed live 2026-09-05
 // against deskcalendar.asp's own flat "Upcoming Hearings" table. Each row's
-// docket-number link, "Details..." link, and Date/Time cell are pulled
-// together with a single bounded-lookahead regex rather than three separate
-// per-row regexes, since this page (unlike docket_search_results.asp) has no
-// stable per-row wrapper element to split on first.
+// docket-number link, "Details..." link, Date/Time cell, AND (added
+// 2026-09-05, see LOCATION CAPTURE below) the table's own third "Location"
+// column are pulled together with a single bounded-lookahead regex rather
+// than several separate per-row regexes, since this page (unlike
+// docket_search_results.asp) has no stable per-row wrapper element to split
+// on first.
 const HEARING_ROW_RE =
-  /CaseNumber=(\d{2}-\d{3}-[A-Z]+)"[\s\S]{0,400}?Calendar-Detail\.asp\?ID=(\d+)"[\s\S]{0,200}?>(\d{1,2}\/\d{1,2}\/\d{4}) - \d{1,2}:\d{2}\s*[AP]M</g;
+  /CaseNumber=(\d{2}-\d{3}-[A-Z]+)"[\s\S]{0,400}?Calendar-Detail\.asp\?ID=(\d+)"[\s\S]{0,200}?>(\d{1,2}\/\d{1,2}\/\d{4}) - \d{1,2}:\d{2}\s*[AP]M<\/td>\s*<td[^>]*>([^<]*)<\/td>/g;
+
+// LOCATION CAPTURE (added 2026-09-05): deskcalendar.asp's own table header
+// (confirmed live) is literally "Docket: | Date/Time: | Location:" — the
+// third `<td>` per row this module was already skipping over now feeds
+// `location` directly. Confirmed live 2026-09-05 real values are a
+// building/room/presiding-officer shorthand, e.g. "APSC/ HR#1/ Commission"
+// (APSC's own building, Hearing Room #1, presided by the full Commission)
+// and "APSC / HR #1/ WHITE" (a single Commissioner) — not a street address,
+// but exactly the kind of "where to show up" venue string this project's
+// hearing location field is for, published verbatim (decoded/trimmed only,
+// not reformatted) per NormalizedHearing's own "exactly as the source
+// publishes it" convention.
+function decodeAndTrim(raw: string): string | null {
+  const cleaned = decodeHtmlEntities(raw).trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
 
 // Every real future hearing row is kept per docket (not just the
 // earliest) — a docket can genuinely carry more than one, e.g. a
@@ -482,7 +501,7 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
     if (!date || date.getTime() <= now) continue;
     const arr = map.get(docket) ?? [];
     if (!arr.some((h) => h.date.getTime() === date.getTime())) {
-      arr.push({ date, link: HEARING_DETAIL_URL(m[2]) });
+      arr.push({ date, link: HEARING_DETAIL_URL(m[2]), location: decodeAndTrim(m[4]) });
     }
     map.set(docket, arr);
   }
@@ -916,7 +935,7 @@ function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearings:
     causeDetail: `Waiting on a construction certificate/authority from the Arkansas Public Service Commission — Docket No. ${detail.docket}, "${detail.style}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `AR PSC Docket No. ${detail.docket}`,

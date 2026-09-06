@@ -435,6 +435,9 @@ model ProjectHearing {
   // Free text from the source, e.g. "Local public hearing", "Evidentiary
   // hearing", "Formal Hearing" — null when the source doesn't name a type.
   label     String?
+  // Venue/address (or "Telephonically" / "Via Microsoft Teams" etc.) exactly
+  // as the source publishes it — null when the source doesn't name one.
+  location  String?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 

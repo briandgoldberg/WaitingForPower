@@ -227,11 +227,36 @@ const HEARING_H4_RE = /<h4[^>]*>(?:<strong>)?[^<]*hearing/i;
 
 interface UpcomingHearing {
   date: Date;
+  location: string | null;
 }
 
 function parseCtCalendarDate(raw: string): Date | null {
   const d = new Date(raw.trim());
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// The same `<h4>` that HEARING_H4_RE tests for "hearing" also names the
+// session's own venue/attendance mechanism right in its own text — e.g.
+// "Enforcement Action Public Hearing via Zoom Conferencing" — confirmed
+// live 2026-09-05 (the calendar's other real category, plain business
+// meetings, is worded "Energy/Telecommunications Meeting via Zoom
+// Conferencing" — no physical-room examples currently live, but this reads
+// whatever CSC's own prose says, in-person or remote alike). A date
+// section can in principle carry more than one `<h4>` (an agenda item plus
+// a hearing item); this returns the first one whose own text mentions
+// "hearing", matching HEARING_H4_RE's own scoping.
+function extractHearingLocation(sectionHtml: string): string | null {
+  const h4Re = /<h4[^>]*>([\s\S]*?)<\/h4>/gi;
+  for (const m of sectionHtml.matchAll(h4Re)) {
+    const text = stripHtml(m[1]);
+    if (!/hearing/i.test(text)) continue;
+    // Strips a leading "N(AM/PM) - " time prefix (already captured
+    // separately via the section's own date) so `location` holds just the
+    // venue/mechanism description CSC published.
+    const withoutTimePrefix = text.replace(/^\d{1,2}(:\d{2})?\s*[AP]M\s*-\s*/i, "").trim();
+    return withoutTimePrefix.length > 0 ? withoutTimePrefix : null;
+  }
+  return null;
 }
 
 // Every real upcoming hearing found is kept (not just the earliest) — a
@@ -250,6 +275,7 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
     if (!dateText || !HEARING_H4_RE.test(fullMatch)) continue;
     const date = parseCtCalendarDate(dateText);
     if (!date || date.getTime() <= now) continue;
+    const location = extractHearingLocation(fullMatch);
 
     // A date's own section can name more than one case (rare, but not
     // impossible) — every "PETITION NO. n" / "DOCKET NO. n" mention in
@@ -259,7 +285,7 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
       const kind = ref[1].toLowerCase();
       const key = `${kind}-${ref[2]}`;
       const arr = map.get(key) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
       map.set(key, arr);
     }
   }
@@ -662,7 +688,7 @@ function normalizeCandidate(
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need (or related declaratory ruling) from the Connecticut Siting Council — ${label} No. ${candidate.number}, "${desc.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? candidate.url : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `CT CSC ${label} No. ${candidate.number}`,

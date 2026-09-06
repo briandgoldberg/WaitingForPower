@@ -26,14 +26,27 @@
 // EVENTS: the same detail response also carries a real `events` array —
 // confirmed live 2026-09-05 against several active dockets — each with a
 // structured `eventType` string ("AZ Power Plant and Line Siting Committee
-// Hearing", "Pre-hearing Conference", "Public Comment") and a genuine
-// `eventDateTime`. Only the "Public Comment" type, still in the future, is
-// surfaced as this project's hearings (see schema.prisma) — the hearing/
-// conference entries are procedural proceedings, not a public comment
-// opportunity. This is the cleanest
-// structured comment-event data found across any state source in this
-// series so far (contrast waEfsecFacilities.ts's separate aggregate page,
-// or ohOpsbCases.ts's free-text hearing paragraphs).
+// Hearing", "Pre-hearing Conference", "Public Comment"), a genuine
+// `eventDateTime`, and (per this feature's own field) a `location` string —
+// sometimes a real venue, sometimes just "See Notes"/"N/A"/"TBD" (treated as
+// no real location, see cleanEventLocation). This is the cleanest structured
+// comment-event data found across any state source in this series so far
+// (contrast waEfsecFacilities.ts's separate aggregate page, or
+// ohOpsbCases.ts's free-text hearing paragraphs).
+//
+// BROADENED 2026-09-05: this used to surface only the "Public Comment"
+// eventType, discarding the Siting Committee's own hearing events
+// entirely — but under this project's "hearings visitors can attend"
+// standard, those hearings are exactly the kind of genuine open proceeding
+// (governed by Arizona's open-meeting law) this feature exists to surface,
+// not merely procedural noise. Now included alongside Public Comment: any
+// eventType containing "Hearing" (e.g. "AZ Power Plant and Line Siting
+// Committee Hearing"). Still excluded: eventTypes naming a "Conference"
+// (e.g. "Pre-hearing Conference") — despite "Pre-hearing" itself containing
+// the substring "hearing," a prehearing conference is a procedural
+// scheduling session among the parties' attorneys, not a proceeding the
+// public shows up to — see isAttendableEvent below (conference check runs
+// first, so "Pre-hearing Conference" is excluded despite matching /hearing/i).
 // Note two separate hosts: efiling.azcc.gov is this API (and the filing
 // tool); edocket.azcc.gov is a separate human-facing search UI that reads
 // the same underlying data — confirmed by hand that
@@ -141,7 +154,7 @@ async function searchCandidates(): Promise<DocketSearchResult[]> {
   return data.searchResult;
 }
 
-interface PublicCommentEvent {
+interface AttendableEvent {
   date: Date;
   // The same event's own eventEndDateTime, if the API publishes one —
   // confirmed live 2026-09-05 this is null on every real "Public Comment"
@@ -149,13 +162,19 @@ interface PublicCommentEvent {
   // window), but the field is real and captured in case a future one sets
   // it.
   endDate: Date | null;
+  // The source's own eventType string (e.g. "Public Comment", "AZ Power
+  // Plant and Line Siting Committee Hearing"), kept as the hearing's label
+  // so the different event types stay distinguishable on the project page.
+  label: string;
+  location: string | null;
 }
 
 interface DocketDetail {
   resolution: "granted" | "denied" | null;
-  // Every upcoming "Public Comment" event on this docket, not just the
-  // earliest — see module header EVENTS.
-  publicCommentEvents: PublicCommentEvent[];
+  // Every upcoming attendable event on this docket (Public Comment and
+  // genuine hearing events — see isAttendableEvent), not just the
+  // earliest — see module header EVENTS/BROADENED.
+  attendableEvents: AttendableEvent[];
 }
 
 const DENY_RE = /\bdeny(?:ing|al)?\b|\bdismiss/i;
@@ -165,6 +184,29 @@ interface DocketEvent {
   eventEndDateTime: string | null;
   eventType: string;
   public: boolean;
+  location?: string | null;
+}
+
+// See module header BROADENED. A "Conference" (e.g. "Pre-hearing
+// Conference") is checked and excluded FIRST, since "Pre-hearing" itself
+// contains the substring "hearing" — order matters here.
+const CONFERENCE_EVENT_RE = /conference/i;
+const HEARING_OR_COMMENT_EVENT_RE = /hearing|public comment/i;
+
+function isAttendableEvent(eventType: string): boolean {
+  if (CONFERENCE_EVENT_RE.test(eventType)) return false;
+  return HEARING_OR_COMMENT_EVENT_RE.test(eventType);
+}
+
+// The API's own `location` field is sometimes a real venue/address,
+// sometimes a placeholder like "See Notes"/"N/A"/"TBD" that isn't actually
+// telling a visitor anything — treated as no real location per this
+// module's own judgment call (see module header EVENTS).
+function cleanEventLocation(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || /^(see notes?|n\/a|tbd)$/i.test(trimmed)) return null;
+  return trimmed;
 }
 
 async function fetchDetail(docketID: number): Promise<DocketDetail> {
@@ -178,22 +220,27 @@ async function fetchDetail(docketID: number): Promise<DocketDetail> {
   // proceedings — confirmed live 2026-09-05 against several active
   // dockets — with a structured `eventType` (e.g. "AZ Power Plant and Line
   // Siting Committee Hearing", "Pre-hearing Conference", "Public Comment")
-  // and a real `eventDateTime`. Only "Public Comment" events, still in the
-  // future, and marked `public: true`, are surfaced — the hearing/
-  // conference event types are procedural sessions, not a comment
-  // opportunity.
+  // and a real `eventDateTime`. Public Comment and genuine hearing events,
+  // still in the future and marked `public: true`, are surfaced — only
+  // attorneys-only conference-type events are excluded — see
+  // isAttendableEvent and module header BROADENED.
   const now = Date.now();
-  const publicCommentEvents: PublicCommentEvent[] = [];
+  const attendableEvents: AttendableEvent[] = [];
   for (const e of data.events ?? []) {
-    if (!e.public || e.eventType !== "Public Comment") continue;
+    if (!e.public || !isAttendableEvent(e.eventType)) continue;
     const d = new Date(e.eventDateTime);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (publicCommentEvents.some((pc) => pc.date.getTime() === d.getTime())) continue;
+    if (attendableEvents.some((pc) => pc.date.getTime() === d.getTime())) continue;
     const endD = e.eventEndDateTime ? new Date(e.eventEndDateTime) : null;
-    publicCommentEvents.push({ date: d, endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null });
+    attendableEvents.push({
+      date: d,
+      endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null,
+      label: e.eventType.trim(),
+      location: cleanEventLocation(e.location),
+    });
   }
 
-  return { resolution, publicCommentEvents };
+  return { resolution, attendableEvents };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -293,8 +340,8 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     causeDetail: `Waiting on a Certificate of Environmental Compatibility from the Arizona Corporation Commission's Line Siting Committee — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink:
-      detail.publicCommentEvents.length > 0 ? `https://edocket.azcc.gov/search/docket-search/item-detail/${search.docketID}` : null,
-    hearings: detail.publicCommentEvents.map((e) => ({ date: e.date, endDate: e.endDate, label: "Public Comment" })),
+      detail.attendableEvents.length > 0 ? `https://edocket.azcc.gov/search/docket-search/item-detail/${search.docketID}` : null,
+    hearings: detail.attendableEvents.map((e) => ({ date: e.date, endDate: e.endDate, label: e.label, location: e.location })),
     sources: [
       {
         label: `AZ ACC Docket No. ${search.docketNumber}`,

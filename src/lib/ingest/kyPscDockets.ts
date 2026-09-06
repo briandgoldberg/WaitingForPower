@@ -521,7 +521,7 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity / Certificate of Construction from the Kentucky Public Service Commission — Case No. ${detail.caseNumber}, "${detail.nature}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/ViewCaseFilings/${detail.caseNumber}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `KY PSC Case No. ${detail.caseNumber}`,

@@ -130,22 +130,28 @@ const DOCKET_NUMBER_IN_SUMMARY_RE = /\b\d{2}[A-Z]-\d{3,4}[A-Z]{1,3}\b/g;
 
 interface UpcomingHearing {
   date: Date;
+  location: string | null;
 }
 
 // Minimal RFC5545 unfolding (continuation lines start with a single space)
 // + VEVENT extraction — real observed shape only (DTSTART;VALUE=DATE:
 // YYYYMMDD for these all-day hearing entries), not a full iCalendar parser.
-function parseIcsEvents(ics: string): { dateStr: string; summary: string }[] {
+// LOCATION — confirmed live 2026-09-05: 3,877 of 4,671 real events carry a
+// plain `LOCATION:` property (e.g. "DORA - Hearing Room A") — the PUC's own
+// venue for that hearing — which flows into NormalizedHearing.location.
+function parseIcsEvents(ics: string): { dateStr: string; summary: string; location: string | null }[] {
   const unfolded = ics.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "");
-  const events: { dateStr: string; summary: string }[] = [];
+  const events: { dateStr: string; summary: string; location: string | null }[] = [];
   for (const m of unfolded.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)) {
     const block = m[1];
     const dtstartMatch = /DTSTART[^:\n]*:(\d{8})/.exec(block);
     const summaryMatch = /SUMMARY:(.*)/.exec(block);
     if (!dtstartMatch || !summaryMatch) continue;
+    const locationMatch = /LOCATION:(.*)/.exec(block);
     events.push({
       dateStr: dtstartMatch[1],
       summary: summaryMatch[1].replace(/\\,/g, ",").replace(/\\;/g, ";"),
+      location: locationMatch ? locationMatch[1].replace(/\\,/g, ",").replace(/\\;/g, ";").trim() || null : null,
     });
   }
   return events;
@@ -169,14 +175,14 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
   const ics = await res.text();
   const now = Date.now();
   const map = new Map<string, UpcomingHearing[]>();
-  for (const { dateStr, summary } of parseIcsEvents(ics)) {
+  for (const { dateStr, summary, location } of parseIcsEvents(ics)) {
     if (/vacated/i.test(summary)) continue;
     const date = parseIcsDate(dateStr);
     if (!date || date.getTime() <= now) continue;
     for (const docketMatch of summary.matchAll(DOCKET_NUMBER_IN_SUMMARY_RE)) {
       const docketNo = docketMatch[0];
       const arr = map.get(docketNo) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
       map.set(docketNo, arr);
     }
   }
@@ -402,7 +408,7 @@ function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upc
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Colorado Public Utilities Commission — Docket No. ${search.docketId}, "${search.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `${DETAIL_URL}?p_docket_id=${encodeURIComponent(search.docketId)}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `Colorado PUC Docket No. ${search.docketId}`,

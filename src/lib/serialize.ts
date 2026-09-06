@@ -96,6 +96,7 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
         date: h.date.toISOString(),
         endDate: h.endDate ? h.endDate.toISOString() : null,
         label: h.label,
+        location: h.location,
       })),
     daysWaiting: days,
     yearsWaiting: years,

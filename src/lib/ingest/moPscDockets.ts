@@ -266,9 +266,19 @@ function stripTags(html: string): string {
 const HEARINGS_PAGE_URL = "https://psc.mo.gov/General/Upcoming_Local_Public_Hearings";
 const HEARING_CASE_LINK_RE = /^<a[^>]*>\s*([A-Z]{2}-\d{4}-\d{4})\s*<\/a>/i;
 const HEARING_DATE_RE = /Date:\s*([^<\r\n]+)/i;
+// Same plain-text "Date: ... / Time: ... / Location: ..." block as
+// HEARING_DATE_RE reads from — confirmed live 2026-09-05 against the one
+// real entry on the page (Case EA-2026-0154): "Location: Webex - see
+// below." Captured verbatim (including a "see below" pointer to a virtual
+// hearing, not just a physical address) since that's the real, complete
+// value of this source's own Location field — no attempt is made to also
+// scrape the dial-in phone number/access code from the following free-text
+// paragraphs, which aren't structured the same way across entries.
+const HEARING_LOCATION_RE = /Location:\s*([^<\r\n]+)/i;
 
 interface UpcomingLocalHearing {
   date: Date;
+  location: string | null;
 }
 
 function parseHearingDate(raw: string): Date | null {
@@ -300,8 +310,10 @@ async function fetchUpcomingLocalHearingsByCase(): Promise<Map<string, UpcomingL
     const date = parseHearingDate(dateMatch[1]);
     if (!date || date.getTime() <= now) continue;
     const caseNo = caseMatch[1].toUpperCase();
+    const locationMatch = HEARING_LOCATION_RE.exec(chunk);
+    const location = locationMatch ? decodeHtmlEntities(locationMatch[1]) : null;
     const arr = map.get(caseNo) ?? [];
-    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
     map.set(caseNo, arr);
   }
   return map;
@@ -634,7 +646,7 @@ function normalizeCase(
     // deep-link to) — the same case-specific page already used as this
     // project's own source URL below.
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/Display/${candidate.caseId}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `MO PSC Case No. ${candidate.caseNo}`,

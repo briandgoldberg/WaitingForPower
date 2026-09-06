@@ -219,26 +219,29 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Hearings</h2>
+        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public Hearings</h2>
         {p.hearings.length > 0 ? (
-          <ul className="flex flex-col gap-1.5 text-sm text-[var(--text-secondary)]">
+          <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
             {p.hearings.map((h, i) => (
               <li key={i}>
-                {new Date(h.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
-                {h.endDate &&
-                  ` – ${new Date(h.endDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}`}
-                {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
+                <div>
+                  {new Date(h.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
+                  {h.endDate &&
+                    ` – ${new Date(h.endDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}`}
+                  {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
+                </div>
+                {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
               </li>
             ))}
           </ul>
         ) : (
           <p className="text-sm text-[var(--text-secondary)]">Unknown</p>
         )}
-        <p className="text-sm mt-2">
+        <p className="text-sm mt-3">
           {p.hearingDetailsLink ? (
             /^https?:\/\//.test(p.hearingDetailsLink) ? (
               <a href={p.hearingDetailsLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
-                Hearing details
+                Full hearing details, including where to go
               </a>
             ) : (
               <>

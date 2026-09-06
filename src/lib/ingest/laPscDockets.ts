@@ -301,29 +301,47 @@
 // `SchedulerEventTypeId` — confirmed live via `GET /portal/PSC/
 // ReadScheduleEventTypes`, which returns the full, small, real enum: 1
 // =Hearing, 2=Holiday, 3=Meeting, 4=Status Conference, 5=Technical
-// Conference. Only SchedulerEventTypeId=1 ("Hearing") is used here — Status
-// Conferences and Technical Conferences are real, separate, more
-// procedural event types LPSC schedules for the same dockets (confirmed
-// live: Docket U-38035 has a real upcoming "Status Conference", Docket
-// U-37964 too) that this module deliberately does not surface as a
-// hearing/comment-period date, matching this project's standing "hearing"
-// framing (see vtPucDockets.ts/ctCscDockets.ts). Each real Hearing event's
-// own `Title` field is a plain, consistently-formatted string, "Hearing:
-// {docketNumber}" (e.g. "Hearing: U-37812", confirmed live against the same
-// exact docket-number format ("U-NNNNN") this module already tracks via
+// Conference. Re-scoped 2026-09-05 (site owner directive: surface any
+// hearing type that's a genuine open proceeding the public can attend/dial
+// into, not just ones where the public gets to speak) to include
+// SchedulerEventTypeId 1 ("Hearing"), 4 ("Status Conference") AND 5
+// ("Technical Conference") — confirmed live that Status Conferences are not
+// private: Docket U-38035's real upcoming Status Conference (and U-37964's)
+// both carry a real SchedulerEventLocationName of "Galvez Building 11th
+// Floor Conference Room and remote access via teleconferencing," i.e. an
+// explicit public dial-in, not a closed/internal session. Technical
+// Conference (id 5) is included on the same reasoning even though none
+// happened to be scheduled in the live window checked 2026-09-05 — nothing
+// marks it private either. SchedulerEventTypeId=3 ("Meeting", titled
+// "Business and Executive Session" live) is still excluded: its title never
+// names a docket at all (so there's no way to attribute it to a specific
+// project regardless), and "Executive Session" is the closed-door portion
+// of a Commission meeting under Louisiana's open-meetings law, i.e.
+// genuinely non-public. Holiday (2) is obviously excluded. Each real
+// Hearing/Status Conference/Technical Conference event's own `Title` field
+// is a plain, consistently-formatted string, "{Hearing|Status Conference|
+// Technical Conference}: {docketNumber}" (e.g. "Hearing: U-37812",
+// "Status Conference: U-38035," both confirmed live against the same exact
+// docket-number format ("U-NNNNN"/"T-NNNNN") this module already tracks via
 // MatterNumber/docketNumber elsewhere) — the event's own structured
 // `Dockets` array field is confirmed live to always be empty ([]) despite
 // existing in the schema, so the Title string is the only real way to
-// recover which docket a hearing belongs to, not a defensive fallback.
-// Real confirmed-live examples as of 2026-09-05: Docket U-37812 (Entergy
-// Louisiana, tracked in this module's live candidate set) has a real
-// upcoming Hearing on 2026-09-29; Docket U-37882 (also tracked) has THREE
-// separate upcoming Hearing entries (2026-10-07, 2026-10-12, 2026-10-19) —
-// this is the real, motivating case for keeping every real upcoming hearing
-// per docket (not just the earliest, unlike modules elsewhere in this series
-// still using the single-hearing convention). A 12-month forward
-// window (today..+12 months) was confirmed live to return real hearings
-// scheduled as far out as 2027-02-23, comfortably inside that window.
+// recover which docket a hearing belongs to, not a defensive fallback. The
+// parsed type name (Hearing/Status Conference/Technical Conference) is
+// carried through as the hearing's own `label` so visitors can tell them
+// apart, and the event's own `SchedulerEventLocationName` field (e.g.
+// "GALVEZ BUILDING, 11TH FLOOR HEARING ROOM" for Hearings) is carried
+// through as `location` — both already present on the same event objects
+// this fetch already parses, no extra request. Real confirmed-live examples
+// as of 2026-09-05: Docket U-37812 (Entergy Louisiana, tracked in this
+// module's live candidate set) has a real upcoming Hearing on 2026-09-29;
+// Docket U-37882 (also tracked) has THREE separate upcoming Hearing entries
+// (2026-10-07, 2026-10-12, 2026-10-19) — this is the real, motivating case
+// for keeping every real upcoming hearing per docket (not just the
+// earliest, unlike modules elsewhere in this series still using the
+// single-hearing convention). A 12-month forward window (today..+12 months)
+// was confirmed live to return real hearings scheduled as far out as
+// 2027-02-23, comfortably inside that window.
 //
 // Wired to Vercel Cron weekly, 08:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-la-psc/route.ts).
@@ -481,16 +499,23 @@ async function searchUDockets(startDate: Date, endDate: Date): Promise<DocketLis
   }));
 }
 
-// See module header HEARING CALENDAR — SchedulerEventTypeId=1 is "Hearing"
-// per the live ReadScheduleEventTypes enum; the docket number is recovered
-// from the event's own Title text ("Hearing: U-37812"), not the (always
-// empty, confirmed live) Dockets array field.
-const HEARING_EVENT_TITLE_RE = /^Hearing:\s*([A-Z]-\d+)/;
+// See module header HEARING CALENDAR — SchedulerEventTypeId 1/4/5 ("Hearing"
+// /"Status Conference"/"Technical Conference" per the live
+// ReadScheduleEventTypes enum) are genuine open proceedings tied to a
+// specific docket; the docket number is recovered from the event's own
+// Title text ("Hearing: U-37812", "Status Conference: U-38035"), not the
+// (always empty, confirmed live) Dockets array field. Type 3 ("Meeting",
+// LPSC's own closed-door "Business and Executive Session") is deliberately
+// excluded — see module header.
+const OPEN_HEARING_EVENT_TYPE_IDS = new Set([1, 4, 5]);
+const HEARING_EVENT_TITLE_RE = /^(Hearing|Status Conference|Technical Conference):\s*([A-Z]-\d+)/;
 const HEARING_LOOKAHEAD_MONTHS = 12;
 
 interface UpcomingHearing {
   date: Date;
   endDate: Date | null;
+  label: string | null;
+  location: string | null;
 }
 
 interface ScheduledEventRow {
@@ -498,6 +523,7 @@ interface ScheduledEventRow {
   SchedulerEventTypeId: number;
   Start: string | null;
   End: string | null;
+  SchedulerEventLocationName: string | null;
 }
 interface ScheduledEventsResponse {
   Data: ScheduledEventRow[];
@@ -542,15 +568,17 @@ async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, Upcomi
   const nowMs = now.getTime();
   const map = new Map<string, UpcomingHearing[]>();
   for (const ev of json.Data) {
-    if (ev.SchedulerEventTypeId !== 1) continue; // not a real "Hearing" event — see module header
+    if (!OPEN_HEARING_EVENT_TYPE_IDS.has(ev.SchedulerEventTypeId)) continue; // not a real open proceeding — see module header
     const m = HEARING_EVENT_TITLE_RE.exec(ev.Title ?? "");
     if (!m) continue;
     const date = parseMsDate(ev.Start);
     if (!date || date.getTime() <= nowMs) continue;
-    const docketNumber = m[1];
+    const label = m[1];
+    const docketNumber = m[2];
     const endDate = parseMsDate(ev.End);
+    const location = ev.SchedulerEventLocationName ? decodeHtmlEntities(ev.SchedulerEventLocationName) : null;
     const arr = map.get(docketNumber) ?? [];
-    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, endDate });
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, endDate, label, location });
     map.set(docketNumber, arr);
   }
   return map;
@@ -839,7 +867,7 @@ function normalizeDocket(
     causeDetail: `Waiting on certification from the Louisiana Public Service Commission — Docket No. ${record.docketNumber}, "${synopsis || description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? DOCKET_DETAILS_URL(record.matterId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label, location: h.location })),
     sources: [
       {
         label: `LA PSC Docket No. ${record.docketNumber}`,

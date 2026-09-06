@@ -125,10 +125,17 @@ const HEARING_CALENDAR_LOOKAHEAD_DAYS = 400;
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
 }
 
+// Third <td> (no class) after the docket-number <td> is the free-text
+// column the module header calls "Summary/Notes" — confirmed live
+// 2026-09-05 it actually opens with a "Location:" label first (e.g.
+// "<span>Location:</span> Hearing Room<br />"), present on every one of 32
+// real docket rows pulled live, before the Summary/Notes text. Captured
+// into group 5 here.
 const CALENDAR_ROW_RE =
-  /<tr>\s*<td class="nowrap">\s*<span>([^<]+)<\/span>\s*<br \/>\s*<span class="\w+">([^<]*)<\/span>\s*<\/td>\s*<td class="nowrap">\s*(?:<a href="(\/Web\/Dockets\/Detail\/\d+)">([^<]+)<\/a>)?[\s\S]*?<\/tr>/g;
+  /<tr>\s*<td class="nowrap">\s*<span>([^<]+)<\/span>\s*<br \/>\s*<span class="\w+">([^<]*)<\/span>\s*<\/td>\s*<td class="nowrap">\s*(?:<a href="(\/Web\/Dockets\/Detail\/\d+)">([^<]+)<\/a>)?\s*<\/td>\s*<td>\s*(?:<span>Location:<\/span>\s*([^<]*?)\s*<br[^>]*>)?[\s\S]*?<\/tr>/g;
 
 export function parseHearingCalendar(html: string): Map<string, UpcomingHearing[]> {
   const now = Date.now();
@@ -141,8 +148,9 @@ export function parseHearingCalendar(html: string): Map<string, UpcomingHearing[
     if (!/^scheduled$/i.test(status)) continue; // defensive — only "Scheduled" has been observed live, see module header
     const date = new Date(m[1].trim());
     if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+    const location = m[5] ? decodeHtmlEntities(m[5]) : null;
     const arr = map.get(docketNumber) ?? [];
-    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: `${BASE_URL}${href}` });
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: `${BASE_URL}${href}`, location });
     map.set(docketNumber, arr);
   }
   return map;
@@ -406,7 +414,7 @@ function normalizeDocket(
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the South Carolina Public Service Commission — Docket No. ${search.docketNumber}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `SC PSC Docket No. ${search.docketNumber}`,

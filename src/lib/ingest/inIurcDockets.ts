@@ -381,19 +381,49 @@ interface UpcomingHearing {
   date: Date;
   endDate: Date | null;
   label: string | null;
+  location: string | null;
 }
 
 interface HearingApiRow {
   iurc_hearingstartdate?: string;
   iurc_hearingenddate?: string;
   iurc_hearingtype?: string;
+  iurc_hearingroom?: string;
+  iurc_remarks?: string;
 }
 
 // See module header HEARING SCHEDULE — a private attorney-only scheduling
 // conference, confirmed live not open to the public the way every other
 // real hearingtype value observed (Evidentiary Hearing/Field Hearing/
-// Settlement Hearing) is.
+// Settlement Hearing) is. Deliberately narrow: every other real hearingtype
+// value found live (including Field Hearing/Settlement Hearing) is a genuine
+// open proceeding and stays included.
 const EXCLUDED_HEARING_TYPES = new Set(["Attorney Conference"]);
+
+// LOCATION CAPTURE (added 2026-09-05): confirmed live against real hearing
+// rows for both a normal room-number hearing (Cause 46443's two upcoming
+// Evidentiary Hearings, both `iurc_hearingroom: "222"`, `iurc_remarks: ""`)
+// and a real Field Hearing (Cause 46193's Bloomington/Terre Haute field
+// hearings) — a Field Hearing reports the literal string "OTHER" for
+// iurc_hearingroom and puts the REAL venue name/address directly in
+// iurc_remarks instead, e.g. "Monroe Convention Center – The Great Room \n302
+// South College Avenue\nBloomington, IN 47403". iurc_remarks is NOT treated
+// as a location for a normal room-number hearing, since remarks there is
+// sometimes a continuance/reschedule note instead (confirmed live, e.g.
+// "This hearing has been continued to August 1, 2025 pursuant to the 6/18/25
+// Docket Entry.") — never a venue in that case. No fuller venue field (a
+// building name/address for the room-number case) was found anywhere in this
+// API's real response shape; "IURC Hearing Room <n>" is the fullest location
+// this source publishes for that case.
+function buildHearingLocation(room: string | undefined, remarks: string | undefined): string | null {
+  const trimmedRoom = room?.trim();
+  if (!trimmedRoom) return null;
+  if (trimmedRoom.toUpperCase() === "OTHER") {
+    const cleaned = remarks?.trim().replace(/\s*\n\s*/g, ", ");
+    return cleaned && cleaned.length > 0 ? cleaned : null;
+  }
+  return `IURC Hearing Room ${trimmedRoom}`;
+}
 
 // Every real future, non-excluded hearing on the docket is kept (not just
 // the earliest) — a case can genuinely have more than one on the books at
@@ -424,6 +454,7 @@ async function fetchUpcomingHearings(legalCaseId: string): Promise<UpcomingHeari
       date: d,
       endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null,
       label: row.iurc_hearingtype ?? null,
+      location: buildHearingLocation(row.iurc_hearingroom, row.iurc_remarks),
     });
   }
   return hearings;
@@ -653,7 +684,7 @@ function buildActiveProject(row: SearchResultRow, caption: string, hearings: Upc
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Indiana Utility Regulatory Commission — Cause No. ${row.docketNumber}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? detailUrl(row.legalCaseId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label ?? null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label ?? null, location: h.location })),
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };

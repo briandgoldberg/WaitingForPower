@@ -363,47 +363,106 @@ const FILING_ROW_RE =
 interface UpcomingHearing {
   date: Date;
   link: string;
+  label: string | null;
+  location: string | null;
 }
 
 // PUBLIC HEARING DATES (added 2026-09-05): CEC has no separate sitewide
 // hearings calendar cross-referenced to a docket number the way this
 // series' VT/CT modules found — the general www.energy.ca.gov/events
 // listing (Business Meetings, workshops, rulemaking hearings) was checked
-// live and confirmed to name none of this module's 10 real "Under Review"
+// live and confirmed to name none of this module's real "Under Review"
 // candidates, by docket number OR by project name, across its first 3
 // pages. What IS real, confirmed live 2026-09-05: a scheduled
-// project-specific hearing is announced as its own filing directly on that
-// project's efiling.energy.ca.gov DocketLog.aspx row — already fetched by
-// fetchDocketFilings above for every candidate, so no second request is
-// needed. Confirmed live against 23-AFC-01's real "Notice of Hearing on
-// Geothermal Resources" filing (TN 250216): unlike a typical filing row, its
-// own document-title cell carries a real plain-text date/time line
-// IMMEDIATELY after the `<strong>...</strong>` title and its wrapping `<br
-// />` — literally "May 31, 2023<br />9:00 a.m. - 3:30 p.m." — not buried in
-// the linked PDF at all. HEARING_TITLE_DATE_RE below requires both a title
-// containing "hearing" AND that specific "Month D, YYYY" plain-text pattern
-// immediately following — confirmed this correctly returns zero matches for
-// every other real "hearing"-mentioning filing title checked live (e.g.
-// "Hearing Officer Memo re...", "Transcript of August 31, 2023 Informational
-// Hearing", "Request for Mailed Notice of Actions and Hearings" — none of
-// these has a bare date/time line immediately after the title, so the
-// stricter pattern naturally excludes them without needing a separate
-// title-phrase denylist).
-//   Real, honest gap found live: every one of this module's current 10 real
-//   candidates (3 AFC geothermal + 7 Opt-In battery/solar) was checked by
-//   hand 2026-09-05, and the ONLY real "Notice of Hearing" filings found
-//   (23-AFC-01/02/03's shared "Notice of Hearing on Geothermal Resources",
-//   TN 250216) are for a hearing already held May 31, 2023 — no candidate
-//   currently has a real, still-upcoming scheduled hearing. The mechanism
-//   below is real and live-confirmed to work correctly (it would surface a
-//   real upcoming date the day CEC dockets one), it simply has nothing to
-//   report against the current population — see the ingestion module's own
-//   VERIFICATION dry run.
+// project-specific hearing/meeting/workshop is announced as its own filing
+// directly on that project's efiling.energy.ca.gov DocketLog.aspx row —
+// already fetched by fetchDocketFilings above for every candidate, so no
+// second request is needed.
+//
+// BROADENED 2026-09-05 (re-confirmed live against every one of this
+// module's current real candidates' full docket logs): the original
+// version of this only matched a title containing "hearing" — but CEC's
+// real docket logs also carry genuine, project-specific, publicly
+// attendable events titled "Notice of ... Public Meeting" (24-OPT-05's real
+// "Notice of Corby Battery Energy Storage System CEC Staff Assessment
+// Public Meeting"), "Notice of ... Scoping Meeting" (24-OPT-05's and
+// 25-OPT-02's real "Notice of Informational and Environmental Scoping
+// Meeting for the Proposed ... Project"), and "Notice of ... Workshop"
+// (23-AFC-0x's real "Notice of Public Workshop on Tribal Mitigation" and
+// "Notice of Preliminary [2nd] Staff Assessment Technical and Mitigation
+// Workshop") — a CEC staff assessment public meeting, environmental scoping
+// meeting, and technical/mitigation workshop are all genuine CEC-organized
+// public-participation events open to attend, same as an evidentiary
+// hearing, matching this task's "any hearing type the public can attend,
+// not just where the public speaks" goal. NOTICE_TITLE_RE below requires a
+// "Notice of"/"Updated Notice of" prefix (confirmed real on every example
+// above) alongside one of these keywords, so it does NOT also match real
+// non-notice "hearing"/"meeting" titles checked live: "CEC Hearing Public
+// Comment" (a public comment submission, not a notice), "Hearing Officer
+// Memo re...", "Transcript of August 31, 2023 Informational Hearing",
+// "Recording of Joint Environmental Scoping Meeting and Informational
+// Hearing on August 31, 2023", "Request for Mailed Notice of Actions and
+// Hearings", or a generic Commission "Business Meeting" agenda item
+// (confirmed real on all three 23-AFC-0x dockets: "Final Agenda of the
+// November 13 2024 Business Meeting" — CEC's own sitewide Commission
+// business meeting, not a hearing/meeting specific to this project).
+//
+// Two real, distinct shapes of where the date lives, both confirmed live:
+//   1. Hearing/public-meeting/scoping-meeting notices carry the date in the
+//      filing's own BODY text, right after the title (e.g. 23-AFC-01's
+//      "Notice of Hearing on Geothermal Resources" body: "May 31, 2023
+//      9:00 a.m. - 3:30 p.m."; 24-OPT-05's "Notice of Corby ... Public
+//      Meeting" body: "Notice of Corby ... Public Meeting (24-OPT-05)
+//      September 1, 2026 4:00 p.m. – approximately 9:00 p.m.* Hybrid:
+//      In-Person and Remote").
+//   2. Workshop notices instead embed the date directly IN THE TITLE itself
+//      (23-AFC-01's real "Notice of Public Workshop on Tribal Mitigation
+//      September 6, 2024", "Notice of Preliminary 2nd Staff Assessment
+//      Technical and Mitigation Workshop September 19, 2024"), with no time
+//      and a body that's just an unrelated document-language note ("Spanish
+//      Language") — not a venue/format string, so location is deliberately
+//      never guessed from this shape.
+// LOCATION (added 2026-09-05): only shape 1 above has ever been confirmed to
+// carry real trailing venue/format text — 24-OPT-05's real "Hybrid:
+// In-Person and Remote" line, appearing after the time, in the same body
+// text already being parsed for the date. Captured as-is when present (the
+// text after the last time-of-day mention in the body); left null
+// otherwise — including for every shape-2 (title-date) notice, where no
+// per-event venue text has ever been confirmed real, so none is guessed.
 // This is a hearing DATE, not a stated comment-period window, so
 // commentPeriodEnd is always left null, matching this series'
 // vtPucDockets.ts/ctCscDockets.ts precedent for the same kind of source.
-const HEARING_TITLE_DATE_RE =
-  /<strong>(?:<a href="([^"]*)"[^>]*>)?([^<]*hearing[^<]*)(?:<\/a>)?<\/strong>\s*<br\s*\/>\s*([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/gi;
+//
+// Real, honest gap found live 2026-09-05: every one of this module's real
+// candidates' full docket logs were checked by hand, and every real
+// hearing/meeting/workshop notice found (shared 23-AFC-0x "Notice of
+// Hearing on Geothermal Resources"; 23-AFC-0x's 2024 workshop notices;
+// 24-OPT-05's and 25-OPT-02's 2025/2026 meeting notices) is for an event
+// already held as of this check — no candidate currently has a real,
+// still-upcoming one. The mechanism below is real and live-confirmed to
+// work correctly (it would surface a real upcoming date/location the day
+// CEC dockets one), it simply has nothing to report against the current
+// population — see the ingestion module's own VERIFICATION dry run.
+//
+// One `<span id="MainContent_grdFilings_lblDocumentList_N">...</span>` wraps
+// each filing row's own title+body content (the same span FILING_ROW_RE
+// above matches into, confirmed live to bound every one of a docket's real
+// filing rows, including the rare ones with no `<i class="icon-file">`
+// page-count marker) — used here as a safe per-row boundary so date/venue
+// text belonging to one filing can never be attributed to its neighbor.
+const FILING_SPAN_RE = /<span id="MainContent_grdFilings_lblDocumentList_\d+">([\s\S]*?)<\/span>/g;
+const FILING_TITLE_RE = /<strong>(?:<a href="([^"]*)"[^>]*>)?([^<]*)(?:<\/a>)?<\/strong>/;
+const NOTICE_TITLE_RE = /^(?:updated\s+)?notice\s+of\b.*(?:\bhearing\b|\bpublic meeting\b|\bscoping meeting\b|\bworkshop\b)/i;
+const DATE_RE = /([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/;
+const TIME_RE = /\d{1,2}:\d{2}\s*[ap]\.?m\.?/gi;
+
+function noticeLabel(title: string): string | null {
+  if (/\bhearing\b/i.test(title)) return "Public hearing";
+  if (/\bpublic meeting\b/i.test(title)) return "Public meeting";
+  if (/\bscoping meeting\b/i.test(title)) return "Scoping meeting";
+  if (/\bworkshop\b/i.test(title)) return "Public workshop";
+  return null;
+}
 
 const MONTH_NAMES = [
   "january", "february", "march", "april", "may", "june",
@@ -419,22 +478,71 @@ function parseLongDate(monthName: string, day: string, year: string): Date | nul
 
 // See PUBLIC HEARING DATES above — scans the same already-fetched docket-log
 // HTML fetchDocketFilings parses filings from, keeping every real
-// still-future hearing date found (not just the earliest) — a docket could
-// in principle carry more than one "Notice of Hearing" filing over its life
-// (e.g. a rescheduling, or separate hearings on separate sub-issues), even
-// though the current live population never showed more than one on any
-// candidate (see module header's "honest gap" note). Deduped by exact
-// timestamp in case the same filing row could ever be matched twice.
+// still-future date found (not just the earliest) — a docket could in
+// principle carry more than one such notice over its life (e.g. a
+// rescheduling, or separate events on separate sub-issues), even though the
+// current live population never showed more than one per candidate (see
+// module header's "honest gap" note). Deduped by exact timestamp in case
+// the same filing row could ever be matched twice.
 function extractUpcomingHearings(html: string, docketNumber: string): UpcomingHearing[] {
   const now = Date.now();
   const hearings: UpcomingHearing[] = [];
-  for (const m of html.matchAll(HEARING_TITLE_DATE_RE)) {
-    const date = parseLongDate(m[3], m[4], m[5]);
-    if (!date || date.getTime() <= now) continue;
+  const fallbackLink = `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`;
+
+  for (const rowMatch of html.matchAll(FILING_SPAN_RE)) {
+    const row = rowMatch[1];
+    const titleMatch = FILING_TITLE_RE.exec(row);
+    if (!titleMatch) continue;
+    const title = stripTags(titleMatch[2] ?? "");
+    if (!NOTICE_TITLE_RE.test(title)) continue;
+
+    // See the two real date shapes documented above: body text is
+    // everything between the title and the page-count `<i
+    // class="icon-file">` marker this row's own span carries when a
+    // document is attached.
+    const bodyRaw = row.slice(titleMatch.index + titleMatch[0].length).split(/<i class="icon-file">/)[0];
+    const body = stripTags(bodyRaw.replace(/<br\s*\/?>/gi, " "));
+
+    let dateMatch = DATE_RE.exec(title);
+    let location: string | null = null;
+    let timeMatch: RegExpMatchArray | null = null;
+
+    if (!dateMatch) {
+      const bodyDateMatch = DATE_RE.exec(body);
+      if (bodyDateMatch) {
+        dateMatch = bodyDateMatch;
+        const dateEnd = bodyDateMatch.index + bodyDateMatch[0].length;
+        const timeMatches = [...body.matchAll(TIME_RE)].filter((tm) => (tm.index ?? -1) >= dateEnd);
+        timeMatch = timeMatches[timeMatches.length - 1] ?? null;
+        if (timeMatch) {
+          const tail = body
+            .slice((timeMatch.index ?? 0) + timeMatch[0].length)
+            .replace(/^[\s*.,;:–-]+/, "")
+            .trim();
+          if (tail.length > 0) location = tail;
+        }
+      }
+    }
+    if (!dateMatch) continue;
+
+    const date = parseLongDate(dateMatch[1], dateMatch[2], dateMatch[3]);
+    if (!date) continue;
+    if (timeMatch) {
+      const tm = /(\d{1,2}):(\d{2})\s*([ap])\.?m\.?/i.exec(timeMatch[0]);
+      if (tm) {
+        let hour = Number(tm[1]) % 12;
+        if (/p/i.test(tm[3])) hour += 12;
+        date.setHours(hour, Number(tm[2]), 0, 0);
+      }
+    }
+    if (date.getTime() <= now) continue;
     if (hearings.some((h) => h.date.getTime() === date.getTime())) continue;
+
     hearings.push({
       date,
-      link: m[1] ? m[1] : `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`,
+      link: titleMatch[1] ? titleMatch[1] : fallbackLink,
+      label: noticeLabel(title),
+      location,
     });
   }
   return hearings;
@@ -632,7 +740,7 @@ function normalizeCandidate(
     causeDetail: `Waiting on California Energy Commission certification — Docket ${detail.docketNumber}${detail.projectTypeText ? ` (${detail.projectTypeText})` : ""}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: upcomingHearings.length > 0 ? upcomingHearings[0].link : null,
-    hearings: upcomingHearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: upcomingHearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `CEC Docket ${detail.docketNumber}`,

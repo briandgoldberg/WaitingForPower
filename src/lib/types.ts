@@ -23,6 +23,7 @@ export interface HearingDTO {
   date: string; // ISO date
   endDate: string | null; // ISO date
   label: string | null;
+  location: string | null;
 }
 
 export interface ProjectDTO {

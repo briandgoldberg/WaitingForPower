@@ -330,7 +330,13 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Virginia State Corporation Commission — case ${search.Case_Number}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: futureHearings.length > 0 ? `https://scc.virginia.gov/docketsearch/#/caseDetails/${search.MATTER_NO}` : null,
-    hearings: futureHearings.map((h) => ({ date: h.date, endDate: null, label: h.label })),
+    // `location` comes straight from the Activities API's own Location
+    // field (e.g. "SCC 2nd Floor Court Room", "Telephonically", "Via
+    // Microsoft Teams or 2nd Floor Courtroom") — already fetched and
+    // captured onto each NextHearing by findFutureHearings below, just not
+    // previously threaded through to the output. See module header
+    // FETCHING for confirmation this field is real and populated live.
+    hearings: futureHearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `Virginia SCC Case ${search.Case_Number}`,

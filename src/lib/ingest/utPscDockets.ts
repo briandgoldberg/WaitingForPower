@@ -184,8 +184,9 @@
 // DocketListing.docketNo already uses, extracted here with the same
 // dash-joined-digit-groups shape. Docket numbers are pulled from the
 // combined SUMMARY+DESCRIPTION text (a single event occasionally names more
-// than one related docket, e.g. "17-035-36, Solar A 17-035-26"); only the
-// earliest FUTURE event date is kept per docket. Verified by hand
+// than one related docket, e.g. "17-035-36, Solar A 17-035-26"); EVERY real
+// future event date is kept per docket (not just the earliest — a docket
+// can genuinely have more than one on the books at once). Verified by hand
 // (parseFolderEntries-style local test against the real fetched .ics) that
 // this correctly extracts 11 distinct real future-dated dockets and, just
 // as importantly, correctly returns NO match for any of this module's own
@@ -193,6 +194,19 @@
 // granted years ago (see REAL POPULATION SIZE above) and so has no future
 // hearing scheduled; a genuinely new Utah CPCN filing would pick up a real
 // technical-conference/hearing date here the moment PSC schedules one.
+//
+// LOCATION + CANCELLATION — confirmed live 2026-09-05 against the same real
+// .ics: 1,236 of 1,622 events carry a plain `LOCATION:` property (e.g.
+// "Heber Wells Rm. 401") — the PSC's own room/venue for that event — which
+// now flows into NormalizedHearing.location instead of being discarded.
+// Confirmed real gotcha: this calendar's own `STATUS:` property is always
+// CONFIRMED, even for events that are genuinely cancelled — the real
+// cancellation signal instead lives in plain-text SUMMARY prefixes/suffixes
+// ("CANCELLED Hearing...", "CANCELED Hearing...", "CANCEL Hearing...",
+// "Hearing ... (CANCELLED)"), confirmed against 149 real past events using
+// that convention (never in DESCRIPTION alone). Filtered out here
+// (CANCELLED_SUMMARY_RE) the same way coPucDockets.ts excludes a real
+// cancellation/vacation — not a hearing-type-based exclusion.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
@@ -239,7 +253,12 @@ function decodeHtmlEntities(s: string): string {
 
 interface UpcomingHearing {
   date: Date;
+  location: string | null;
 }
+
+// See module header LOCATION + CANCELLATION. Matches "CANCEL"/"CANCELED"/
+// "CANCELLED"/"CANCELLING" etc. wherever it appears in the SUMMARY text.
+const CANCELLED_SUMMARY_RE = /\bcancel/i;
 
 // RFC 5545 line-unfolding: a continuation line starts with a single space
 // and is appended to the previous logical line. Confirmed necessary against
@@ -300,16 +319,21 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
   let dtstart: string | null = null;
   let summary = "";
   let description = "";
+  let location = "";
 
   const flushEvent = () => {
     if (!dtstart) return;
     const date = parseIcsDateValue(dtstart);
     if (!date || date.getTime() <= now) return;
+    // See module header LOCATION + CANCELLATION — a real cancellation here
+    // is text-marked in SUMMARY, not a hearing-type exclusion.
+    if (CANCELLED_SUMMARY_RE.test(summary)) return;
     const text = `${summary} ${description}`;
+    const loc = location.trim() || null;
     for (const m of text.matchAll(DOCKET_NUMBER_RE)) {
       const docketNo = m[1];
       const arr = map.get(docketNo) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location: loc });
       map.set(docketNo, arr);
     }
   };
@@ -320,6 +344,7 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
       dtstart = null;
       summary = "";
       description = "";
+      location = "";
       continue;
     }
     if (line === "END:VEVENT") {
@@ -335,6 +360,8 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
       summary = unescapeIcsText(line.slice("SUMMARY:".length));
     } else if (line.startsWith("DESCRIPTION:")) {
       description = unescapeIcsText(line.slice("DESCRIPTION:".length));
+    } else if (line.startsWith("LOCATION:")) {
+      location = unescapeIcsText(line.slice("LOCATION:".length));
     }
   }
   return map;
@@ -637,7 +664,7 @@ function normalizeDocket(
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity determination from the Utah Public Service Commission — Docket No. ${listing.docketNo}, "${listing.matter}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? listing.url : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `Utah PSC Docket No. ${listing.docketNo}`,

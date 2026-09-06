@@ -138,43 +138,96 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
-interface CommentPeriod {
+interface FacilityEvent {
   start: Date;
   end: Date;
   link: string;
+  /** e.g. "Comment period", "Informational public hearing" — the source's own bracketed label. */
+  label: string;
+  /** "How to attend" line the source publishes right on this row, if any — see EVENT_ROW_RE below. */
+  location: string | null;
 }
 
 // EFSEC's own sitewide /hearings-and-meetings page (a single Drupal View,
-// confirmed by hand 2026-09-05) lists every hearing/comment-period event
-// across all facilities, each row classed "views-row comment-{status}" or
-// "views-row event-{status}" (status observed so far: "past", "upcoming" —
+// confirmed by hand 2026-09-05) lists every hearing/comment-period/meeting
+// event across all facilities, each row classed "views-row comment-{status}"
+// or "views-row event-{status}" (status observed so far: "past", "upcoming" —
 // "current" is inferred from the same naming convention but not yet seen
 // live). Far cheaper than checking each facility's own detail page for
-// this: one fetch covers every facility at once. Only non-"past" comment
-// rows are kept — a closed comment period isn't something to surface as
-// open. Matched back to a facility by the row's own bold facility-name
-// prefix (before " - [Comment period]"), trailing "*" stripped — EFSEC
-// marks every facility name with a trailing asterisk in this feed,
-// confirmed against "Cascade Renewable Transmission*".
-const COMMENT_ROW_RE =
-  /<div class="views-row comment-(?!past)[a-z]+">[\s\S]*?<strong>([^<]+?)\*?<\/strong>\s*-\s*\[Comment period\][\s\S]*?<time datetime="([^"]+)"[\s\S]*?<time datetime="([^"]+)"[\s\S]*?<h6 class="field-content"><a href="([^"]+)"/g;
+// this: one fetch covers every facility at once. Only non-"past" rows are
+// kept — a closed comment period or already-held hearing isn't something to
+// surface as upcoming. Matched back to a facility by the row's own bold
+// facility-name prefix (before " - [<label>]"), trailing "*" stripped — EFSEC
+// marks every facility name with a trailing asterisk in this feed, confirmed
+// against "Cascade Renewable Transmission*".
+//
+// BROADENED 2026-09-05: this used to only match "comment-" classed rows
+// literally tagged "[Comment period]" — but a real fetch of this page shows
+// "event-" classed rows include genuine per-facility public hearings too
+// (confirmed live: "Columbia Solar* - [Informational public hearing]"),
+// which this module was silently excluding even though they're exactly the
+// kind of open, attendable proceeding this feature exists to surface. Both
+// row classes are now matched; what's excluded is only rows with no
+// facility tag at all (EFSEC's own generic "Monthly Council meeting"
+// business-meeting rows render with an empty title-1 span, so they never
+// match the `<strong>` capture below and are dropped automatically) and any
+// facility-tagged row whose bracketed label itself names a routine Council
+// meeting (confirmed live: "Goose Prairie Solar* - [Special Council
+// meeting]", a facility site-visit/tour tied to routine Council business,
+// not a hearing or comment opportunity on that facility's own docket) — see
+// COUNCIL_MEETING_LABEL_RE. Everything else (comment periods, informational/
+// public hearings, etc.) is kept, per this project's "err toward including
+// a genuine open proceeding" standard.
+//
+// LOCATION: the same row also carries a "how to attend" line in its own
+// `views-field-nothing-1` block, right after a person icon — e.g. "Virtual
+// attendance encouraged.", "In-person and Virtual attendance encouraged."
+// — confirmed live 2026-09-05. Comment-period rows leave this blank (a
+// written comment period has no attendance mode/venue), but hearing/meeting
+// rows do carry it; captured as `location` when non-empty, via
+// cleanAttendanceNote below.
+const EVENT_ROW_RE =
+  /<div class="views-row (?:comment|event)-(?!past)[a-z]+">[\s\S]*?<div class="views-field views-field-title-1"><span class="field-content">(?:<strong>([^<]+?)\*?<\/strong>\s*-\s*\[([^\]]+)\])?<\/span><\/div>[\s\S]*?<time datetime="([^"]+)"[\s\S]*?<time datetime="([^"]+)"[\s\S]*?<h6 class="field-content"><a href="([^"]+)"[^>]*>[\s\S]*?<\/h6>[\s\S]*?<div class="views-field views-field-nothing-1"><span class="field-content">([\s\S]*?)<\/span><\/div>/g;
 
-// Every real active comment-period row is kept per facility (not just one)
+// See EVENT_ROW_RE's own comment above — a facility-tagged row whose label
+// itself names a routine Council business meeting (as opposed to a hearing
+// or comment opportunity on that facility's own docket) is excluded.
+const COUNCIL_MEETING_LABEL_RE = /council meeting/i;
+
+// Strips the leading icon markup and the page's own generic "click here"
+// instruction, leaving just the attendance/venue clause itself — e.g. "<i
+// class=\"fa-solid fa-user\"></i> Virtual attendance encouraged. Click the
+// event name to see options." becomes "Virtual attendance encouraged."
+function cleanAttendanceNote(raw: string): string | null {
+  const text = raw
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*Click the event name to see options\.?\s*$/i, "")
+    .trim();
+  return text || null;
+}
+
+// Every real active/upcoming event row is kept per facility (not just one)
 // — WA's own /hearings-and-meetings feed can in principle list more than
-// one open comment period for the same facility at once, and map.set used
-// to silently overwrite any earlier match with the last one seen.
-async function fetchActiveCommentPeriodsByFacilityName(): Promise<Map<string, CommentPeriod[]>> {
+// one open hearing/comment period for the same facility at once, and
+// map.set used to silently overwrite any earlier match with the last one
+// seen.
+async function fetchActiveEventsByFacilityName(): Promise<Map<string, FacilityEvent[]>> {
   const html = await fetchText(`${BASE_URL}/hearings-and-meetings`);
-  const map = new Map<string, CommentPeriod[]>();
-  for (const m of html.matchAll(COMMENT_ROW_RE)) {
-    const [, facilityName, startIso, endIso, href] = m;
+  const map = new Map<string, FacilityEvent[]>();
+  for (const m of html.matchAll(EVENT_ROW_RE)) {
+    const [, facilityName, label, startIso, endIso, href, attendanceRaw] = m;
+    // No facility tag at all — a generic Council business-meeting row (see
+    // EVENT_ROW_RE's own comment above).
+    if (!facilityName || !label) continue;
+    if (COUNCIL_MEETING_LABEL_RE.test(label)) continue;
     const start = new Date(startIso);
     const end = new Date(endIso);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
     const name = facilityName.trim();
     const arr = map.get(name) ?? [];
     if (!arr.some((c) => c.start.getTime() === start.getTime())) {
-      arr.push({ start, end, link: `${BASE_URL}${href}` });
+      arr.push({ start, end, link: `${BASE_URL}${href}`, label: label.trim(), location: cleanAttendanceNote(attendanceRaw) });
     }
     map.set(name, arr);
   }
@@ -380,7 +433,7 @@ function cleanCounty(raw: string | null): string | null {
 function normalizeFacility(
   summary: FacilitySummary,
   detail: FacilityDetail,
-  commentPeriodsByFacilityName: Map<string, CommentPeriod[]>,
+  eventsByFacilityName: Map<string, FacilityEvent[]>,
 ): NormalizedProject {
   const sourceId = summary.nodeId ?? summary.slug;
   const matchKey = resolveMatchKey("wa-efsec", sourceId);
@@ -396,7 +449,7 @@ function normalizeFacility(
   const fuelType = inferFuelType(summary.types);
   const county = cleanCounty(summary.county);
   const filedDate = parseMonthYear(detail.filedRaw);
-  const commentPeriods = commentPeriodsByFacilityName.get(summary.name) ?? [];
+  const events = eventsByFacilityName.get(summary.name) ?? [];
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -450,10 +503,10 @@ function normalizeFacility(
     dataQualityNote: dataQualityNoteParts.join(" "),
     // hearingDetailsLink is one link per project, not per hearing — use the
     // first matching row's own event-detail link (every row this feed
-    // matches carries one, see COMMENT_ROW_RE), falling back to the
+    // matches carries one, see EVENT_ROW_RE), falling back to the
     // facility's own detail page only in case that's ever missing.
-    hearingDetailsLink: commentPeriods.length > 0 ? (commentPeriods[0].link || `${BASE_URL}${summary.slug}`) : null,
-    hearings: commentPeriods.map((c) => ({ date: c.start, endDate: c.end, label: null })),
+    hearingDetailsLink: events.length > 0 ? (events[0].link || `${BASE_URL}${summary.slug}`) : null,
+    hearings: events.map((e) => ({ date: e.start, endDate: e.end, label: e.label, location: e.location })),
     sources: [
       {
         label: `EFSEC Facility Page: ${summary.name}`,
@@ -475,12 +528,12 @@ export interface IngestSummary {
 export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const listHtml = await fetchText(`${BASE_URL}/facilities`);
   const allFacilities = parseFacilityList(listHtml);
-  // One fetch covers every facility's active comment periods — see
-  // fetchActiveCommentPeriodsByFacilityName's header. A failure here
-  // shouldn't block the whole ingestion run over a feature this
-  // supplementary, so it degrades to "no comment period data this run"
-  // rather than failing every candidate.
-  const commentPeriodsByFacilityName = await fetchActiveCommentPeriodsByFacilityName().catch(() => new Map<string, CommentPeriod[]>());
+  // One fetch covers every facility's active hearings/comment periods — see
+  // fetchActiveEventsByFacilityName's header. A failure here shouldn't
+  // block the whole ingestion run over a feature this supplementary, so it
+  // degrades to "no hearing data this run" rather than failing every
+  // candidate.
+  const eventsByFacilityName = await fetchActiveEventsByFacilityName().catch(() => new Map<string, FacilityEvent[]>());
 
   const candidates = selectWithRotation(
     allFacilities.filter((f) => f.status === "Application review"),
@@ -496,7 +549,7 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   for (const candidate of candidates) {
     try {
       const detail = await fetchFacilityDetail(candidate.slug);
-      const normalized = normalizeFacility(candidate, detail, commentPeriodsByFacilityName);
+      const normalized = normalizeFacility(candidate, detail, eventsByFacilityName);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

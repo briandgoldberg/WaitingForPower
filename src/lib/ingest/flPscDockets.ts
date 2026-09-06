@@ -148,6 +148,14 @@
 // start date for what is often a multi-day hearing, matching this
 // project's standing convention (see e.g. vtPucDockets.ts) of never
 // modeling commentPeriodEnd as anything other than null.
+//   LOCATION — added 2026-09-05: the same "Notice of Hearing" free text is
+// semicolon-separated ("<date(s)>; <time>, <time zone>; <city>") and ends
+// with the city the certification hearing is actually held in — confirmed
+// live for both real candidates ("...Eastern Time; Jacksonville" for JEA,
+// "...Eastern Time; Miami" for FPL). HEARING_CITY_IN_TEXT_RE/the guard in
+// fetchDoahHearingDate below pulls that city into NormalizedHearing.location
+// instead of discarding it, falling back to null (never guessed) if the
+// notice's free text doesn't have a trailing city segment.
 //   Architecturally this differs from this series' single-calendar states
 // (e.g. coPucDockets.ts's one Google Calendar covering every docket): DOAH
 // has no equivalent bulk hearing calendar, only a per-case search, and each
@@ -203,9 +211,17 @@ const DOAH_CASE_NO_RE = /Division of Administrative Hearings<\/a>[\s\S]{0,60}?Ca
 const DOAH_SESSION_COOKIE_RE = /ASPSESSIONID[A-Z0-9]*=[^;]+/i;
 const NOTICE_OF_HEARING_RE = /Notice of Hearing\s*\(hearing set for ([^)]+)\)/i;
 const HEARING_DATE_IN_TEXT_RE = /([A-Z][a-z]+\.?\s+\d{1,2})(?:[^;]*?),\s*(\d{4})/;
+// The notice's own free text is semicolon-separated ("<date(s)>; <time>,
+// <time zone>; <city>") — confirmed live 2026-09-05 against both of this
+// module's real candidates: "March 22 through 26, 2027; 9:00 a.m., Eastern
+// Time; Jacksonville" (JEA) and "October 22, 23, and 26 through 29, 2026;
+// 9:00 a.m., Eastern Time; Miami" (FPL) — the city named after the last
+// semicolon is where the certification hearing is actually held.
+const HEARING_CITY_IN_TEXT_RE = /;\s*([^;]+?)\s*$/;
 
 interface DoahHearing {
   date: Date;
+  location: string | null;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -444,11 +460,21 @@ async function fetchDoahHearingDate(searchCaseNum: string): Promise<DoahHearing 
   // superseded schedule, not a stale/rescheduled one.
   const noticeMatch = NOTICE_OF_HEARING_RE.exec(html);
   if (!noticeMatch) return null;
-  const dateMatch = HEARING_DATE_IN_TEXT_RE.exec(noticeMatch[1]);
+  const noticeText = noticeMatch[1];
+  const dateMatch = HEARING_DATE_IN_TEXT_RE.exec(noticeText);
   if (!dateMatch) return null;
   const date = new Date(`${dateMatch[1]}, ${dateMatch[2]}`);
   if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) return null; // a past hearing isn't upcoming
-  return { date };
+  // See HEARING_CITY_IN_TEXT_RE above — the city named after the notice's
+  // final semicolon. Guarded against the 2-segment "<date(s)>; <time>, <time
+  // zone>" shape (no city given) being mistaken for a location: a real city
+  // name never contains a digit or the word "time"/"a.m."/"p.m.". Left null
+  // rather than guessed at when that guard trips or there's no semicolon at
+  // all.
+  const cityMatch = HEARING_CITY_IN_TEXT_RE.exec(noticeText);
+  const cityCandidate = cityMatch ? decodeHtmlEntities(cityMatch[1]).trim() : "";
+  const location = cityCandidate && !/\d|time\b|\ba\.?m\.?\b|\bp\.?m\.?\b/i.test(cityCandidate) ? cityCandidate : null;
+  return { date, location };
 }
 
 // --- PSC <-> DEP matching -------------------------------------------------
@@ -584,7 +610,7 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
   // recent "Notice of Hearing" line is kept, which supersedes any earlier
   // one for the same case (see module header DOAH HEARING LOOKUP).
   const hearingDetailsLink = c.doahHearing ? (depDetailUrl ?? sources[0]?.url ?? null) : null;
-  const hearings = c.doahHearing ? [{ date: c.doahHearing.date, endDate: null, label: null }] : [];
+  const hearings = c.doahHearing ? [{ date: c.doahHearing.date, endDate: null, label: null, location: c.doahHearing.location }] : [];
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
   const caseLabel = c.depDetail?.caseNumber ?? (c.pscDocket ? `PSC Docket ${c.pscDocket.docketnum}` : sourceId);

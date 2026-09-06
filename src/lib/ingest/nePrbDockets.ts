@@ -424,6 +424,36 @@ const AGENDA_CASE_NUMBER_RE = /PRB-(\d{3,6})(-[A-Za-z]{1,4})?/g;
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
+}
+
+// Real, confirmed live 2026-09-05: right after the meeting-date paragraph,
+// the agenda page's own body states the physical venue as three separate
+// centered `<p>` lines — room, building, street address/city — e.g.
+// "First Floor Hearing Room" / "Nebraska State Office Building" / "301
+// Centennial Mall South, Lincoln, Nebraska" for the real September 18, 2026
+// meeting. Applies to every case-specific hearing found on this page, since
+// the page only ever describes one single upcoming meeting (see module
+// header HEARING CALENDAR) — there is no per-case venue to distinguish.
+const AGENDA_LOCATION_RE =
+  /beginning at[\s\S]*?<\/p>\s*<p class="text-align-center">([^<]+)<\/p>\s*<p class="text-align-center">([^<]+)<\/p>\s*<p class="text-align-center">([^<]+)<\/p>/i;
+// Real, confirmed live: the same page also states the meeting is held
+// in-person AND offers a real remote-attendance option (Microsoft Teams
+// video, plus a dial-in phone number) — captured here as a plain boolean
+// flag appended to the physical address rather than reproducing the raw
+// meeting link/passcode (which rotates every meeting and isn't itself a
+// "venue" the way the physical address is).
+const AGENDA_REMOTE_RE = /join the meeting[\s\S]{0,80}?via Microsoft Teams/i;
+const AGENDA_PHONE_RE = /listen to the meeting via telephone/i;
+
+function extractAgendaLocation(html: string): string | null {
+  const m = AGENDA_LOCATION_RE.exec(html);
+  const addressParts = m ? m.slice(1, 4).map((s) => decodeHtmlEntities(s)).filter((s) => s.length > 0) : [];
+  const remote = AGENDA_REMOTE_RE.test(html) || AGENDA_PHONE_RE.test(html);
+  const parts: string[] = [];
+  if (addressParts.length > 0) parts.push(addressParts.join(", "));
+  if (remote) parts.push("also available remotely via Microsoft Teams/phone");
+  return parts.length > 0 ? parts.join(" — ") : null;
 }
 
 // Every real upcoming hearing found is kept (not just the earliest) — see
@@ -443,10 +473,12 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
   const date = parseLongDate(dateMatch[1], now.getFullYear(), now);
   if (!date || date.getTime() <= Date.now()) return map;
 
+  const location = extractAgendaLocation(html);
+
   for (const m of text.matchAll(AGENDA_CASE_NUMBER_RE)) {
     const key = `${m[1]}${m[2] ? m[2].toUpperCase() : ""}`;
     const arr = map.get(key) ?? [];
-    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: AGENDA_URL });
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: AGENDA_URL, location });
     map.set(key, arr);
   }
   return map;
@@ -883,7 +915,7 @@ function normalizeCase(
     causeDetail: `Waiting on approval from the Nebraska Power Review Board under Neb. Rev. Stat. §§70-1013 to 70-1014.01 — ${caseDisplay}, "${facts.text.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? AGENDA_URL : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources,
     externalIds: { nePrb: sourceId },
   };

@@ -280,10 +280,34 @@ const HEARING_DATE_RE = /\d{1,2}\/\d{1,2}\/\d{4}/g;
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
 }
 
 function stripHtmlComments(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+// Real, confirmed live 2026-09-05: the table has its own "Location" column
+// right between the Date/Time cell and the Docket cell — real values
+// observed include a physical address ("Hearing Room 2115, Dobbs Building,
+// 430 N Salisbury St. Raleigh", "Cabarrus County Courthouse 61 Union Street
+// South Concord") and a plain remote-attendance note ("Webex", "Held
+// remotely via WebEx"). Since `row` (see fetchUpcomingHearingsByDocket) is
+// sliced starting at the date text itself, not the row's own `<tr>`/`<td>`
+// open tag, the very first `</td>...<td>...</td>` pair encountered in `row`
+// is reliably this Location cell — confirmed against every real row
+// sampled, both physical and remote.
+const HEARING_LOCATION_RE = /<\/td>\s*<td>([\s\S]*?)<\/td>/;
+
+function stripTagsAndDecode(html: string): string {
+  return decodeHtmlEntities(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).trim();
+}
+
+function extractHearingRowLocation(row: string): string | null {
+  const m = HEARING_LOCATION_RE.exec(row);
+  if (!m) return null;
+  const text = stripTagsAndDecode(m[1]);
+  return text.length > 0 ? text : null;
 }
 
 // See module header HEARING CALENDAR for the real row-boundary and
@@ -320,11 +344,12 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
 
     const noticeMatch = HEARING_NOTICE_RE.exec(row);
     const link = noticeMatch ? noticeMatch[1] : HEARINGS_URL;
+    const location = extractHearingRowLocation(row);
 
     for (const docketMatch of row.matchAll(HEARING_DOCKET_RE)) {
       const docketNumber = decodeHtmlEntities(docketMatch[1]);
       const arr = map.get(docketNumber) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link, location });
       map.set(docketNumber, arr);
     }
   }
@@ -693,7 +718,7 @@ function normalizeDocket(
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the North Carolina Utilities Commission — Docket No. ${candidate.docketNumber}, "${candidate.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/NCUC/PSC/DocketDetails.aspx?DocketId=${candidate.docketId}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `NC NCUC Docket No. ${candidate.docketNumber}`,

@@ -52,6 +52,8 @@ export interface NormalizedHearing {
   endDate?: Date | null;
   /** e.g. "Local public hearing", "Evidentiary hearing" — see schema.prisma. */
   label?: string | null;
+  /** Venue/address exactly as the source publishes it — see schema.prisma. */
+  location?: string | null;
 }
 
 export interface NormalizedProject {
@@ -457,6 +459,7 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
           date: h.date,
           endDate: h.endDate ?? null,
           label: h.label ?? null,
+          location: h.location ?? null,
         })),
       });
     }

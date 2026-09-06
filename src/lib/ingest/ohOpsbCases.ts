@@ -118,14 +118,6 @@ export async function fetchCases(): Promise<OpsbCase[]> {
 const HEARING_LABEL_RE = /<strong>([^<]*[Hh]earing)<\/strong>/g;
 const DATE_LINE_RE = /^([A-Za-z]+\.?)\s+(\d{1,2})(?:,\s+(\d{4}))?,?\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(a\.m\.|p\.m\.)/i;
 
-function findDateLineAfter(html: string, labelEndIndex: number): string | null {
-  const window = html.slice(labelEndIndex, labelEndIndex + 400).replace(/<[^>]+>/g, "\n");
-  for (const line of window.split("\n").map((s) => s.trim()).filter(Boolean)) {
-    if (DATE_LINE_RE.test(line)) return line;
-  }
-  return null;
-}
-
 // "August 11, 2025, at 5 p.m." / "February 9, 2026, at 10 a.m." / "Feb. 27,
 // 2026, at 5 p.m." (abbreviated with a trailing period) / "October 27 at 6
 // p.m." (no year at all) — every format observed. No timezone stated
@@ -163,35 +155,64 @@ function parseHearingDateTime(raw: string, now: Date): Date | null {
   return candidate;
 }
 
-// Every still-upcoming "Local public hearing"-type entry is surfaced (not
-// just the earliest) — a case can list both a past "Local public hearing"
-// and a future "Evidentiary hearing" (or vice versa once the local hearing
-// is rescheduled), and only a future date is something a visitor can
-// actually still show up to or comment ahead of. Real cases publish both
-// a "Local public hearing" (where ordinary
-// citizens actually testify — the genuine public-comment opportunity) and
-// a separate "Evidentiary hearing" (attorneys/expert witnesses building
-// the formal record — not something the public comments at, confirmed by
-// hand against real OPSB case-process descriptions). Confirmed live
-// 2026-09-05 on Case 26-196-EL-BGN (Ashville Energy Center) that these can
-// land far enough apart that the local hearing is already past while the
-// evidentiary hearing is still upcoming — surfacing that evidentiary date
-// as "the public comment period" would be actively misleading (there's no
-// real public-input opportunity left once the local hearing has passed),
-// so only "Local public hearing"-type labels are ever considered here,
-// never "Evidentiary."
-const EVIDENTIARY_HEARING_RE = /evidentiary/i;
-
+// BROADENED 2026-09-05: this used to exclude every "Evidentiary hearing"
+// label, keeping only "Local public hearing" ones, on the theory that only
+// the local hearing is a genuine public-input opportunity (evidentiary
+// hearings being attorneys/expert witnesses building the formal record).
+// Re-scoped per this project's "can attend" standard: an OPSB evidentiary
+// hearing is still a real, open government proceeding held at a public
+// venue (confirmed live 2026-09-05 on Case 26-196-EL-BGN: "Offices of the
+// Public Utilities Commission of Ohio, 180 E. Broad St., Columbus, Ohio") —
+// a member of the public can walk in and observe it even though they don't
+// get to testify there, which is exactly the bar this feature uses
+// elsewhere ("hearings visitors can attend," not narrowly "hearings the
+// public can speak at"). Both hearing types are now surfaced; `label` is
+// still set to whichever the source itself calls it ("Local public
+// hearing" vs "Evidentiary hearing") so the two stay visually
+// distinguishable on the project page.
 interface UpcomingHearing {
   date: Date;
   label: string;
+  /** Venue/address line(s) following the date on the same case page, if any. */
+  location: string | null;
 }
 
-// Every real upcoming "Local public hearing"-type entry is kept (not just
-// the earliest) — a case can genuinely publish more than one, and the
-// array shape should support that even though in practice there's usually
-// just one. "Evidentiary hearing" labels are still never surfaced — see
-// EVIDENTIARY_HEARING_RE above.
+// The address/venue text OPSB publishes right after the date line — e.g.
+// "Amanda Clearcreek High School" or "Offices of the Public Utilities
+// Commission of Ohio, 180 E. Broad St., Columbus, Ohio" — confirmed by hand
+// 2026-09-05 across the same real case pages cited in HEARING_LABEL_RE's
+// own comment above. Collected from the same already-fetched detail-page text, not a separate
+// request. Stops at the next date-shaped line (the following hearing's own
+// date) or another "...hearing" label so it never bleeds into unrelated
+// page content; capped at a few lines since every real example seen is a
+// short venue/address, never a long paragraph.
+function findLocationAfterDateLine(lines: string[], dateLineIndex: number): string | null {
+  const locationLines: string[] = [];
+  for (let i = dateLineIndex + 1; i < lines.length && locationLines.length < 3; i++) {
+    const line = lines[i];
+    if (DATE_LINE_RE.test(line)) break;
+    if (/hearing/i.test(line)) break;
+    // A "<" this far past the label means the 400-char window cut through
+    // an HTML tag that never got a chance to close before the slice ended
+    // (confirmed live 2026-09-05 on Case 26-196-EL-BGN: the address's own
+    // three real lines are followed by a stray, unclosed "<div
+    // class=\"col-xs-12...\"" fragment from the page's next layout section)
+    // — anything past that point is markup debris, not more address text.
+    if (line.includes("<") || line.includes(">")) break;
+    // A short venue/address line, not a run-on paragraph of unrelated prose.
+    if (line.length > 120) break;
+    locationLines.push(line);
+  }
+  if (locationLines.length === 0) return null;
+  // Some source lines already end in their own trailing comma (from a
+  // `<br />`-separated address fragment) — join then collapse the
+  // occasional resulting doubled comma rather than leaving it in.
+  return locationLines.join(", ").replace(/,\s*,/g, ",");
+}
+
+// Every real upcoming hearing entry (both "Local public hearing" and
+// "Evidentiary hearing" labels — see BROADENED note above) is kept, not
+// just the earliest — a case can genuinely publish more than one.
 async function fetchHearings(detailUrl: string): Promise<UpcomingHearing[]> {
   const res = await fetch(detailUrl, { headers: BROWSER_HEADERS });
   if (!res.ok) return [];
@@ -199,13 +220,16 @@ async function fetchHearings(detailUrl: string): Promise<UpcomingHearing[]> {
   const now = new Date();
   const hearings: UpcomingHearing[] = [];
   for (const m of html.matchAll(HEARING_LABEL_RE)) {
-    if (EVIDENTIARY_HEARING_RE.test(m[1])) continue;
-    const dateLine = findDateLineAfter(html, m.index! + m[0].length);
-    if (!dateLine) continue;
-    const d = parseHearingDateTime(dateLine, now);
+    const labelEndIndex = m.index! + m[0].length;
+    const window = html.slice(labelEndIndex, labelEndIndex + 400).replace(/<[^>]+>/g, "\n");
+    const lines = window.split("\n").map((s) => s.trim()).filter(Boolean);
+    const dateLineIndex = lines.findIndex((line) => DATE_LINE_RE.test(line));
+    if (dateLineIndex === -1) continue;
+    const d = parseHearingDateTime(lines[dateLineIndex], now);
     if (!d || d.getTime() <= now.getTime()) continue;
     if (hearings.some((h) => h.date.getTime() === d.getTime())) continue;
-    hearings.push({ date: d, label: m[1].trim() });
+    const location = findLocationAfterDateLine(lines, dateLineIndex);
+    hearings.push({ date: d, label: m[1].trim(), location });
   }
   return hearings;
 }
@@ -307,7 +331,7 @@ function normalizeCase(c: OpsbCase, hearings: UpcomingHearing[]): NormalizedProj
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need from the Ohio Power Siting Board — Case No. ${c.caseNumber}, "${c.project}" (${c.applicant})`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `https://opsb.ohio.gov${c.url}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `Ohio OPSB Case ${c.caseNumber}`,

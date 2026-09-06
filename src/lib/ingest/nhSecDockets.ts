@@ -325,11 +325,20 @@ const SEC_DOCKET_IN_TITLE_RE = /\bSEC\s+\d{2}-\d{3}\b/g;
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
 }
 
 interface PucEventItem {
   title: string;
   start_time: number;
+  // A genuine structured venue/address field — confirmed live 2026-09-05,
+  // e.g. "21 South Fruit St, Suite 10, Concord, NH 03301, Hearing Room A"
+  // or a specific off-site venue for a local public hearing (e.g. "Conway:
+  // North Conway Water Precinct, 104 Sawmill Ln., North Conway, NH"). Not
+  // present on every event shape historically, so read defensively.
+  fields?: {
+    field_event_location?: string[];
+  };
 }
 
 // Every real upcoming hearing found is kept (not just the earliest) — a
@@ -349,6 +358,7 @@ async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing[]
   for (const item of json.data) {
     const date = new Date(item.start_time * 1000);
     if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+    const location = item.fields?.field_event_location?.[0]?.trim() || null;
     for (const m of item.title.matchAll(SEC_DOCKET_IN_TITLE_RE)) {
       const docketNumber = m[0];
       const arr = map.get(docketNumber) ?? [];
@@ -356,6 +366,7 @@ async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing[]
         arr.push({
           date,
           link: `${BASE_URL}/Docket.aspx?DocketNumber=${encodeURIComponent(docketNumber)}`,
+          location,
         });
       }
       map.set(docketNumber, arr);
@@ -618,7 +629,7 @@ function normalizeCandidate(
     causeDetail: `Waiting on a Certificate of Site and Facility (or related siting approval) from the New Hampshire Site Evaluation Committee — Docket ${row.docketNumber}, "${row.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Docket.aspx?DocketNumber=${encodeURIComponent(row.docketNumber)}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `NH Docket ${row.docketNumber}`,

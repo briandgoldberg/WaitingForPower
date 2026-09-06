@@ -284,6 +284,28 @@ const HEARING_HREF_RE = /<a href="(\/event\/[^"]+)" rel="bookmark">/;
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
+}
+
+// Each event's own body text includes a hand-typed "Location: ..." sentence
+// right alongside the date/case-number info already parsed above — e.g.
+// "Location: via Teams videoconference." or "Location: ... at the Swanton
+// Village Municipal Complex, 120 First Street, Swanton, VT 05488." —
+// confirmed live 2026-09-05 across the current public-hearing calendar.
+// Almost every real entry immediately follows the venue sentence with "The
+// public hearing will begin at ..."; that phrase is used as a cutoff so the
+// captured location doesn't run on into unrelated scheduling prose, same
+// spirit as this module's other confirmed-live text-extraction regexes.
+const HEARING_LOCATION_RE = /Location:\s*([\s\S]*?)<\/p>/i;
+const HEARING_LOCATION_CUTOFF_RE = /\bThe public hearing will begin\b/i;
+
+function extractHearingLocation(block: string): string | null {
+  const m = HEARING_LOCATION_RE.exec(block);
+  if (!m) return null;
+  let text = decodeHtmlEntities(m[1]);
+  const cutIdx = text.search(HEARING_LOCATION_CUTOFF_RE);
+  if (cutIdx !== -1) text = text.slice(0, cutIdx).trim();
+  return text.length > 0 ? text.slice(0, 300) : null;
 }
 
 // Every real upcoming hearing found is kept (not just the earliest) — a
@@ -303,9 +325,10 @@ async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, Upcoming
       if (!caseNo || !timeIso || !href) continue;
       const date = new Date(timeIso);
       if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
+      const location = extractHearingLocation(block);
       const arr = map.get(caseNo) ?? [];
       if (!arr.some((h) => h.date.getTime() === date.getTime())) {
-        arr.push({ date, link: `https://puc.vermont.gov${href}` });
+        arr.push({ date, link: `https://puc.vermont.gov${href}`, location });
       }
       map.set(caseNo, arr);
     }
@@ -586,7 +609,7 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
     causeDetail: `Waiting on a Certificate of Public Good from the Vermont Public Utility Commission, pursuant to 30 V.S.A. §248 — Case No. ${record.caseNumber}, "${record.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? CASE_DETAIL_URL(record.caseId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `VT PUC Case No. ${record.caseNumber}`,

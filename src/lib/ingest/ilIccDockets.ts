@@ -165,7 +165,29 @@
 // resolved via CaseStatus (see fetchDetail/parseDetail), matching this
 // module's existing one-detail-fetch-per-open-candidate cost discipline —
 // a closed docket's schedule is all in the past by construction and isn't
-// worth the extra request.
+// worth the extra request. Every event type past the Deadline exclusion is
+// kept as a public hearing/conference (Evidentiary, Status, Prehearing,
+// Oral Argument, and any other real type confirmed on other dockets —
+// Briefs/Testimony/Rebuttal/Motion/Proposed Order/Exceptions to Proposed
+// Order deadlines — are already excluded, none of them share the ALJ-
+// presided-hearing shape of the ones kept); this is deliberately not
+// narrowed to only Evidentiary hearings, matching this task's "any genuine
+// open proceeding the public can attend" goal.
+//
+// LOCATION (added 2026-09-05): each event card's own third `<span
+// class="d-block mt-3">` line — confirmed live to hold the presiding ALJ
+// name(s) (e.g. "Administrative Law Judge Cardoni<br/>Administrative Law
+// Judge Groh") and, on docket P2015-0277's real May 5, 2015 Prehearing
+// card, an appended room note ("Administrative Law Judge Von
+// Qualen<br/><br/>(rooms B & C for overflow)") — is the only per-event
+// venue/attendance-adjacent text this page publishes; there is no separate
+// address/room field. The page's own sitewide "Office Locations" footer
+// (160 North LaSalle St., Chicago / 527 East Capitol Ave., Springfield) was
+// checked and confirmed to be generic ICC office addresses repeated on
+// every page, not a per-hearing venue, so it is deliberately NOT used here
+// — using it would misrepresent a generic footer as this specific
+// hearing's location. Captured as-is (ALJ name plus any room note,
+// exactly as published) rather than guessed at further.
 //
 // Wired to Vercel Cron weekly, 22:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-il-icc/route.ts) — a real run's timing was
@@ -208,6 +230,7 @@ interface UpcomingHearing {
   date: Date;
   link: string;
   label: string | null;
+  location: string | null;
 }
 
 // See module header HEARING SCHEDULE. Each card is a `<li
@@ -223,6 +246,10 @@ const SCHEDULE_DATE_RE = /<h4>([\s\S]*?)<\/h4>/;
 // The Commission's own internal decision deadline, not a hearing/conference
 // the public attends — see module header HEARING SCHEDULE.
 const SCHEDULE_DEADLINE_RE = /^deadline/i;
+// See module header LOCATION — the card's own third `<span class="d-block
+// mt-3">` line, holding the presiding ALJ name(s) and, when published, a
+// room note.
+const SCHEDULE_PRESIDING_RE = /<span class="d-block mt-3">([\s\S]*?)<\/span>/;
 
 // Every real future, non-"Deadline", non-cancelled event on the docket's
 // Schedule sub-page is kept (not just the earliest) — a docket can
@@ -245,7 +272,15 @@ async function fetchScheduledEvents(docketId: string): Promise<UpcomingHearing[]
     const dateText = decodeHtmlEntities(rawDate.replace(/<[^>]+>/g, " "));
     const d = new Date(dateText);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (!hearings.some((h) => h.date.getTime() === d.getTime())) hearings.push({ date: d, link: url, label: type });
+    // See LOCATION above — the presiding-ALJ/room-note span, exactly as
+    // published, or null when a card doesn't carry one (e.g. the plain
+    // "Hearing"/"Deadline"-adjacent card variants confirmed live to lack
+    // this span entirely).
+    const rawLocation = SCHEDULE_PRESIDING_RE.exec(block)?.[1];
+    const location = rawLocation
+      ? decodeHtmlEntities(rawLocation.replace(/(?:<br\s*\/?>\s*)+/gi, ", ").replace(/<[^>]+>/g, " ")).replace(/^,\s*|,\s*$/g, "")
+      : null;
+    if (!hearings.some((h) => h.date.getTime() === d.getTime())) hearings.push({ date: d, link: url, label: type, location: location || null });
   }
   return hearings;
 }
@@ -492,7 +527,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, heari
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Illinois Commerce Commission — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `IL ICC Docket No. ${search.docketNumber}`,

@@ -172,9 +172,25 @@ const AGENDA_INDEX_RE = /<a href="([^"]+\.aspx)">([A-Za-z]+ \d{1,2}, \d{4}),[^<]
 // text is the docket number.
 const AGENDA_DOCKET_RE = /<a href="https:\/\/puc\.sd\.gov\/Dockets\/Electric\/\d{4}\/(EL\d{2}-\d{3})\.aspx"><strong>\1<\/strong><\/a>/g;
 
+// Each real agenda page's own opening block names the meeting's physical
+// room right after the date/time line — confirmed live 2026-09-05 against
+// three real 2026 agenda pages (0728.aspx, 0811.aspx, 0908.aspx), all
+// identically "Room 413, Capitol Building <br /> Pierre, South Dakota"
+// between the "at <time> CDT" line and the closing </strong>. Same page
+// already fetched for AGENDA_DOCKET_RE above, no extra request.
+const AGENDA_LOCATION_RE = /at\s+[\d:]+\s*[ap]\.m\.[^<]*<br\s*\/>\s*([\s\S]*?)<\/strong>/i;
+
+function parseAgendaLocation(html: string): string | null {
+  const m = AGENDA_LOCATION_RE.exec(html);
+  if (!m) return null;
+  const location = decodeHtmlEntities(m[1]);
+  return location.length > 0 ? location : null;
+}
+
 interface UpcomingAgendaHearing {
   date: Date;
   link: string;
+  location: string | null;
 }
 
 async function fetchUpcomingAgendaHearings(): Promise<Map<string, UpcomingAgendaHearing[]>> {
@@ -204,10 +220,11 @@ async function fetchUpcomingAgendaHearings(): Promise<Map<string, UpcomingAgenda
       } catch {
         continue;
       }
+      const location = parseAgendaLocation(agendaHtml);
       for (const m of agendaHtml.matchAll(AGENDA_DOCKET_RE)) {
         const docketNumber = m[1];
         const arr = map.get(docketNumber) ?? [];
-        if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: url });
+        if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: url, location });
         map.set(docketNumber, arr);
       }
     }
@@ -406,7 +423,7 @@ async function normalizeCandidate(
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility permit from the South Dakota Public Utilities Commission, pursuant to SDCL 49-41B — Docket No. ${listing.docketNumber}, "${listing.rawTitle.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `SD PUC Docket No. ${listing.docketNumber}`,

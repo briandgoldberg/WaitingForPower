@@ -266,16 +266,25 @@
 // (July 2026) as of this writing; Case 26-0135-E-CN-PW returned "No Records
 // Found" — confirmed this exact page renders that literal string for a
 // case with no scheduled meetings, not an error. A case number with no
-// hearings at all (or not found) is handled the same way. Only the
-// earliest FUTURE meeting date (of any meeting type — an evidentiary
-// hearing is exactly as real and public as a "Public Comment Hearing" one)
-// is kept per case; commentLink points at that specific meeting's own
-// Details page (not the WebDocket case page already used for `sources`).
-// One request per real (post-filter) candidate — this source has no
-// single sitewide calendar page, only a per-case search — politeness-
-// delayed the same as every other per-candidate request in this module,
-// and individually try/caught so one case's lookup failing doesn't blank
-// out every other case's real hearing data.
+// hearings at all (or not found) is handled the same way. EVERY real
+// future meeting is kept per case (not just the earliest — a case can
+// genuinely have several on the books at once), and no meeting TYPE is
+// filtered out: an Evidentiary Hearing is exactly as real and public as a
+// Public Comment Hearing, matching this site's "list every open hearing a
+// visitor could attend" scope. One request per real (post-filter)
+// candidate — this source has no single sitewide calendar page, only a
+// per-case search — politeness-delayed the same as every other
+// per-candidate request in this module, and individually try/caught so one
+// case's lookup failing doesn't blank out every other case's real hearing
+// data.
+//
+// LOCATION — added 2026-09-05: the same response parsed above for Date/
+// Details-link also carries each meeting's own Meeting Type and Location
+// (e.g. "PSC  Howard M. Cunningham Hearing Room", "Hampshire Co.
+// Courthouse") in a third <tr> per meeting — confirmed live against Case
+// 26-0075-E-CN's real 10 rows (see HEARING_ROW_RE). Both now flow through
+// into NormalizedHearing.label/location instead of being discarded (label
+// was previously hardcoded to null in normalizeCase).
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
@@ -460,6 +469,8 @@ const ORDER_ROW_RE =
 interface UpcomingHearing {
   date: Date;
   link: string;
+  label: string | null;
+  location: string | null;
 }
 
 function parseMDYShortYear(raw: string): Date | null {
@@ -476,8 +487,17 @@ function parseMDYShortYear(raw: string): Date | null {
 // 26-0135-E-CN-PW) renders the literal string "No Records Found" instead of
 // any row, which this regex simply fails to match (zero results), same as
 // a genuine network/parse miss — no special-casing needed.
+//
+// Each meeting is actually rendered as 3 consecutive <tr>s in the real
+// response — confirmed live 2026-09-05: (1) Case No/Date/Start Time/Details
+// row, (2) a colspan=3 "Case Description" (applicant name) row, (3) a row
+// with Meeting Type (colspan=1, e.g. "Evidentiary Hearing"/"Public Comment
+// Hearing") and Location (colspan=2, e.g. "PSC  Howard M. Cunningham
+// Hearing Room", "Hampshire Co. Courthouse") side by side. Groups 3/4 below
+// capture that third row so the venue the PSC already publishes for every
+// meeting flows into `location` instead of being discarded.
 const HEARING_ROW_RE =
-  /<td valign="bottom" height="25">[^<]*&nbsp;<\/td>\s*<td valign="bottom" height="25">([^<]*)&nbsp;<\/td>\s*<td valign="bottom" height="25">&nbsp;&nbsp;[^<]*&nbsp;<\/td>[\s\S]*?intHearingID=(\d+)/g;
+  /<td valign="bottom" height="25">[^<]*&nbsp;<\/td>\s*<td valign="bottom" height="25">([^<]*)&nbsp;<\/td>\s*<td valign="bottom" height="25">&nbsp;&nbsp;[^<]*&nbsp;<\/td>[\s\S]*?intHearingID=(\d+)[\s\S]*?<td valign="top" colspan="1">&nbsp;&nbsp;&nbsp;([^<]*)&nbsp;<\/td>\s*<td valign="top" colspan="2">\s*&nbsp;&nbsp;&nbsp;([^<]*)&nbsp;<\/td>/g;
 
 // One request per real (post-filter) candidate — this source has no single
 // sitewide calendar page, only a per-case "Meetings by Case" search (see
@@ -503,7 +523,9 @@ async function fetchUpcomingHearingsForCase(caseNumber: string): Promise<Upcomin
     const date = parseMDYShortYear(m[1]);
     if (!date || date.getTime() <= now) continue;
     if (!found.some((h) => h.date.getTime() === date.getTime())) {
-      found.push({ date, link: HEARING_DETAIL_URL(m[2]) });
+      const label = stripTags(m[3]) || null;
+      const location = stripTags(m[4]) || null;
+      found.push({ date, link: HEARING_DETAIL_URL(m[2]), label, location });
     }
   }
   return found;
@@ -721,7 +743,7 @@ function normalizeCase(
     causeDetail: `Waiting on a ${docketLabel} from the West Virginia Public Service Commission — Case No. ${record.caseNumber}, "${record.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? DETAIL_URL(record.caseId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `WV PSC Case No. ${record.caseNumber}`,

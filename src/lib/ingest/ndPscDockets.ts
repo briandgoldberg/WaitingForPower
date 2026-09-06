@@ -205,6 +205,7 @@ const MEETING_DOC_LINK_RE = /<a href="(https:\/\/www\.psc\.nd\.gov\/webdocs\/[^"
 interface UpcomingHearing {
   date: Date;
   link: string;
+  location: string | null;
 }
 
 // See module header HEARING CALENDAR — the calendar's own case numbers
@@ -213,6 +214,51 @@ function normalizeCaseNumber(raw: string): string {
   const m = /^PU-(\d+)-(\d+)$/.exec(raw.trim());
   if (!m) return raw.trim();
   return `PU-${m[1]}-${m[2].padStart(3, "0")}`;
+}
+
+// A real meeting block's own text carries up to two distinct kinds of
+// location info, confirmed live 2026-09-05 against apps.psc.nd.gov/events/
+// meetings — both captured here, neither invented:
+//   1. An "attendance mechanism" suffix right after the hearing-type doc
+//      link, e.g. `<a ...>Formal Hearing</a> (601KB pdf) -Internet
+//      Broadcast` — real confirmed text for PU-26-86 and PU-25-261 alike.
+//   2. A real physical venue/address block (venue name, street, city)
+//      appended after the case detail (or, for non-case items like the
+//      Lignite Energy Council's quarterly meeting, after the websubject
+//      line) — real confirmed example: PU-26-86's own "Grand Williston
+//      Hotel & Conference Center / 3601 Second Avenue West / Williston, ND".
+// A hearing can have both (PU-26-86 has a real physical venue AND is also
+// broadcast over the internet) — both are kept, joined with " — ".
+function extractHearingLocation(blockText: string): string | null {
+  let text = blockText.replace(/<!--[\s\S]*?-->/g, "");
+  text = text.replace(/<b>[\s\S]*?<\/b>/, "");
+
+  let attendanceNote: string | null = null;
+  const docLinkRe = /<a href="[^"]*"[^>]*>[^<]*<\/a>\s*(?:\(\d+KB pdf\))?\s*([^<]*?)\s*<br\s*\/?>/;
+  const docMatch = docLinkRe.exec(text);
+  if (docMatch) {
+    const suffix = docMatch[1].replace(/^-+\s*/, "").trim();
+    if (suffix.length > 0) attendanceNote = suffix;
+    text = text.slice(docMatch.index + docMatch[0].length);
+  }
+
+  // Strips the fixed-shape "Case No. <a>NUMBER</a><br/>Entity<br/>
+  // Description<br/>Type<br/>" chunk(s) (repeatable for a joint hearing
+  // naming more than one case) so only a real trailing address block, if
+  // any, is left over.
+  const caseChunkRe =
+    /Case No\.\s*(?:<a[^>]*>)?[\s\S]*?(?:<\/a>)?\s*<br\s*\/?>\s*[^<]*<br\s*\/?>\s*[^<]*<br\s*\/?>\s*[^<]*<br\s*\/?>/g;
+  text = text.replace(caseChunkRe, "");
+
+  const addressLines = text
+    .split(/<br\s*\/?>/i)
+    .map((l) => decodeHtmlEntities(l))
+    .filter((l) => l.length > 0 && /[A-Za-z0-9]/.test(l));
+
+  const parts: string[] = [];
+  if (addressLines.length > 0) parts.push(addressLines.join(", "));
+  if (attendanceNote) parts.push(attendanceNote);
+  return parts.length > 0 ? parts.join(" — ") : null;
 }
 
 // Every real upcoming hearing found is kept (not just the earliest) — a
@@ -236,11 +282,12 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
 
     const docMatch = MEETING_DOC_LINK_RE.exec(text);
     const link = docMatch ? docMatch[1] : MEETINGS_URL;
+    const location = extractHearingLocation(text);
 
     for (const caseMatch of text.matchAll(MEETING_CASE_RE)) {
       const caseNumber = normalizeCaseNumber(caseMatch[1]);
       const arr = map.get(caseNumber) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link, location });
       map.set(caseNumber, arr);
     }
   }
@@ -472,7 +519,7 @@ async function normalizeCandidate(
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility siting permit from the North Dakota Public Service Commission, pursuant to N.D.C.C. Ch. 49-22 — Case No. ${listing.caseNumber}, "${listing.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [
       {
         label: `ND PSC Case No. ${listing.caseNumber}`,

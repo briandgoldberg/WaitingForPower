@@ -106,7 +106,7 @@ export default async function HomePage({
                   className="justify-self-start shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
                   style={{ color: "var(--accent)" }}
                 >
-                  {upcomingHearings.toLocaleString()} hearings to advocate at →
+                  {upcomingHearings.toLocaleString()} Upcoming Hearings →
                 </Link>
               </>
             )}

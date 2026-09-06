@@ -90,16 +90,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <FeedbackWidget />
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p>WaitingForPower tracks structural and sourced data on U.S. energy projects of every fuel type.</p>
-              <p className="mt-1">
-                We&rsquo;re always adding more data sources. If you know of a project that isn&rsquo;t listed,{" "}
-                <Link href="/contact?topic=data" className="underline">
-                  reach out
-                </Link>
-                .
-              </p>
-            </div>
+            <p>
+              WaitingForPower tracks as much sourced U.S. energy project data as possible so{" "}
+              <Link href="/contact?topic=data" className="underline">
+                reach out
+              </Link>{" "}
+              if you know of one that isn&rsquo;t listed.
+            </p>
             <div className="flex items-center gap-3">
               <a
                 href="https://x.com/WaitingForPower"

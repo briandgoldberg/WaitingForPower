@@ -91,6 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <p>
+              We&rsquo;re always adding more data sources.{" "}
               <Link href="/contact?topic=data" className="underline">
                 Reach out
               </Link>{" "}

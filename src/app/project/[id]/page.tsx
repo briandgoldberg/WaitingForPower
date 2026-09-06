@@ -10,6 +10,7 @@ import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { GreenlightVote } from "@/components/GreenlightVote";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
+import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 
 export const dynamic = "force-dynamic";
 
@@ -69,9 +70,22 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
+  const hearingEventsJsonLd = buildHearingEventsJsonLd({
+    projectName: p.name,
+    projectUrl: `https://waitingforpower.com/project/${p.slug}`,
+    hearingDetailsLink: p.hearingDetailsLink,
+    hearings: p.hearings,
+  });
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
+      {hearingEventsJsonLd && (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(hearingEventsJsonLd) }}
+        />
+      )}
       {p.isAggregateExample && (
         <div className="rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">
           <strong>This is a regional aggregate, not a single physical project.</strong> It&rsquo;s

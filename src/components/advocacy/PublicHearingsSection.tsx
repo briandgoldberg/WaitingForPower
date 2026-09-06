@@ -6,7 +6,11 @@ export function PublicHearingsSection({ groups }: { groups: UpcomingHearingGroup
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
         Real hearings you can attend or follow, pulled straight from each project&rsquo;s own
-        docket source, soonest first.
+        docket source, soonest first.{" "}
+        <a href="/hearings.rss" className="text-[var(--accent)] underline">
+          RSS feed
+        </a>
+        .
       </p>
 
       {groups.length === 0 ? (

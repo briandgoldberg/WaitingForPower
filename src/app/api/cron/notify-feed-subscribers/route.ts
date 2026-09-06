@@ -11,9 +11,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { splitStateCodes } from "@/lib/data/usStates";
 import { sendFeedWeeklyEmail } from "@/lib/feedSubscriptionEmail";
+import { getUpcomingPublicHearingGroups } from "@/lib/hearings";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
+
+// Cap on how many upcoming hearings show inline in one weekly email —
+// this is a teaser linking to the full list (see hearingsUrl in
+// feedSubscriptionEmail.ts), not meant to replace it.
+const HEARINGS_PER_EMAIL = 5;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -22,6 +28,9 @@ export async function GET(req: NextRequest) {
   }
 
   const subs = await prisma.feedSubscription.findMany({ where: { confirmed: true } });
+  // Same live data for every subscriber — computed once, filtered per
+  // subscriber below, rather than re-querying inside the loop.
+  const hearingGroups = await getUpcomingPublicHearingGroups();
 
   let emailed = 0;
   let failed = 0;
@@ -42,6 +51,12 @@ export async function GET(req: NextRequest) {
       (r) => !r.project.isAggregateExample && (scopeState == null || splitStateCodes(r.project.state).includes(scopeState)),
     );
 
+    const hearingsInScope = hearingGroups
+      .filter((g) => scopeState == null || splitStateCodes(g.project.state).includes(scopeState))
+      .flatMap((g) => g.hearings.map((h) => ({ project: g.project, hearing: h })))
+      .sort((a, b) => new Date(a.hearing.date).getTime() - new Date(b.hearing.date).getTime())
+      .slice(0, HEARINGS_PER_EMAIL);
+
     const result = await sendFeedWeeklyEmail({
       to: sub.email,
       state: scopeState,
@@ -50,6 +65,12 @@ export async function GET(req: NextRequest) {
         projectSlug: r.project.slug,
         summary: r.summary,
         createdAt: r.createdAt.toISOString(),
+      })),
+      hearings: hearingsInScope.map((h) => ({
+        projectName: h.project.name,
+        projectSlug: h.project.slug,
+        date: h.hearing.date,
+        location: h.hearing.location,
       })),
       unsubscribeToken: sub.unsubscribeToken,
     });

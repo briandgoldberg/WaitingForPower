@@ -10,7 +10,10 @@ export const metadata: Metadata = {
   title: "Advocacy — WaitingForPower",
   description:
     "Push for faster energy permitting two ways: six bipartisan national policies, and real public hearings happening now that you can attend.",
-  alternates: { canonical: "/policies" },
+  alternates: {
+    canonical: "/policies",
+    types: { "application/rss+xml": "/hearings.rss" },
+  },
 };
 
 export default async function PoliciesPage({

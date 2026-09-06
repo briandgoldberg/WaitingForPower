@@ -99,7 +99,7 @@ export default async function HomePage({
             {upcomingHearings > 0 && (
               <>
                 <p className="text-sm text-[var(--muted)] max-w-2xl">
-                  Every public hearing you can attend or comment at, as it&rsquo;s found.
+                  Every public hearing you can attend, follow, or comment at, as it&rsquo;s found.
                 </p>
                 <Link
                   href="/policies?tab=hearings"

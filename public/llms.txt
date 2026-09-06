@@ -36,10 +36,14 @@
   Impact Study") and `networkUpgradeCostUsd` (null for most projects; see
   /methodology for current coverage).
 
+## Advocacy
+
+- [Advocacy](https://waitingforpower.com/policies) — two tabs: National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus links to contact your House member and senators) and Public Hearings (every real upcoming public hearing across all tracked projects — dates, venues, and a link to hearing details — grouped by project, soonest first).
+- [Public Hearings RSS feed](https://waitingforpower.com/hearings.rss): the same upcoming-hearings data as an RSS 2.0 feed, one item per hearing, refreshed on every request. Usable directly by feed readers, Zapier's "New Item in Feed" trigger, or IFTTT's RSS applet.
+
 ## Docs
 
 - [Methodology](https://waitingforpower.com/methodology) — how each field is computed, per-source detail, and known data-quality caveats.
-- [Policies](https://waitingforpower.com/policies) — six bipartisan permitting-reform proposals this data supports, one per structural bottleneck.
 - [Source](https://github.com/briandgoldberg/WaitingForPower) — the ingestion pipeline and full schema, MIT licensed.
 
 ## Use and citation

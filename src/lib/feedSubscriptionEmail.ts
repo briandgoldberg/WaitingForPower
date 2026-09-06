@@ -35,6 +35,17 @@ interface FeedSummary {
   createdAt: string;
 }
 
+interface HearingSummary {
+  projectName: string;
+  projectSlug: string;
+  date: string; // ISO
+  location: string | null;
+}
+
+function hearingDateLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 // Groups already-chronological summaries (oldest first, per
 // notify-feed-subscribers' `orderBy: { createdAt: "asc" }` query) into
 // consecutive same-day buckets, preserving that order.
@@ -98,6 +109,11 @@ export async function sendFeedWeeklyEmail(params: {
   to: string;
   state: string | null;
   summaries: FeedSummary[];
+  // Real upcoming public hearings in this subscriber's scope — see
+  // src/lib/hearings.ts. Optional/omittable per entry's own fields since
+  // this is capped to a handful (see notify-feed-subscribers' HEARINGS_PER_EMAIL)
+  // rather than every hearing in scope, so the email stays short.
+  hearings: HearingSummary[];
   unsubscribeToken: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const resend = getResend();
@@ -105,8 +121,10 @@ export async function sendFeedWeeklyEmail(params: {
 
   const scope = scopeLabel(params.state);
   const feedUrl = params.state ? `https://waitingforpower.com/?state=${params.state}` : "https://waitingforpower.com/";
+  const hearingsUrl = "https://waitingforpower.com/policies?tab=hearings";
   const unsubscribeUrl = `https://waitingforpower.com/api/feed-subscribe/unsubscribe?token=${params.unsubscribeToken}`;
   const hasUpdates = params.summaries.length > 0;
+  const hasHearings = params.hearings.length > 0;
   const days = groupByDay(params.summaries);
 
   const { error } = await resend.emails.send({
@@ -121,6 +139,16 @@ export async function sendFeedWeeklyEmail(params: {
         ...day.items.map((s) => `- ${s.projectName}: ${s.summary} (https://waitingforpower.com/project/${s.projectSlug})`),
         "",
       ]),
+      ...(hasHearings
+        ? [
+            `Upcoming public hearings in ${scope}:`,
+            ...params.hearings.map(
+              (h) => `- ${hearingDateLabel(h.date)}: ${h.projectName}${h.location ? ` (${h.location})` : ""} (https://waitingforpower.com/project/${h.projectSlug})`,
+            ),
+            `All hearings: ${hearingsUrl}`,
+            "",
+          ]
+        : []),
       `Full feed: ${feedUrl}`,
       "",
       `Unsubscribe: ${unsubscribeUrl}`,
@@ -139,6 +167,19 @@ export async function sendFeedWeeklyEmail(params: {
           .join("")}</ul>`,
         )
         .join("")}
+      ${
+        hasHearings
+          ? `
+      <h3 style="font-size:14px;margin:20px 0 4px;">Upcoming public hearings in ${escapeHtml(scope)}</h3>
+      <ul style="margin:0;">${params.hearings
+        .map(
+          (h) =>
+            `<li><a href="https://waitingforpower.com/project/${h.projectSlug}">${escapeHtml(h.projectName)}</a> — ${hearingDateLabel(h.date)}${h.location ? ` (${escapeHtml(h.location)})` : ""}</li>`,
+        )
+        .join("")}</ul>
+      <p><a href="${hearingsUrl}">All upcoming hearings</a></p>`
+          : ""
+      }
       <p><a href="${feedUrl}">Full feed</a></p>
       <p style="color:#666;font-size:13px;"><a href="${unsubscribeUrl}">Unsubscribe</a></p>
     `,

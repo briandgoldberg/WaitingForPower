@@ -28,8 +28,7 @@ export default async function PoliciesPage({
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Advocacy</h1>
         <p className="text-sm text-[var(--muted)] mt-2 max-w-2xl">
-          Two ways to push for faster, better energy permitting: national policy change, and
-          showing up to the hearings happening right now.
+          Push for faster energy permitting through national policy or hearings happening now.
         </p>
       </div>
 

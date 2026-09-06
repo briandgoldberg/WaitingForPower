@@ -96,23 +96,17 @@ export default async function HomePage({
             >
               {totalProjects.toLocaleString()} projects tracked →
             </Link>
+            {upcomingHearings > 0 && (
+              <Link
+                href="/policies?tab=hearings"
+                className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                style={{ color: "var(--accent)" }}
+              >
+                {upcomingHearings.toLocaleString()} hearings to advocate at →
+              </Link>
+            )}
           </div>
         </div>
-
-        {upcomingHearings > 0 && (
-          <Link
-            href="/policies?tab=hearings"
-            className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 hover:border-[var(--accent)] transition-colors"
-          >
-            <span className="text-sm">
-              <span className="font-semibold">{upcomingHearings.toLocaleString()} public hearings</span>{" "}
-              <span className="text-[var(--text-secondary)]">are coming up — go make your voice heard.</span>
-            </span>
-            <span className="shrink-0 text-sm font-semibold" style={{ color: "var(--accent)" }}>
-              Advocate →
-            </span>
-          </Link>
-        )}
 
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between gap-3 flex-wrap">

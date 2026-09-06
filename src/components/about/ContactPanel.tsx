@@ -66,9 +66,7 @@ export function ContactPanel({ initialTopic }: { initialTopic?: string } = {}) {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Contact Us</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          Interested in a data feed, API access, or a custom dataset? That&rsquo;s exactly what
-          we&rsquo;re building toward, so tell us what you need. Also happy to hear feedback, bug
-          reports, or partnership ideas.
+          Have a question or an idea? We&rsquo;d love to hear from you.
         </p>
       </div>
 

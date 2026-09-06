@@ -85,13 +85,13 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2.5 sm:items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_auto] gap-x-3 gap-y-2.5 sm:items-center">
             <p className="text-sm text-[var(--muted)] max-w-2xl">
               Every new filing, stage advance, approval, and cancellation, as it&rsquo;s detected.
             </p>
             <Link
               href="/projects"
-              className="justify-self-start sm:justify-self-end shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+              className="justify-self-start shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
               style={{ color: "var(--accent)" }}
             >
               {totalProjects.toLocaleString()} projects tracked →
@@ -103,7 +103,7 @@ export default async function HomePage({
                 </p>
                 <Link
                   href="/policies?tab=hearings"
-                  className="justify-self-start sm:justify-self-end shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                  className="justify-self-start shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
                   style={{ color: "var(--accent)" }}
                 >
                   {upcomingHearings.toLocaleString()} hearings to advocate at →

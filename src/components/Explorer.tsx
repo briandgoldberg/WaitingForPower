@@ -107,13 +107,22 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
           </div>
         )}
         <div className="h-[560px]">
-          {view === "map" ? (
-            <Map projects={filtered} />
-          ) : (
-            <div className="h-full overflow-y-auto">
-              <ProjectList projects={filtered} />
-            </div>
-          )}
+          {view === "map" && <Map projects={filtered} />}
+          {/* Rendered (not conditionally mounted) regardless of the active
+              view, just hidden via CSS when the map is showing — this is
+              the only place a real <a href="/project/slug"> exists anywhere
+              on the site, and "map" is the default view, so a JS-executing
+              crawler that never clicks the "List" toggle would otherwise
+              never see a single real link to any of the ~3,600 project
+              pages, leaving sitemap.xml as their only discovery path.
+              Confirmed live 2026-09-06: Search Console reported ~1,955
+              project pages "Discovered - currently not indexed", and the
+              server-rendered /projects HTML had 0 links matching
+              href="/project/" despite embedding full data for every
+              project — this is why. */}
+          <div className={view === "list" ? "h-full overflow-y-auto" : "hidden"}>
+            <ProjectList projects={filtered} />
+          </div>
         </div>
       </div>
 

@@ -436,20 +436,25 @@ export async function ingestLbnlQueuedUp(filePath: string, minCapacityMw = MIN_C
   return ingestLbnlQueuedUpBuffer(readFileSync(filePath), minCapacityMw);
 }
 
-// emp.lbl.gov's bot-protection intermittently 403s a request that would
-// otherwise succeed — confirmed live 2026-09-04: repeated identical requests
-// to the same URL, seconds apart, returned 403/200/403/200 with no header
-// or timing difference explaining which — this reads as a WAF sampling a
-// fraction of non-browser requests, not a hard per-client block (a genuine
-// TLS-fingerprint block would be consistent, and wasn't). A single failed
-// fetch here previously aborted the whole ingestion run — very likely why
-// this source's live cron backfill has never completed (see
-// IngestSourceBackfill in schema.prisma, and every currently-tracked LBNL
-// project's matchKey still being null as of 2026-09-04). Retrying a few
-// times with a short delay costs nothing on the weeks it isn't needed and
-// turns a per-request failure rate that isn't even reliably reproducible
-// into a very low per-run one.
-async function fetchWithRetry(url: string, init: RequestInit, attempts = 4): Promise<Response> {
+// emp.lbl.gov's bot-protection 403s some requests to this URL. On
+// 2026-09-04 this looked like random WAF sampling (identical requests
+// seconds apart returned 403/200/403/200). Re-investigated 2026-09-06 after
+// a real cron failure survived 4 retries: side-by-side testing right now
+// shows curl succeeding on ~5 of 6 attempts against this exact URL/UA, while
+// Node's own fetch() (undici) fails 8 of 8 in a row — i.e. this reads more
+// like a TLS/HTTP-client-fingerprint block against Node's fetch specifically
+// than pure sampling. Retrying more times within the same process is
+// unlikely to help a block like that; it's kept here (bumped from 4 to 6
+// attempts) because it's free and still helps on days it genuinely is
+// transient, but a real fix would mean fetching through a client with a
+// browser-like TLS fingerprint (e.g. shelling out to curl) rather than more
+// retries — not done here since this is a weekly, non-critical source and
+// failures already alert by email (see the cron route's failure handling).
+// A single failed fetch here previously aborted the whole ingestion run —
+// very likely why this source's live cron backfill has never completed
+// (see IngestSourceBackfill in schema.prisma, and every currently-tracked
+// LBNL project's matchKey still being null as of 2026-09-04).
+async function fetchWithRetry(url: string, init: RequestInit, attempts = 6): Promise<Response> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -459,7 +464,7 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 4): Pro
     } catch (err) {
       lastError = err;
     }
-    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 750 * (i + 1)));
   }
   throw lastError;
 }

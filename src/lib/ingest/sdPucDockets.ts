@@ -177,10 +177,10 @@ interface UpcomingAgendaHearing {
   link: string;
 }
 
-async function fetchUpcomingAgendaHearings(): Promise<Map<string, UpcomingAgendaHearing>> {
+async function fetchUpcomingAgendaHearings(): Promise<Map<string, UpcomingAgendaHearing[]>> {
   const now = Date.now();
   const currentYear = new Date().getFullYear();
-  const map = new Map<string, UpcomingAgendaHearing>();
+  const map = new Map<string, UpcomingAgendaHearing[]>();
 
   for (const year of [currentYear, currentYear + 1]) {
     let indexHtml: string;
@@ -206,10 +206,9 @@ async function fetchUpcomingAgendaHearings(): Promise<Map<string, UpcomingAgenda
       }
       for (const m of agendaHtml.matchAll(AGENDA_DOCKET_RE)) {
         const docketNumber = m[1];
-        const existing = map.get(docketNumber);
-        if (!existing || date.getTime() < existing.date.getTime()) {
-          map.set(docketNumber, { date, link: url });
-        }
+        const arr = map.get(docketNumber) ?? [];
+        if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: url });
+        map.set(docketNumber, arr);
       }
     }
   }
@@ -358,7 +357,7 @@ function extractApplicant(rawTitleHtml: string): string | null {
 
 async function normalizeCandidate(
   listing: DocketListing,
-  upcomingAgendaHearings: Map<string, UpcomingAgendaHearing>,
+  upcomingAgendaHearings: Map<string, UpcomingAgendaHearing[]>,
 ): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
   const ordersText = await fetchOrdersSectionText(listing.year, listing.docketNumber);
@@ -371,7 +370,7 @@ async function normalizeCandidate(
   const counties = extractCounties(listing.rawTitle);
   const applicant = extractApplicant(listing.rawTitleHtml);
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
-  const hearing = upcomingAgendaHearings.get(listing.docketNumber);
+  const hearings = upcomingAgendaHearings.get(listing.docketNumber) ?? [];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the South Dakota Public Utilities Commission's public docket pages, scoped to Energy Conversion and Transmission Facility permit applications (SDCL 49-41B) filed in the Electric docket series — see the ingestion module header for the real caption phrasings this is scoped to.",
@@ -406,9 +405,8 @@ async function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility permit from the South Dakota Public Utilities Commission, pursuant to SDCL 49-41B — Docket No. ${listing.docketNumber}, "${listing.rawTitle.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `SD PUC Docket No. ${listing.docketNumber}`,
@@ -457,7 +455,7 @@ export async function ingestSdPucDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingAgendaHearings = await fetchUpcomingAgendaHearings().catch(() => new Map<string, UpcomingAgendaHearing>());
+  const upcomingAgendaHearings = await fetchUpcomingAgendaHearings().catch(() => new Map<string, UpcomingAgendaHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   for (const listing of realApplications) {

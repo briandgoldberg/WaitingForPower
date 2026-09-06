@@ -215,12 +215,17 @@ function normalizeCaseNumber(raw: string): string {
   return `PU-${m[1]}-${m[2].padStart(3, "0")}`;
 }
 
-async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing>> {
+// Every real upcoming hearing found is kept (not just the earliest) — a
+// case can genuinely have more than one on the books at once (see module
+// header — a single meeting block can also name more than one case, a
+// joint hearing, which is why this pushes into each named case's own array
+// rather than assuming exactly one hearing per case).
+async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(MEETINGS_URL, { headers: { "User-Agent": USER_AGENT, Accept: "text/html" } });
   if (!res.ok) throw new Error(`ND PSC meeting notices request failed (${res.status})`);
   const html = await res.text();
 
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   const now = Date.now();
   for (const block of html.matchAll(MEETING_BLOCK_RE)) {
     const text = block[1];
@@ -234,10 +239,9 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
 
     for (const caseMatch of text.matchAll(MEETING_CASE_RE)) {
       const caseNumber = normalizeCaseNumber(caseMatch[1]);
-      const existing = map.get(caseNumber);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(caseNumber, { date, link });
-      }
+      const arr = map.get(caseNumber) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link });
+      map.set(caseNumber, arr);
     }
   }
   return map;
@@ -401,7 +405,7 @@ function extractCapacity(text: string): { value: number | null; unit: string | n
 
 async function normalizeCandidate(
   listing: CaseListing,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
   const detailHtml = await getPage(`pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}`);
@@ -409,7 +413,7 @@ async function normalizeCandidate(
   const currentStage = await resolveStageFromOrders(listing.getId, listing.getId2, entries);
 
   const matchKey = resolveMatchKey("nd-psc", listing.caseNumber);
-  const hearing = upcomingHearings.get(listing.caseNumber);
+  const hearings = upcomingHearings.get(listing.caseNumber) ?? [];
   const projectType = inferProjectType(listing.category, listing.description);
   const fuelType = inferFuelType(listing.category, listing.description, projectType);
   const { value: capacityValue, unit: capacityUnit } = extractCapacity(listing.description);
@@ -467,9 +471,8 @@ async function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility siting permit from the North Dakota Public Service Commission, pursuant to N.D.C.C. Ch. 49-22 — Case No. ${listing.caseNumber}, "${listing.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `ND PSC Case No. ${listing.caseNumber}`,
@@ -520,7 +523,7 @@ export async function ingestNdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   for (const listing of selected) {

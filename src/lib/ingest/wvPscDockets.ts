@@ -481,8 +481,9 @@ const HEARING_ROW_RE =
 
 // One request per real (post-filter) candidate — this source has no single
 // sitewide calendar page, only a per-case "Meetings by Case" search (see
-// module header). Only the earliest FUTURE meeting is kept.
-async function fetchUpcomingHearingForCase(caseNumber: string): Promise<UpcomingHearing | null> {
+// module header). Every real FUTURE meeting is kept (not just the
+// earliest) — a case can genuinely have more than one on the books at once.
+async function fetchUpcomingHearingsForCase(caseNumber: string): Promise<UpcomingHearing[]> {
   const params = new URLSearchParams({
     CaseNoOperator: "EQUAL",
     CaseNo: caseNumber,
@@ -497,15 +498,15 @@ async function fetchUpcomingHearingForCase(caseNumber: string): Promise<Upcoming
   }
   const html = await res.text();
   const now = Date.now();
-  let earliest: UpcomingHearing | null = null;
+  const found: UpcomingHearing[] = [];
   for (const m of html.matchAll(HEARING_ROW_RE)) {
     const date = parseMDYShortYear(m[1]);
     if (!date || date.getTime() <= now) continue;
-    if (!earliest || date.getTime() < earliest.date.getTime()) {
-      earliest = { date, link: HEARING_DETAIL_URL(m[2]) };
+    if (!found.some((h) => h.date.getTime() === date.getTime())) {
+      found.push({ date, link: HEARING_DETAIL_URL(m[2]) });
     }
   }
-  return earliest;
+  return found;
 }
 
 // Looked up per real candidate, not per every raw search hit — see the
@@ -514,12 +515,12 @@ async function fetchUpcomingHearingForCase(caseNumber: string): Promise<Upcoming
 // the whole function is additionally wrapped in .catch(() => new Map()) at
 // the call site as this series' standard defense for a supplementary
 // (non-core) feature.
-async function fetchUpcomingHearingsByCase(caseNumbers: string[]): Promise<Map<string, UpcomingHearing>> {
-  const map = new Map<string, UpcomingHearing>();
+async function fetchUpcomingHearingsByCase(caseNumbers: string[]): Promise<Map<string, UpcomingHearing[]>> {
+  const map = new Map<string, UpcomingHearing[]>();
   for (const caseNumber of caseNumbers) {
     try {
-      const hearing = await fetchUpcomingHearingForCase(caseNumber);
-      if (hearing) map.set(caseNumber, hearing);
+      const hearings = await fetchUpcomingHearingsForCase(caseNumber);
+      if (hearings.length > 0) map.set(caseNumber, hearings);
     } catch {
       // One case's hearing lookup failing shouldn't block the others.
     }
@@ -667,14 +668,14 @@ function normalizeCase(
   record: CaseListRecord,
   docketLabel: string,
   resolution: Resolution,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("wv-psc", record.caseNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(record.description, record.applicant);
   const capacityMw = extractCapacityMw(record.description);
   const counties = extractCounties(record.description);
   const county = counties.length > 0 ? counties.join(", ") : null;
-  const hearing = upcomingHearings.get(record.caseNumber);
+  const hearings = upcomingHearings.get(record.caseNumber) ?? [];
 
   let currentStage: ProjectStage;
   if (resolution === "granted") currentStage = "approved_awaiting_construction";
@@ -719,9 +720,8 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on a ${docketLabel} from the West Virginia Public Service Commission — Case No. ${record.caseNumber}, "${record.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? DETAIL_URL(record.caseId) : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `WV PSC Case No. ${record.caseNumber}`,
@@ -767,7 +767,7 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // See module header PUBLIC HEARING DATES. A failure here shouldn't block
   // the whole ingestion run over a feature this supplementary — degrades to
   // "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase(realCaseNumbers).catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByCase(realCaseNumbers).catch(() => new Map<string, UpcomingHearing[]>());
 
   for (const entry of rotatedCandidates) {
     const { record, docketLabel } = entry;

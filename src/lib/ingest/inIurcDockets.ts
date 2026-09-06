@@ -380,6 +380,7 @@ async function fetchCaption(legalCaseId: string): Promise<string> {
 interface UpcomingHearing {
   date: Date;
   endDate: Date | null;
+  label: string | null;
 }
 
 interface HearingApiRow {
@@ -394,31 +395,38 @@ interface HearingApiRow {
 // Settlement Hearing) is.
 const EXCLUDED_HEARING_TYPES = new Set(["Attorney Conference"]);
 
+// Every real future, non-excluded hearing on the docket is kept (not just
+// the earliest) — a case can genuinely have more than one on the books at
+// once (Cause 46443 had two live 2026-09-05, see module header). Deduped by
+// exact start timestamp in case the same row could ever be returned twice.
 // Real observed format: "11/20/2026 9:30 AM" — parseable directly by the
 // JS Date constructor (confirmed live), unlike this module's own parseMDY
 // (date-only, no time component).
-async function fetchUpcomingHearing(legalCaseId: string): Promise<UpcomingHearing | null> {
+async function fetchUpcomingHearings(legalCaseId: string): Promise<UpcomingHearing[]> {
   const res = await fetch(HEARINGS_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ txtPageNumber: "1", Id: legalCaseId }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) return [];
   const rows = (await res.json()) as HearingApiRow[];
-  if (!Array.isArray(rows)) return null;
+  if (!Array.isArray(rows)) return [];
 
   const now = Date.now();
-  let earliest: UpcomingHearing | null = null;
+  const hearings: UpcomingHearing[] = [];
   for (const row of rows) {
     if (!row.iurc_hearingstartdate || EXCLUDED_HEARING_TYPES.has(row.iurc_hearingtype ?? "")) continue;
     const d = new Date(row.iurc_hearingstartdate);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (!earliest || d.getTime() < earliest.date.getTime()) {
-      const endD = row.iurc_hearingenddate ? new Date(row.iurc_hearingenddate) : null;
-      earliest = { date: d, endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null };
-    }
+    if (hearings.some((h) => h.date.getTime() === d.getTime())) continue;
+    const endD = row.iurc_hearingenddate ? new Date(row.iurc_hearingenddate) : null;
+    hearings.push({
+      date: d,
+      endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null,
+      label: row.iurc_hearingtype ?? null,
+    });
   }
-  return earliest;
+  return hearings;
 }
 
 // Confirmed against real captions of both forms: "VERIFIED PETITION OF X
@@ -580,15 +588,14 @@ function buildCleanupPlaceholder(row: SearchResultRow): NormalizedProject {
     currentStage: "completed",
     causeSlugs: ["local_state_opposition"],
     causeDetail: `Indiana IURC Cause No. ${row.docketNumber} is no longer an open Certificate of Public Convenience and Necessity application awaiting a Commission determination.`,
-    commentPeriodStart: null,
-    commentPeriodEnd: null,
-    commentLink: null,
+    hearingDetailsLink: null,
+    hearings: [],
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };
 }
 
-function buildActiveProject(row: SearchResultRow, caption: string, hearing: UpcomingHearing | null): NormalizedProject {
+function buildActiveProject(row: SearchResultRow, caption: string, hearings: UpcomingHearing[]): NormalizedProject {
   const matchKey = resolveMatchKey("in-iurc", row.docketNumber);
   const applicant = extractApplicant(caption, row.parties.split(",")[0]?.trim() || "Unknown Applicant");
   const projectType = inferProjectType(caption);
@@ -645,9 +652,8 @@ function buildActiveProject(row: SearchResultRow, caption: string, hearing: Upco
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Indiana Utility Regulatory Commission — Cause No. ${row.docketNumber}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: hearing?.endDate ?? null,
-    commentLink: hearing ? detailUrl(row.legalCaseId) : null,
+    hearingDetailsLink: hearings.length > 0 ? detailUrl(row.legalCaseId) : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label ?? null })),
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };
@@ -688,8 +694,8 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
         // See module header HEARING SCHEDULE — a failure here shouldn't
         // block tracking the underlying application over this
         // supplementary feature.
-        const hearing = await fetchUpcomingHearing(row.legalCaseId).catch(() => null);
-        normalized = buildActiveProject(row, caption, hearing);
+        const hearings = await fetchUpcomingHearings(row.legalCaseId).catch(() => []);
+        normalized = buildActiveProject(row, caption, hearings);
         realApplicationsTracked += 1;
       } else {
         normalized = buildCleanupPlaceholder(row);

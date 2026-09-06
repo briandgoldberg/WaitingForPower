@@ -426,8 +426,14 @@ interface UpcomingHearing {
   link: string;
 }
 
-async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing>> {
-  const map = new Map<string, UpcomingHearing>();
+// Every real upcoming hearing found is kept (not just the earliest) — see
+// module header HEARING CALENDAR: by construction this page only ever shows
+// one upcoming meeting date, so in practice there's typically at most 1
+// entry per case here, but the array shape is used for consistency with
+// every other source in this series and to future-proof against the page's
+// own format changing.
+async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing[]>> {
+  const map = new Map<string, UpcomingHearing[]>();
   const html = await fetchText(AGENDA_URL);
   const text = stripTags(html);
 
@@ -439,7 +445,9 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
 
   for (const m of text.matchAll(AGENDA_CASE_NUMBER_RE)) {
     const key = `${m[1]}${m[2] ? m[2].toUpperCase() : ""}`;
-    map.set(key, { date, link: AGENDA_URL });
+    const arr = map.get(key) ?? [];
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: AGENDA_URL });
+    map.set(key, arr);
   }
   return map;
 }
@@ -793,12 +801,12 @@ function normalizeCase(
   suffix: string | null,
   sortedMentions: CaseMention[],
   projectType: ProjectType,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const sourceId = `${caseNumber}${suffix ?? ""}`;
   const matchKey = resolveMatchKey("ne-prb", sourceId);
   const caseDisplay = `PRB-${sourceId}`;
-  const hearing = upcomingHearings.get(sourceId);
+  const hearings = upcomingHearings.get(sourceId) ?? [];
 
   const facts = pickFactsMention(sortedMentions);
   const { mention: resolutionMention, resolution } = pickResolutionMention(sortedMentions);
@@ -874,9 +882,8 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on approval from the Nebraska Power Review Board under Neb. Rev. Stat. §§70-1013 to 70-1014.01 — ${caseDisplay}, "${facts.text.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? AGENDA_URL : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources,
     externalIds: { nePrb: sourceId },
   };
@@ -923,7 +930,7 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
 

@@ -287,8 +287,11 @@ function stripHtmlComments(html: string): string {
 }
 
 // See module header HEARING CALENDAR for the real row-boundary and
-// HTML-comment gotchas this parsing approach was built to survive.
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+// HTML-comment gotchas this parsing approach was built to survive. Every
+// real upcoming hearing found is kept (not just the earliest) — a docket
+// can genuinely have more than one on the books at once (e.g. a Public
+// Witness Hearing and a separate Expert Witness Hearing, see module header).
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(HEARINGS_URL, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`NCUC hearings page request failed (${res.status})`);
   const html = await res.text();
@@ -302,7 +305,7 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
   }
   const tableHtml = stripHtmlComments(html.slice(startIdx, endIdx));
 
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   const now = Date.now();
   const dateMatches = [...tableHtml.matchAll(HEARING_DATE_RE)];
   for (let i = 0; i < dateMatches.length; i++) {
@@ -320,10 +323,9 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
 
     for (const docketMatch of row.matchAll(HEARING_DOCKET_RE)) {
       const docketNumber = decodeHtmlEntities(docketMatch[1]);
-      const existing = map.get(docketNumber);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(docketNumber, { date, link });
-      }
+      const arr = map.get(docketNumber) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link });
+      map.set(docketNumber, arr);
     }
   }
   return map;
@@ -634,10 +636,10 @@ function extractApplicant(caption: string): string | null {
 function normalizeDocket(
   candidate: DocketCandidate,
   resolution: DocketResolution,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("nc-ncuc", candidate.docketNumber);
-  const hearing = upcomingHearings.get(candidate.docketNumber);
+  const hearings = upcomingHearings.get(candidate.docketNumber) ?? [];
   const projectType = inferProjectType(candidate.caption);
   const fuelType = inferFuelType(candidate.caption, projectType);
   const capacityMw = extractCapacityMw(candidate.caption);
@@ -690,9 +692,8 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the North Carolina Utilities Commission — Docket No. ${candidate.docketNumber}, "${candidate.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/NCUC/PSC/DocketDetails.aspx?DocketId=${candidate.docketId}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `NC NCUC Docket No. ${candidate.docketNumber}`,
@@ -721,7 +722,7 @@ export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promi
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

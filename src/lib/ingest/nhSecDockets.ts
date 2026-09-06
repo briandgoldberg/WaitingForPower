@@ -332,7 +332,9 @@ interface PucEventItem {
   start_time: number;
 }
 
-async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing>> {
+// Every real upcoming hearing found is kept (not just the earliest) — a
+// docket can in principle have more than one on the books at once.
+async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(EVENTS_API_URL, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`NH PUC events API request failed (${res.status})`);
   const json = (await res.json()) as { data?: PucEventItem[] };
@@ -343,19 +345,20 @@ async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing>>
   }
 
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (const item of json.data) {
     const date = new Date(item.start_time * 1000);
     if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
     for (const m of item.title.matchAll(SEC_DOCKET_IN_TITLE_RE)) {
       const docketNumber = m[0];
-      const existing = map.get(docketNumber);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(docketNumber, {
+      const arr = map.get(docketNumber) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) {
+        arr.push({
           date,
           link: `${BASE_URL}/Docket.aspx?DocketNumber=${encodeURIComponent(docketNumber)}`,
         });
       }
+      map.set(docketNumber, arr);
     }
   }
   return map;
@@ -553,10 +556,10 @@ function extractCounties(text: string): string[] {
 function normalizeCandidate(
   row: DocketBookRow,
   filings: DocketFiling[],
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("nh-sec", row.docketNumber);
-  const hearing = upcomingHearings.get(row.docketNumber);
+  const hearings = upcomingHearings.get(row.docketNumber) ?? [];
 
   const filingTitles = filings.map((f) => f.title).join(" ");
   const combinedText = `${row.description} ${filingTitles}`;
@@ -614,9 +617,8 @@ function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Site and Facility (or related siting approval) from the New Hampshire Site Evaluation Committee — Docket ${row.docketNumber}, "${row.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Docket.aspx?DocketNumber=${encodeURIComponent(row.docketNumber)}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `NH Docket ${row.docketNumber}`,
@@ -655,7 +657,7 @@ export async function ingestNhSecDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary -- degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingSecHearings().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingSecHearings().catch(() => new Map<string, UpcomingHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

@@ -130,9 +130,9 @@ interface UpcomingHearing {
 const CALENDAR_ROW_RE =
   /<tr>\s*<td class="nowrap">\s*<span>([^<]+)<\/span>\s*<br \/>\s*<span class="\w+">([^<]*)<\/span>\s*<\/td>\s*<td class="nowrap">\s*(?:<a href="(\/Web\/Dockets\/Detail\/\d+)">([^<]+)<\/a>)?[\s\S]*?<\/tr>/g;
 
-export function parseHearingCalendar(html: string): Map<string, UpcomingHearing> {
+export function parseHearingCalendar(html: string): Map<string, UpcomingHearing[]> {
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (const m of html.matchAll(CALENDAR_ROW_RE)) {
     const href = m[3];
     const docketNumber = m[4];
@@ -141,15 +141,14 @@ export function parseHearingCalendar(html: string): Map<string, UpcomingHearing>
     if (!/^scheduled$/i.test(status)) continue; // defensive — only "Scheduled" has been observed live, see module header
     const date = new Date(m[1].trim());
     if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
-    const existing = map.get(docketNumber);
-    if (!existing || date.getTime() < existing.date.getTime()) {
-      map.set(docketNumber, { date, link: `${BASE_URL}${href}` });
-    }
+    const arr = map.get(docketNumber) ?? [];
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link: `${BASE_URL}${href}` });
+    map.set(docketNumber, arr);
   }
   return map;
 }
 
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
   const from = new Date();
   const to = new Date();
   to.setDate(to.getDate() + HEARING_CALENDAR_LOOKAHEAD_DAYS);
@@ -354,7 +353,7 @@ function extractApplicant(caption: string): string {
 function normalizeDocket(
   search: DocketSearchResult,
   detail: DocketDetail,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("sc-psc", search.docketNumber);
   const projectType = inferProjectType(search.caption);
@@ -362,7 +361,7 @@ function normalizeDocket(
   const capacityMw = extractCapacityMw(search.caption);
   const county = extractCounty(search.caption);
   const applicant = extractApplicant(search.caption);
-  const hearing = upcomingHearings.get(search.docketNumber);
+  const hearings = upcomingHearings.get(search.docketNumber) ?? [];
 
   let currentStage: ProjectStage;
   if (detail.resolution === "granted") currentStage = "approved_awaiting_construction";
@@ -406,9 +405,8 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the South Carolina Public Service Commission — Docket No. ${search.docketNumber}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `SC PSC Docket No. ${search.docketNumber}`,
@@ -440,7 +438,7 @@ export async function ingestScPscDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

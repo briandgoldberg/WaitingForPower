@@ -494,9 +494,14 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
     causeSlugs,
     causeDetail: `Waiting on a site certificate decision from the Oregon Energy Facility Siting Council, administered by the Oregon Department of Energy — ${facility.Title}${detailsText ? `, "${detailsText.slice(0, 300)}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: null,
-    commentPeriodEnd: null,
-    commentLink: openForComment ? COMMENT_PORTAL_URL : null,
+    // No actual hearing/comment-period dates are published anywhere on this
+    // source — the portal only exposes a live "open for comment right now"
+    // boolean, no start/end dates. hearingDetailsLink still points there
+    // when open; hearings is explicitly [] (never omitted) since this
+    // module does actively check for hearing data, it just never has real
+    // dates to report — see module header COMMENT_PORTAL_URL.
+    hearingDetailsLink: openForComment ? COMMENT_PORTAL_URL : null,
+    hearings: [],
     sources: [
       {
         label: `OR EFSC Facility Page: ${facility.Title}`,

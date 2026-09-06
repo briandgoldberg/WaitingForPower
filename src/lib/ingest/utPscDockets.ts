@@ -284,16 +284,17 @@ function parseIcsDateValue(raw: string): Date | null {
 }
 
 // Parses the PSC's public "PSC Events" Google Calendar (see module header)
-// into a Map of docket number -> earliest future scheduled event. A single
-// event's SUMMARY+DESCRIPTION is scanned together (confirmed live: some
-// events name more than one related docket).
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+// into a Map of docket number -> every real future scheduled event (not
+// just the earliest — a docket can genuinely have more than one on the
+// books at once). A single event's SUMMARY+DESCRIPTION is scanned together
+// (confirmed live: some events name more than one related docket).
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(HEARING_CALENDAR_ICS_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
   if (!res.ok) throw new Error(`Utah PSC hearing-calendar ICS request failed (${res.status})`);
   const ics = await res.text();
   const lines = unfoldIcs(ics);
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
 
   let inEvent = false;
   let dtstart: string | null = null;
@@ -307,10 +308,9 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
     const text = `${summary} ${description}`;
     for (const m of text.matchAll(DOCKET_NUMBER_RE)) {
       const docketNo = m[1];
-      const existing = map.get(docketNo);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(docketNo, { date });
-      }
+      const arr = map.get(docketNo) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+      map.set(docketNo, arr);
     }
   };
 
@@ -589,14 +589,14 @@ function extractApplicant(title: string): string {
 function normalizeDocket(
   listing: DocketListing,
   resolution: DocketResolution,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("ut-psc", listing.docketNo);
   const projectType = inferProjectType(listing.matter);
   const fuelType = inferFuelType(listing.matter, projectType);
   const capacityMw = extractCapacityMw(listing.matter);
   const applicant = extractApplicant(listing.matter);
-  const hearing = upcomingHearings.get(listing.docketNo);
+  const hearings = upcomingHearings.get(listing.docketNo) ?? [];
 
   let currentStage: ProjectStage;
   if (resolution.resolution === "granted") currentStage = "approved_awaiting_construction";
@@ -636,9 +636,8 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity determination from the Utah Public Service Commission — Docket No. ${listing.docketNo}, "${listing.matter}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing ? listing.url : null,
+    hearingDetailsLink: hearings.length > 0 ? listing.url : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `Utah PSC Docket No. ${listing.docketNo}`,
@@ -681,7 +680,7 @@ export async function ingestUtPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // See module header PUBLIC HEARING DATES. A failure here shouldn't block
   // the whole ingestion run over a feature this supplementary — degrades to
   // "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

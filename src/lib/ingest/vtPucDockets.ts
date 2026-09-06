@@ -286,9 +286,11 @@ interface UpcomingHearing {
   link: string;
 }
 
-async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, UpcomingHearing>> {
+// Every real upcoming hearing found is kept (not just the earliest) — a
+// case can genuinely have more than one on the books at once.
+async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, UpcomingHearing[]>> {
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (let page = 0; page < HEARING_CALENDAR_PAGES_TO_CHECK; page++) {
     const res = await fetch(HEARING_CALENDAR_URL(page), { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!res.ok) break;
@@ -301,10 +303,11 @@ async function fetchUpcomingHearingsByCaseNumber(): Promise<Map<string, Upcoming
       if (!caseNo || !timeIso || !href) continue;
       const date = new Date(timeIso);
       if (Number.isNaN(date.getTime()) || date.getTime() <= now) continue;
-      const existing = map.get(caseNo);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(caseNo, { date, link: `https://puc.vermont.gov${href}` });
+      const arr = map.get(caseNo) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) {
+        arr.push({ date, link: `https://puc.vermont.gov${href}` });
       }
+      map.set(caseNo, arr);
     }
   }
   return map;
@@ -534,7 +537,7 @@ function extractCapacityMw(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, UpcomingHearing>): NormalizedProject {
+function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, UpcomingHearing[]>): NormalizedProject {
   const matchKey = resolveMatchKey("vt-puc", record.caseNumber);
 
   const projectType = inferProjectType(record.description);
@@ -545,7 +548,7 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
   const statusLabel = CASE_STATUS_LABELS[record.statusCode] ?? record.statusCode;
   const currentStage: ProjectStage = "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
-  const hearing = upcomingHearings.get(record.caseNumber);
+  const hearings = upcomingHearings.get(record.caseNumber) ?? [];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Vermont Public Utility Commission's public ePUC case search, scoped to pending Certificate of Public Good (CPG, 30 V.S.A. §248 / §248(j)) petitions — the PUC is Vermont's own, direct siting authority for generation, transmission, and storage facilities under §248; see the ingestion module header for the statutory confirmation.",
@@ -582,9 +585,8 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Good from the Vermont Public Utility Commission, pursuant to 30 V.S.A. §248 — Case No. ${record.caseNumber}, "${record.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? CASE_DETAIL_URL(record.caseId) : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `VT PUC Case No. ${record.caseNumber}`,
@@ -621,7 +623,7 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing[]>());
 
   for (const record of rotatedRecords) {
     try {

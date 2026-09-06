@@ -295,7 +295,7 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     if (!date) continue;
     milestones.push({ date, dateConfidence: "exact", stage: a.Activity_Status, description: a.Activity });
   }
-  const nextHearing = findNextHearing(activities, new Date());
+  const futureHearings = findFutureHearings(activities, new Date());
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Virginia State Corporation Commission's public docket search — an \"unofficial\" copy per the SCC's own disclaimer, provided for public convenience.",
@@ -329,9 +329,8 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Virginia State Corporation Commission — case ${search.Case_Number}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: nextHearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: nextHearing ? `https://scc.virginia.gov/docketsearch/#/caseDetails/${search.MATTER_NO}` : null,
+    hearingDetailsLink: futureHearings.length > 0 ? `https://scc.virginia.gov/docketsearch/#/caseDetails/${search.MATTER_NO}` : null,
+    hearings: futureHearings.map((h) => ({ date: h.date, endDate: null, label: h.label })),
     sources: [
       {
         label: `Virginia SCC Case ${search.Case_Number}`,
@@ -373,25 +372,31 @@ function combineDateAndHearingTime(dateOnly: Date, hearingTime: string): Date | 
 interface NextHearing {
   date: Date;
   location: string | null;
+  label: string | null;
 }
 
-// Only an activity whose name contains "Hearing" AND has a real
-// Hearing_Time counts — Activity_Status isn't used to distinguish
-// upcoming from past (both "No Action" and "Completed" were observed on
-// real future-dated hearings in this series' own research — see module
-// header), so the date itself (still in the future) is the only reliable
-// signal.
-function findNextHearing(activities: CaseActivity[], now: Date): NextHearing | null {
-  let next: NextHearing | null = null;
+// Every activity whose name contains "Hearing" AND has a real Hearing_Time
+// counts, not just the earliest — a case can have more than one real
+// upcoming hearing on the books (e.g. "Hearing" and "Hearing Continued").
+// Activity_Status isn't used to distinguish upcoming from past (both "No
+// Action" and "Completed" were observed on real future-dated hearings in
+// this series' own research — see module header), so the date itself
+// (still in the future) is the only reliable signal. The activity's own
+// `Activity` string becomes each entry's label (e.g. "Hearing", "Hearing
+// Continued").
+function findFutureHearings(activities: CaseActivity[], now: Date): NextHearing[] {
+  const hearings: NextHearing[] = [];
   for (const a of activities) {
     if (!/hearing/i.test(a.Activity) || !a.Hearing_Time) continue;
     const dateOnly = parseUsDate(a.Activity_Date);
     if (!dateOnly) continue;
     const dt = combineDateAndHearingTime(dateOnly, a.Hearing_Time);
     if (!dt || dt.getTime() <= now.getTime()) continue;
-    if (!next || dt.getTime() < next.date.getTime()) next = { date: dt, location: a.Location };
+    if (!hearings.some((h) => h.date.getTime() === dt.getTime())) {
+      hearings.push({ date: dt, location: a.Location, label: a.Activity });
+    }
   }
-  return next;
+  return hearings;
 }
 
 export interface IngestSummary {

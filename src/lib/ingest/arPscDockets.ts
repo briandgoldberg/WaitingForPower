@@ -465,20 +465,26 @@ interface UpcomingHearing {
 const HEARING_ROW_RE =
   /CaseNumber=(\d{2}-\d{3}-[A-Z]+)"[\s\S]{0,400}?Calendar-Detail\.asp\?ID=(\d+)"[\s\S]{0,200}?>(\d{1,2}\/\d{1,2}\/\d{4}) - \d{1,2}:\d{2}\s*[AP]M</g;
 
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+// Every real future hearing row is kept per docket (not just the
+// earliest) — a docket can genuinely carry more than one, e.g. a
+// multi-day hearing (26-001-U's real 11/4 and 11/5/2026 rows, see module
+// header). Deduped by exact timestamp in case the same row could ever be
+// matched twice.
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(HEARING_CALENDAR_URL);
   if (!res.ok) throw new Error(`AR PSC hearing calendar request failed (${res.status})`);
   const html = await res.text();
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (const m of html.matchAll(HEARING_ROW_RE)) {
     const docket = m[1];
     const date = parseMDY(m[3]);
     if (!date || date.getTime() <= now) continue;
-    const existing = map.get(docket);
-    if (!existing || date.getTime() < existing.date.getTime()) {
-      map.set(docket, { date, link: HEARING_DETAIL_URL(m[2]) });
+    const arr = map.get(docket) ?? [];
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) {
+      arr.push({ date, link: HEARING_DETAIL_URL(m[2]) });
     }
+    map.set(docket, arr);
   }
   return map;
 }
@@ -857,7 +863,7 @@ function extractApplicant(detail: DocketDetail): string {
   return detail.style.slice(0, 80);
 }
 
-function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearing: UpcomingHearing | undefined): NormalizedProject {
+function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearings: UpcomingHearing[]): NormalizedProject {
   const matchKey = resolveMatchKey("ar-psc", detail.docket);
   const { projectType, fuelType } = inferProjectTypeAndFuel(detail.style);
   const capacityMw = extractCapacityMw(detail.style);
@@ -909,9 +915,8 @@ function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearing: 
     causeSlugs,
     causeDetail: `Waiting on a construction certificate/authority from the Arkansas Public Service Commission — Docket No. ${detail.docket}, "${detail.style}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `AR PSC Docket No. ${detail.docket}`,
@@ -942,7 +947,7 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
 
   for (const docket of selected) {
     const matchKey = resolveMatchKey("ar-psc", docket);
@@ -983,7 +988,7 @@ export async function ingestArPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       }
 
       const resolution = await detectResolution(docket, detail.orders);
-      const normalized = normalizeDocket(detail, resolution, upcomingHearings.get(docket));
+      const normalized = normalizeDocket(detail, resolution, upcomingHearings.get(docket) ?? []);
       toUpsert.push(normalized);
     } catch (err) {
       errors.push({ matchKey, message: String(err) });

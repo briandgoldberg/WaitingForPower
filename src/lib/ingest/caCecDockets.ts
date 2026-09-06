@@ -418,26 +418,29 @@ function parseLongDate(monthName: string, day: string, year: string): Date | nul
 }
 
 // See PUBLIC HEARING DATES above — scans the same already-fetched docket-log
-// HTML fetchDocketFilings parses filings from, keeping the earliest
-// still-future hearing date found (a docket could in principle carry more
-// than one "Notice of Hearing" filing over its life, e.g. a rescheduling).
-function extractUpcomingHearing(html: string, docketNumber: string): UpcomingHearing | null {
+// HTML fetchDocketFilings parses filings from, keeping every real
+// still-future hearing date found (not just the earliest) — a docket could
+// in principle carry more than one "Notice of Hearing" filing over its life
+// (e.g. a rescheduling, or separate hearings on separate sub-issues), even
+// though the current live population never showed more than one on any
+// candidate (see module header's "honest gap" note). Deduped by exact
+// timestamp in case the same filing row could ever be matched twice.
+function extractUpcomingHearings(html: string, docketNumber: string): UpcomingHearing[] {
   const now = Date.now();
-  let best: UpcomingHearing | null = null;
+  const hearings: UpcomingHearing[] = [];
   for (const m of html.matchAll(HEARING_TITLE_DATE_RE)) {
     const date = parseLongDate(m[3], m[4], m[5]);
     if (!date || date.getTime() <= now) continue;
-    if (!best || date.getTime() < best.date.getTime()) {
-      best = {
-        date,
-        link: m[1] ? m[1] : `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`,
-      };
-    }
+    if (hearings.some((h) => h.date.getTime() === date.getTime())) continue;
+    hearings.push({
+      date,
+      link: m[1] ? m[1] : `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`,
+    });
   }
-  return best;
+  return hearings;
 }
 
-async function fetchDocketFilings(docketNumber: string): Promise<{ filings: DocketFiling[]; upcomingHearing: UpcomingHearing | null }> {
+async function fetchDocketFilings(docketNumber: string): Promise<{ filings: DocketFiling[]; upcomingHearings: UpcomingHearing[] }> {
   const url = `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`CEC docket log request failed (${res.status}) for ${docketNumber}`);
@@ -451,7 +454,7 @@ async function fetchDocketFilings(docketNumber: string): Promise<{ filings: Dock
       `CEC docket log for ${docketNumber} returned zero parsed filing rows — the GridView row structure likely changed. Check FILING_ROW_RE in src/lib/ingest/caCecDockets.ts against a fresh response.`,
     );
   }
-  return { filings, upcomingHearing: extractUpcomingHearing(html, docketNumber) };
+  return { filings, upcomingHearings: extractUpcomingHearings(html, docketNumber) };
 }
 
 // See module header STATUS: a belt-and-suspenders re-check of each
@@ -571,7 +574,7 @@ function normalizeCandidate(
   candidate: ListingCandidate,
   detail: DetailInfo,
   resolution: ResolutionCheck,
-  upcomingHearing: UpcomingHearing | null,
+  upcomingHearings: UpcomingHearing[],
 ): NormalizedProject | null {
   if (!detail.docketNumber) return null;
 
@@ -628,9 +631,8 @@ function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on California Energy Commission certification — Docket ${detail.docketNumber}${detail.projectTypeText ? ` (${detail.projectTypeText})` : ""}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: upcomingHearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: upcomingHearing?.link ?? null,
+    hearingDetailsLink: upcomingHearings.length > 0 ? upcomingHearings[0].link : null,
+    hearings: upcomingHearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `CEC Docket ${detail.docketNumber}`,
@@ -671,9 +673,9 @@ export async function ingestCaCecDockets(maxCandidates = MAX_CANDIDATES): Promis
         errors.push({ matchKey: candidate.href, message: "No Docket Number found on detail page" });
         continue;
       }
-      const { filings, upcomingHearing } = await fetchDocketFilings(detail.docketNumber);
+      const { filings, upcomingHearings } = await fetchDocketFilings(detail.docketNumber);
       const resolution = checkDocketResolution(filings);
-      const normalized = normalizeCandidate(candidate, detail, resolution, upcomingHearing);
+      const normalized = normalizeCandidate(candidate, detail, resolution, upcomingHearings);
       if (normalized) {
         toUpsert.push(normalized);
         if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);

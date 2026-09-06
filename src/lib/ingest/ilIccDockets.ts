@@ -207,6 +207,7 @@ async function fetchText(url: string): Promise<string> {
 interface UpcomingHearing {
   date: Date;
   link: string;
+  label: string | null;
 }
 
 // See module header HEARING SCHEDULE. Each card is a `<li
@@ -223,13 +224,18 @@ const SCHEDULE_DATE_RE = /<h4>([\s\S]*?)<\/h4>/;
 // the public attends — see module header HEARING SCHEDULE.
 const SCHEDULE_DEADLINE_RE = /^deadline/i;
 
-async function fetchNextScheduledEvent(docketId: string): Promise<UpcomingHearing | null> {
+// Every real future, non-"Deadline", non-cancelled event on the docket's
+// Schedule sub-page is kept (not just the earliest) — a docket can
+// genuinely have more than one on the books at once (e.g. a Prehearing
+// Conference and a later Evidentiary hearing). Deduped by exact timestamp
+// in case the same card could ever be matched twice.
+async function fetchScheduledEvents(docketId: string): Promise<UpcomingHearing[]> {
   const url = `${BASE_URL}/docket/${docketId}/schedule`;
   const res = await fetch(url);
-  if (!res.ok) return null;
+  if (!res.ok) return [];
   const html = await res.text();
   const now = Date.now();
-  let earliest: Date | null = null;
+  const hearings: UpcomingHearing[] = [];
   for (const m of html.matchAll(SCHEDULE_ITEM_RE)) {
     const block = m[1];
     const type = SCHEDULE_TYPE_RE.exec(block)?.[1]?.trim();
@@ -239,9 +245,9 @@ async function fetchNextScheduledEvent(docketId: string): Promise<UpcomingHearin
     const dateText = decodeHtmlEntities(rawDate.replace(/<[^>]+>/g, " "));
     const d = new Date(dateText);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (!earliest || d.getTime() < earliest.getTime()) earliest = d;
+    if (!hearings.some((h) => h.date.getTime() === d.getTime())) hearings.push({ date: d, link: url, label: type });
   }
-  return earliest ? { date: earliest, link: url } : null;
+  return hearings;
 }
 
 // Small, hand-confirmed set actually observed in real responses — same
@@ -433,7 +439,7 @@ function extractCounties(description: string): string | null {
   return m ? m[1] : null;
 }
 
-function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, hearing: UpcomingHearing | null): NormalizedProject {
+function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, hearings: UpcomingHearing[]): NormalizedProject {
   const matchKey = resolveMatchKey("il-icc", search.docketId);
   const projectType = inferProjectType(search.description);
   const fuelType = inferFuelType(search.description, projectType);
@@ -485,9 +491,8 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, heari
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Illinois Commerce Commission — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing?.link ?? null,
+    hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label })),
     sources: [
       {
         label: `IL ICC Docket No. ${search.docketNumber}`,
@@ -526,8 +531,8 @@ export async function ingestIlIccDockets(maxCandidates = MAX_CANDIDATES): Promis
       // See module header HEARING SCHEDULE — a closed docket's schedule is
       // all in the past by construction, so the extra request is skipped
       // for candidates already known resolved.
-      const hearing = detail.resolved ? null : await fetchNextScheduledEvent(candidate.docketId).catch(() => null);
-      const normalized = normalizeDocket(candidate, detail, hearing);
+      const hearings = detail.resolved ? [] : await fetchScheduledEvents(candidate.docketId).catch(() => []);
+      const normalized = normalizeDocket(candidate, detail, hearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

@@ -205,10 +205,10 @@
 // just the current single-entry case) and reading the first "Date: ..."
 // text that follows each case number — confirmed live this ordering (case
 // number immediately followed by its own Date/Time/Location block) holds
-// for the one real entry on the page. commentLink points at the hearings
-// page itself (not the bare docket page, which this module already
-// surfaces as its own `sources` entry) since that page carries the actual
-// call-in/registration details a real commenter needs.
+// for the one real entry on the page. hearingDetailsLink points at this
+// case's own EFIS page (see normalizeCase below) rather than the generic
+// Upcoming Local Public Hearings list itself, since that list has no
+// per-case URL to deep-link to.
 //
 // Wired to Vercel Cron weekly, 03:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-mo-psc/route.ts).
@@ -283,14 +283,14 @@ function parseHearingDate(raw: string): Date | null {
 // first case-number link and first "Date:" text found within it are always
 // that same hearing's own — confirmed live against the one real entry on
 // the page as of 2026-09-05.
-async function fetchUpcomingLocalHearingsByCase(): Promise<Map<string, UpcomingLocalHearing>> {
+async function fetchUpcomingLocalHearingsByCase(): Promise<Map<string, UpcomingLocalHearing[]>> {
   const res = await fetch(HEARINGS_PAGE_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
   if (!res.ok) {
     throw new Error(`MO PSC Upcoming Local Public Hearings request failed (${res.status})`);
   }
   const html = await res.text();
   const now = Date.now();
-  const map = new Map<string, UpcomingLocalHearing>();
+  const map = new Map<string, UpcomingLocalHearing[]>();
 
   const chunks = html.split(/Case No\.\s*/i).slice(1);
   for (const chunk of chunks) {
@@ -300,10 +300,9 @@ async function fetchUpcomingLocalHearingsByCase(): Promise<Map<string, UpcomingL
     const date = parseHearingDate(dateMatch[1]);
     if (!date || date.getTime() <= now) continue;
     const caseNo = caseMatch[1].toUpperCase();
-    const existing = map.get(caseNo);
-    if (!existing || date.getTime() < existing.date.getTime()) {
-      map.set(caseNo, { date });
-    }
+    const arr = map.get(caseNo) ?? [];
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+    map.set(caseNo, arr);
   }
   return map;
 }
@@ -582,10 +581,10 @@ function extractCounty(style: string): string | null {
 function normalizeCase(
   candidate: CaseSearchResult,
   resolution: Resolution,
-  upcomingHearings: Map<string, UpcomingLocalHearing>,
+  upcomingHearings: Map<string, UpcomingLocalHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("mo-psc", candidate.caseNo);
-  const hearing = upcomingHearings.get(candidate.caseNo);
+  const hearings = upcomingHearings.get(candidate.caseNo) ?? [];
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.styleOfCase);
   const applicant = extractApplicant(candidate.styleOfCase);
   const county = extractCounty(candidate.styleOfCase);
@@ -630,13 +629,12 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Missouri Public Service Commission — Case No. ${candidate.caseNo}, "${candidate.styleOfCase}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
     // Points at this case's own EFIS page, not psc.mo.gov's generic
     // Upcoming Local Public Hearings list (which has no per-case URL to
     // deep-link to) — the same case-specific page already used as this
     // project's own source URL below.
-    commentLink: hearing ? `${BASE_URL}/Case/Display/${candidate.caseId}` : null,
+    hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/Display/${candidate.caseId}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `MO PSC Case No. ${candidate.caseNo}`,
@@ -676,7 +674,7 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingLocalHearingsByCase().catch(() => new Map<string, UpcomingLocalHearing>());
+  const upcomingHearings = await fetchUpcomingLocalHearingsByCase().catch(() => new Map<string, UpcomingLocalHearing[]>());
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

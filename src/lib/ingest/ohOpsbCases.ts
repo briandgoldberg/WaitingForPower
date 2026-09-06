@@ -52,7 +52,7 @@
 // field), and this module now fetches it for every still-waiting case
 // (small: 16 of 227, confirmed 2026-08-23) to pull the "Local public
 // hearing"/"Evidentiary hearing" date blocks it publishes there — see
-// fetchNextHearing below — but doesn't yet build a full Milestone history
+// fetchHearings below — but doesn't yet build a full Milestone history
 // from that same page. The list endpoint alone still gives structured
 // status/type/applicant/county/date, more than any other state source in
 // this series gets for free; per-case milestone enrichment remains a cheap,
@@ -163,23 +163,51 @@ function parseHearingDateTime(raw: string, now: Date): Date | null {
   return candidate;
 }
 
-// Only the earliest still-upcoming hearing is surfaced — a case can list
-// both a past "Local public hearing" and a future "Evidentiary hearing" (or
-// vice versa once the local hearing is rescheduled), and only a future date
-// is something a visitor can actually still show up to or comment ahead of.
-async function fetchNextHearing(detailUrl: string): Promise<Date | null> {
+// Every still-upcoming "Local public hearing"-type entry is surfaced (not
+// just the earliest) — a case can list both a past "Local public hearing"
+// and a future "Evidentiary hearing" (or vice versa once the local hearing
+// is rescheduled), and only a future date is something a visitor can
+// actually still show up to or comment ahead of. Real cases publish both
+// a "Local public hearing" (where ordinary
+// citizens actually testify — the genuine public-comment opportunity) and
+// a separate "Evidentiary hearing" (attorneys/expert witnesses building
+// the formal record — not something the public comments at, confirmed by
+// hand against real OPSB case-process descriptions). Confirmed live
+// 2026-09-05 on Case 26-196-EL-BGN (Ashville Energy Center) that these can
+// land far enough apart that the local hearing is already past while the
+// evidentiary hearing is still upcoming — surfacing that evidentiary date
+// as "the public comment period" would be actively misleading (there's no
+// real public-input opportunity left once the local hearing has passed),
+// so only "Local public hearing"-type labels are ever considered here,
+// never "Evidentiary."
+const EVIDENTIARY_HEARING_RE = /evidentiary/i;
+
+interface UpcomingHearing {
+  date: Date;
+  label: string;
+}
+
+// Every real upcoming "Local public hearing"-type entry is kept (not just
+// the earliest) — a case can genuinely publish more than one, and the
+// array shape should support that even though in practice there's usually
+// just one. "Evidentiary hearing" labels are still never surfaced — see
+// EVIDENTIARY_HEARING_RE above.
+async function fetchHearings(detailUrl: string): Promise<UpcomingHearing[]> {
   const res = await fetch(detailUrl, { headers: BROWSER_HEADERS });
-  if (!res.ok) return null;
+  if (!res.ok) return [];
   const html = await res.text();
   const now = new Date();
-  let earliest: Date | null = null;
+  const hearings: UpcomingHearing[] = [];
   for (const m of html.matchAll(HEARING_LABEL_RE)) {
+    if (EVIDENTIARY_HEARING_RE.test(m[1])) continue;
     const dateLine = findDateLineAfter(html, m.index! + m[0].length);
     if (!dateLine) continue;
     const d = parseHearingDateTime(dateLine, now);
-    if (d && d.getTime() > now.getTime() && (!earliest || d.getTime() < earliest.getTime())) earliest = d;
+    if (!d || d.getTime() <= now.getTime()) continue;
+    if (hearings.some((h) => h.date.getTime() === d.getTime())) continue;
+    hearings.push({ date: d, label: m[1].trim() });
   }
-  return earliest;
+  return hearings;
 }
 
 const STATUS_TO_STAGE: Record<string, ProjectStage> = {
@@ -237,7 +265,7 @@ function parseOpenDate(raw: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function normalizeCase(c: OpsbCase, nextHearing: Date | null): NormalizedProject {
+function normalizeCase(c: OpsbCase, hearings: UpcomingHearing[]): NormalizedProject {
   const matchKey = resolveMatchKey("oh-opsb", c.caseNumber);
   const currentStage = stageForStatus(c.status);
   const { fuelType, projectType } = classify(c.type);
@@ -278,9 +306,8 @@ function normalizeCase(c: OpsbCase, nextHearing: Date | null): NormalizedProject
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need from the Ohio Power Siting Board — Case No. ${c.caseNumber}, "${c.project}" (${c.applicant})`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: nextHearing,
-    commentPeriodEnd: null,
-    commentLink: nextHearing ? `https://opsb.ohio.gov${c.url}` : null,
+    hearingDetailsLink: hearings.length > 0 ? `https://opsb.ohio.gov${c.url}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label })),
     sources: [
       {
         label: `Ohio OPSB Case ${c.caseNumber}`,
@@ -310,8 +337,8 @@ export async function ingestOhOpsbCases(): Promise<IngestSummary> {
       // ("16 of 227" — cheap at this volume) and stageForStatus above.
       const currentStage = stageForStatus(c.status);
       const stillWaiting = currentStage === "local_review" || currentStage === "planned_pre_filing";
-      const nextHearing = stillWaiting ? await fetchNextHearing(`https://opsb.ohio.gov${c.url}`).catch(() => null) : null;
-      toUpsert.push(normalizeCase(c, nextHearing));
+      const hearings = stillWaiting ? await fetchHearings(`https://opsb.ohio.gov${c.url}`).catch(() => []) : [];
+      toUpsert.push(normalizeCase(c, hearings));
     } catch (err) {
       errors.push({ matchKey: c.caseNumber, message: String(err) });
     }

@@ -319,8 +319,9 @@
 // Louisiana, tracked in this module's live candidate set) has a real
 // upcoming Hearing on 2026-09-29; Docket U-37882 (also tracked) has THREE
 // separate upcoming Hearing entries (2026-10-07, 2026-10-12, 2026-10-19) —
-// the earliest is kept, same "earliest upcoming wins" convention as every
-// other module in this series with a hearing calendar. A 12-month forward
+// this is the real, motivating case for keeping every real upcoming hearing
+// per docket (not just the earliest, unlike modules elsewhere in this series
+// still using the single-hearing convention). A 12-month forward
 // window (today..+12 months) was confirmed live to return real hearings
 // scheduled as far out as 2027-02-23, comfortably inside that window.
 //
@@ -505,7 +506,7 @@ interface ScheduledEventsResponse {
 // See module header HEARING CALENDAR for the `sort=Start-asc` flat-string
 // requirement (same server-side Kendo-sort gotcha as fetchDocketSearchPage/
 // fetchOrders above).
-async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, UpcomingHearing>> {
+async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, UpcomingHearing[]>> {
   const now = new Date();
   const end = new Date(now);
   end.setMonth(end.getMonth() + HEARING_LOOKAHEAD_MONTHS);
@@ -539,7 +540,7 @@ async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, Upcomi
   }
 
   const nowMs = now.getTime();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (const ev of json.Data) {
     if (ev.SchedulerEventTypeId !== 1) continue; // not a real "Hearing" event — see module header
     const m = HEARING_EVENT_TITLE_RE.exec(ev.Title ?? "");
@@ -547,11 +548,10 @@ async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, Upcomi
     const date = parseMsDate(ev.Start);
     if (!date || date.getTime() <= nowMs) continue;
     const docketNumber = m[1];
-    const existing = map.get(docketNumber);
-    if (!existing || date.getTime() < existing.date.getTime()) {
-      const endDate = parseMsDate(ev.End);
-      map.set(docketNumber, { date, endDate });
-    }
+    const endDate = parseMsDate(ev.End);
+    const arr = map.get(docketNumber) ?? [];
+    if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, endDate });
+    map.set(docketNumber, arr);
   }
   return map;
 }
@@ -782,10 +782,10 @@ function normalizeDocket(
   record: DocketListRecord,
   detail: DocketDetail,
   resolution: Resolution,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("la-psc", record.docketNumber);
-  const hearing = upcomingHearings.get(record.docketNumber);
+  const hearings = upcomingHearings.get(record.docketNumber) ?? [];
   const synopsis = detail.synopsis ?? "";
   const description = detail.description ?? record.description;
   const combinedText = `${synopsis} ${description}`;
@@ -838,9 +838,8 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on certification from the Louisiana Public Service Commission — Docket No. ${record.docketNumber}, "${synopsis || description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: hearing?.endDate ?? null,
-    commentLink: hearing ? DOCKET_DETAILS_URL(record.matterId) : null,
+    hearingDetailsLink: hearings.length > 0 ? DOCKET_DETAILS_URL(record.matterId) : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: null })),
     sources: [
       {
         label: `LA PSC Docket No. ${record.docketNumber}`,
@@ -877,7 +876,7 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocketNumber().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByDocketNumber().catch(() => new Map<string, UpcomingHearing[]>());
 
   for (const record of selected) {
     const matchKey = resolveMatchKey("la-psc", record.docketNumber);

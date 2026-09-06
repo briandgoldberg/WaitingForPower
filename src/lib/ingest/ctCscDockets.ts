@@ -234,12 +234,15 @@ function parseCtCalendarDate(raw: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing>> {
+// Every real upcoming hearing found is kept (not just the earliest) — a
+// single date section can already name more than one case, and a case
+// could in principle appear in more than one future date section.
+async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(CALENDAR_URL, { headers: { "User-Agent": "Mozilla/5.0" } });
   if (!res.ok) throw new Error(`CT CSC calendar request failed (${res.status})`);
   const html = await res.text();
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
 
   for (const m of html.matchAll(DATE_SECTION_RE)) {
     const fullMatch = m[0];
@@ -255,8 +258,9 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
     for (const ref of fullMatch.matchAll(caseRefRe)) {
       const kind = ref[1].toLowerCase();
       const key = `${kind}-${ref[2]}`;
-      const existing = map.get(key);
-      if (!existing || date.getTime() < existing.date.getTime()) map.set(key, { date });
+      const arr = map.get(key) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+      map.set(key, arr);
     }
   }
   return map;
@@ -590,10 +594,10 @@ function extractApplicant(desc: string): string {
 function normalizeCandidate(
   candidate: PendingCandidate,
   detail: CandidateDetail | null,
-  upcomingHearings: Map<string, UpcomingHearing>,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
   const sourceId = `${candidate.kind}-${candidate.number}`;
-  const hearing = upcomingHearings.get(sourceId);
+  const hearings = upcomingHearings.get(sourceId) ?? [];
   const matchKey = resolveMatchKey("ct-csc", sourceId);
 
   const rawDesc = stripHtml(candidate.descriptionHtml);
@@ -657,9 +661,8 @@ function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need (or related declaratory ruling) from the Connecticut Siting Council — ${label} No. ${candidate.number}, "${desc.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing ? candidate.url : null,
+    hearingDetailsLink: hearings.length > 0 ? candidate.url : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `CT CSC ${label} No. ${candidate.number}`,
@@ -691,7 +694,7 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const decidedNumbers = await buildDecidedNumberSet(realCandidates);
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing[]>());
 
   const rotatingTier = new Set(realCandidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();

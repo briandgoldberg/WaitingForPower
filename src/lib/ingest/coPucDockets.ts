@@ -160,23 +160,24 @@ function parseIcsDate(dateStr: string): Date | null {
 }
 
 // See module header HEARING CALENDAR for the VACATED-filtering rationale
-// and the real, confirmed-live 0-of-22 current population.
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing>> {
+// and the real, confirmed-live 0-of-22 current population. Every real
+// future hearing found is kept per docket (not just the earliest) — a
+// docket can genuinely have more than one on the books at once.
+async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
   const res = await fetch(HEARING_CALENDAR_ICS_URL);
   if (!res.ok) throw new Error(`CO PUC hearing calendar ICS request failed (${res.status})`);
   const ics = await res.text();
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing>();
+  const map = new Map<string, UpcomingHearing[]>();
   for (const { dateStr, summary } of parseIcsEvents(ics)) {
     if (/vacated/i.test(summary)) continue;
     const date = parseIcsDate(dateStr);
     if (!date || date.getTime() <= now) continue;
     for (const docketMatch of summary.matchAll(DOCKET_NUMBER_IN_SUMMARY_RE)) {
       const docketNo = docketMatch[0];
-      const existing = map.get(docketNo);
-      if (!existing || date.getTime() < existing.date.getTime()) {
-        map.set(docketNo, { date });
-      }
+      const arr = map.get(docketNo) ?? [];
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date });
+      map.set(docketNo, arr);
     }
   }
   return map;
@@ -354,9 +355,9 @@ function buildMilestones(docs: DocketDocument[]): NormalizedMilestone[] {
   return milestones;
 }
 
-function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upcomingHearings: Map<string, UpcomingHearing>): NormalizedProject {
+function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upcomingHearings: Map<string, UpcomingHearing[]>): NormalizedProject {
   const matchKey = resolveMatchKey("co-puc", search.docketId);
-  const hearing = upcomingHearings.get(search.docketId);
+  const hearings = upcomingHearings.get(search.docketId) ?? [];
   const currentStage = stageForStatus(search.status);
   const filedDate = parseUsDate(search.date);
   const capacityMw = extractCapacityMw(search.title);
@@ -400,9 +401,8 @@ function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upc
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Colorado Public Utilities Commission — Docket No. ${search.docketId}, "${search.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: hearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink: hearing ? `${DETAIL_URL}?p_docket_id=${encodeURIComponent(search.docketId)}` : null,
+    hearingDetailsLink: hearings.length > 0 ? `${DETAIL_URL}?p_docket_id=${encodeURIComponent(search.docketId)}` : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null })),
     sources: [
       {
         label: `Colorado PUC Docket No. ${search.docketId}`,
@@ -432,7 +432,7 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing>());
+  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
 
   for (const candidate of candidates) {
     try {

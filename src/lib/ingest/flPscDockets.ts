@@ -579,7 +579,12 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
   // matching this series' standing convention (see e.g. ctCscDockets.ts) of
   // falling back to the candidate's own source URL when the discovered
   // hearing event has no independently shareable page of its own.
-  const commentLink = c.doahHearing ? (depDetailUrl ?? sources[0]?.url ?? null) : null;
+  // Only ever 0 or 1 real entries here (not forced multiplicity) — DOAH's
+  // own Docket tab is scanned newest-filing-first and only the single most
+  // recent "Notice of Hearing" line is kept, which supersedes any earlier
+  // one for the same case (see module header DOAH HEARING LOOKUP).
+  const hearingDetailsLink = c.doahHearing ? (depDetailUrl ?? sources[0]?.url ?? null) : null;
+  const hearings = c.doahHearing ? [{ date: c.doahHearing.date, endDate: null, label: null }] : [];
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
   const caseLabel = c.depDetail?.caseNumber ?? (c.pscDocket ? `PSC Docket ${c.pscDocket.docketnum}` : sourceId);
@@ -603,9 +608,8 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
     causeSlugs,
     causeDetail: `Waiting on Power Plant Siting Act / Transmission Line Siting Act certification from the Florida DEP Siting Coordination Office (and, where applicable, a determination of need from the Florida PSC) — ${caseLabel}, "${c.name}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: c.doahHearing?.date ?? null,
-    commentPeriodEnd: null,
-    commentLink,
+    hearingDetailsLink,
+    hearings,
     sources,
     externalIds: {
       ...(c.depDetail?.caseNumber ? { flDepSiting: c.depDetail.caseNumber } : {}),

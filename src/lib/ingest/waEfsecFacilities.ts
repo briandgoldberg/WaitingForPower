@@ -159,15 +159,24 @@ interface CommentPeriod {
 const COMMENT_ROW_RE =
   /<div class="views-row comment-(?!past)[a-z]+">[\s\S]*?<strong>([^<]+?)\*?<\/strong>\s*-\s*\[Comment period\][\s\S]*?<time datetime="([^"]+)"[\s\S]*?<time datetime="([^"]+)"[\s\S]*?<h6 class="field-content"><a href="([^"]+)"/g;
 
-async function fetchActiveCommentPeriodsByFacilityName(): Promise<Map<string, CommentPeriod>> {
+// Every real active comment-period row is kept per facility (not just one)
+// — WA's own /hearings-and-meetings feed can in principle list more than
+// one open comment period for the same facility at once, and map.set used
+// to silently overwrite any earlier match with the last one seen.
+async function fetchActiveCommentPeriodsByFacilityName(): Promise<Map<string, CommentPeriod[]>> {
   const html = await fetchText(`${BASE_URL}/hearings-and-meetings`);
-  const map = new Map<string, CommentPeriod>();
+  const map = new Map<string, CommentPeriod[]>();
   for (const m of html.matchAll(COMMENT_ROW_RE)) {
     const [, facilityName, startIso, endIso, href] = m;
     const start = new Date(startIso);
     const end = new Date(endIso);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
-    map.set(facilityName.trim(), { start, end, link: `${BASE_URL}${href}` });
+    const name = facilityName.trim();
+    const arr = map.get(name) ?? [];
+    if (!arr.some((c) => c.start.getTime() === start.getTime())) {
+      arr.push({ start, end, link: `${BASE_URL}${href}` });
+    }
+    map.set(name, arr);
   }
   return map;
 }
@@ -371,7 +380,7 @@ function cleanCounty(raw: string | null): string | null {
 function normalizeFacility(
   summary: FacilitySummary,
   detail: FacilityDetail,
-  commentPeriodsByFacilityName: Map<string, CommentPeriod>,
+  commentPeriodsByFacilityName: Map<string, CommentPeriod[]>,
 ): NormalizedProject {
   const sourceId = summary.nodeId ?? summary.slug;
   const matchKey = resolveMatchKey("wa-efsec", sourceId);
@@ -387,7 +396,7 @@ function normalizeFacility(
   const fuelType = inferFuelType(summary.types);
   const county = cleanCounty(summary.county);
   const filedDate = parseMonthYear(detail.filedRaw);
-  const commentPeriod = commentPeriodsByFacilityName.get(summary.name);
+  const commentPeriods = commentPeriodsByFacilityName.get(summary.name) ?? [];
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -439,9 +448,12 @@ function normalizeFacility(
     causeSlugs,
     causeDetail: `Waiting on a site certification decision from the Washington Energy Facility Site Evaluation Council — ${summary.name}${detail.description ? `, "${detail.description}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: commentPeriod?.start ?? null,
-    commentPeriodEnd: commentPeriod?.end ?? null,
-    commentLink: commentPeriod?.link ?? null,
+    // hearingDetailsLink is one link per project, not per hearing — use the
+    // first matching row's own event-detail link (every row this feed
+    // matches carries one, see COMMENT_ROW_RE), falling back to the
+    // facility's own detail page only in case that's ever missing.
+    hearingDetailsLink: commentPeriods.length > 0 ? (commentPeriods[0].link || `${BASE_URL}${summary.slug}`) : null,
+    hearings: commentPeriods.map((c) => ({ date: c.start, endDate: c.end, label: null })),
     sources: [
       {
         label: `EFSEC Facility Page: ${summary.name}`,
@@ -468,7 +480,7 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   // shouldn't block the whole ingestion run over a feature this
   // supplementary, so it degrades to "no comment period data this run"
   // rather than failing every candidate.
-  const commentPeriodsByFacilityName = await fetchActiveCommentPeriodsByFacilityName().catch(() => new Map<string, CommentPeriod>());
+  const commentPeriodsByFacilityName = await fetchActiveCommentPeriodsByFacilityName().catch(() => new Map<string, CommentPeriod[]>());
 
   const candidates = selectWithRotation(
     allFacilities.filter((f) => f.status === "Application review"),

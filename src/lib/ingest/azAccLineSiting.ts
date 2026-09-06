@@ -28,9 +28,9 @@
 // structured `eventType` string ("AZ Power Plant and Line Siting Committee
 // Hearing", "Pre-hearing Conference", "Public Comment") and a genuine
 // `eventDateTime`. Only the "Public Comment" type, still in the future, is
-// surfaced as this project's commentPeriodStart/commentLink (see
-// schema.prisma) — the hearing/conference entries are procedural
-// proceedings, not a public comment opportunity. This is the cleanest
+// surfaced as this project's hearings (see schema.prisma) — the hearing/
+// conference entries are procedural proceedings, not a public comment
+// opportunity. This is the cleanest
 // structured comment-event data found across any state source in this
 // series so far (contrast waEfsecFacilities.ts's separate aggregate page,
 // or ohOpsbCases.ts's free-text hearing paragraphs).
@@ -141,17 +141,21 @@ async function searchCandidates(): Promise<DocketSearchResult[]> {
   return data.searchResult;
 }
 
-interface DocketDetail {
-  resolution: "granted" | "denied" | null;
-  // Next upcoming "Public Comment" event on this docket, if any — see
-  // module header EVENTS.
-  nextPublicComment: Date | null;
+interface PublicCommentEvent {
+  date: Date;
   // The same event's own eventEndDateTime, if the API publishes one —
   // confirmed live 2026-09-05 this is null on every real "Public Comment"
   // event sampled (a single point-in-time announcement, not a scheduled
   // window), but the field is real and captured in case a future one sets
   // it.
-  nextPublicCommentEnd: Date | null;
+  endDate: Date | null;
+}
+
+interface DocketDetail {
+  resolution: "granted" | "denied" | null;
+  // Every upcoming "Public Comment" event on this docket, not just the
+  // earliest — see module header EVENTS.
+  publicCommentEvents: PublicCommentEvent[];
 }
 
 const DENY_RE = /\bdeny(?:ing|al)?\b|\bdismiss/i;
@@ -179,20 +183,17 @@ async function fetchDetail(docketID: number): Promise<DocketDetail> {
   // conference event types are procedural sessions, not a comment
   // opportunity.
   const now = Date.now();
-  let nextPublicComment: Date | null = null;
-  let nextPublicCommentEnd: Date | null = null;
+  const publicCommentEvents: PublicCommentEvent[] = [];
   for (const e of data.events ?? []) {
     if (!e.public || e.eventType !== "Public Comment") continue;
     const d = new Date(e.eventDateTime);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
-    if (!nextPublicComment || d.getTime() < nextPublicComment.getTime()) {
-      nextPublicComment = d;
-      const endD = e.eventEndDateTime ? new Date(e.eventEndDateTime) : null;
-      nextPublicCommentEnd = endD && !Number.isNaN(endD.getTime()) ? endD : null;
-    }
+    if (publicCommentEvents.some((pc) => pc.date.getTime() === d.getTime())) continue;
+    const endD = e.eventEndDateTime ? new Date(e.eventEndDateTime) : null;
+    publicCommentEvents.push({ date: d, endDate: endD && !Number.isNaN(endD.getTime()) ? endD : null });
   }
 
-  return { resolution, nextPublicComment, nextPublicCommentEnd };
+  return { resolution, publicCommentEvents };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -291,9 +292,9 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility from the Arizona Corporation Commission's Line Siting Committee — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    commentPeriodStart: detail.nextPublicComment,
-    commentPeriodEnd: null,
-    commentLink: detail.nextPublicComment ? `https://edocket.azcc.gov/search/docket-search/item-detail/${search.docketID}` : null,
+    hearingDetailsLink:
+      detail.publicCommentEvents.length > 0 ? `https://edocket.azcc.gov/search/docket-search/item-detail/${search.docketID}` : null,
+    hearings: detail.publicCommentEvents.map((e) => ({ date: e.date, endDate: e.endDate, label: "Public Comment" })),
     sources: [
       {
         label: `AZ ACC Docket No. ${search.docketNumber}`,

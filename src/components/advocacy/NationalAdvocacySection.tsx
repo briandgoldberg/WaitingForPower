@@ -6,16 +6,14 @@ export function NationalAdvocacySection() {
     <div className="flex flex-col gap-5">
       <div>
         <p className="text-sm text-[var(--muted)] max-w-2xl">
-          Six bipartisan policies to speed up permit decisions, one per bottleneck. No silver
-          bullets, real trade-offs included.
+          Six bipartisan policies to speed up permit decisions, one per bottleneck.
         </p>
         <p className="text-xs text-[var(--muted)] mt-2 max-w-2xl">
           Inspired by{" "}
           <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
             Citizens&rsquo; Climate Lobby
           </a>
-          &rsquo;s approach to durable, market-based climate policy, these are some potential
-          bipartisan policies to speed up permitting, in this site&rsquo;s own words.
+          .
         </p>
       </div>
 

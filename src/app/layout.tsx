@@ -71,14 +71,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/projects" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Projects
               </Link>
-              <Link href="/blog" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
-                Blog
-              </Link>
               <Link
                 href="/policies"
                 className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10"
               >
                 Advocacy
+              </Link>
+              <Link href="/blog" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+                Blog
               </Link>
               <Link href="/contact" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Contact Us

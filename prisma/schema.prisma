@@ -211,13 +211,12 @@ model Project {
   // source's value.
   hearingDetailsLink String?
 
-  causes             ProjectCause[]
-  sources            ProjectSource[]
-  milestones         Milestone[]
-  hearings           ProjectHearing[]
-  changes            ProjectChange[]
-  verdicts           ProjectVerdict[]
-  hearingSocialPosts HearingSocialPost[]
+  causes     ProjectCause[]
+  sources    ProjectSource[]
+  milestones Milestone[]
+  hearings   ProjectHearing[]
+  changes    ProjectChange[]
+  verdicts   ProjectVerdict[]
 
   @@index([projectType])
   @@index([fuelType])
@@ -444,27 +443,6 @@ model ProjectHearing {
 
   @@index([projectId])
   @@index([date])
-}
-
-// Tracks which real-world hearings have already been auto-posted to which
-// social platform — deliberately keyed on (projectId, date, platform), NOT
-// on ProjectHearing.id: every ingestion run deletes and recreates a
-// project's ProjectHearing rows wholesale (see common.ts's hearings sync
-// block), so a row's own id is never stable across runs even when the real
-// hearing it represents hasn't changed. (projectId, date) is what's actually
-// stable for the same real-world hearing from one day's cron run to the
-// next, so that's what dedup keys off instead.
-model HearingSocialPost {
-  id       Int      @id @default(autoincrement())
-  projectId String
-  date     DateTime
-  platform String // "bluesky" | "mastodon"
-  postedAt DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, date, platform])
-  @@index([projectId])
 }
 
 // User-submitted projects. Never shown publicly until an admin approves them

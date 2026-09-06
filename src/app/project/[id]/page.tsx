@@ -237,17 +237,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           {p.commentLink ? (
             /^https?:\/\//.test(p.commentLink) ? (
               <a href={p.commentLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
-                Submit a comment
+                Hearing details
               </a>
             ) : (
               <>
-                <span className="text-[var(--muted)]">How to comment: </span>
+                <span className="text-[var(--muted)]">Hearing details: </span>
                 {p.commentLink}
               </>
             )
           ) : (
             <>
-              <span className="text-[var(--muted)]">How to comment: </span>Unknown
+              <span className="text-[var(--muted)]">Hearing details: </span>Unknown
             </>
           )}
         </p>

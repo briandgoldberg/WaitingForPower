@@ -99,10 +99,10 @@ export default async function HomePage({
             {upcomingHearings > 0 && (
               <Link
                 href="/policies?tab=hearings"
-                className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+                className="max-w-full text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors"
                 style={{ color: "var(--accent)" }}
               >
-                {upcomingHearings.toLocaleString()} hearings to advocate at →
+                Make your voice heard: {upcomingHearings.toLocaleString()} hearings to advocate at →
               </Link>
             )}
           </div>

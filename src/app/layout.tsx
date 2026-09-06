@@ -91,11 +91,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <p>
-              WaitingForPower tracks as much sourced U.S. energy project data as possible so{" "}
               <Link href="/contact?topic=data" className="underline">
-                reach out
+                Reach out
               </Link>{" "}
-              if you know of one that isn&rsquo;t listed.
+              if you know of a U.S. energy project that isn&rsquo;t listed.
             </p>
             <div className="flex items-center gap-3">
               <a

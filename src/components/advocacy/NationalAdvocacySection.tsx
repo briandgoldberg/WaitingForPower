@@ -14,29 +14,25 @@ export function NationalAdvocacySection() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">Contact your representatives</h2>
-        <p className="text-sm text-[var(--text-secondary)]">
-          Policies like these move fastest when Congress hears from constituents directly.
-        </p>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <a
-            href="https://www.congress.gov/members/find-your-member"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[var(--accent)] underline font-medium"
-          >
-            Find and email your House member
-          </a>
-          <a
-            href="https://www.senate.gov/senators/senators-contact.htm"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[var(--accent)] underline font-medium"
-          >
-            Contact your senators
-          </a>
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href="https://www.congress.gov/members/find-your-member"
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+          style={{ color: "var(--accent)" }}
+        >
+          Contact Your Representative
+        </a>
+        <a
+          href="https://www.senate.gov/senators/senators-contact.htm"
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+          style={{ color: "var(--accent)" }}
+        >
+          Contact Your Senator
+        </a>
       </div>
 
       <nav className="flex flex-wrap gap-1.5">

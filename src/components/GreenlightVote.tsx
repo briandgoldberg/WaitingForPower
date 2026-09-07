@@ -93,44 +93,52 @@ export function GreenlightVote({
   const leadPct = againstIsMajority ? 100 - greenPct : greenPct;
   const leadLabel = againstIsMajority ? "against" : "support";
 
-  if (myVote) {
-    return (
-      <div className={compact ? "flex items-center gap-1.5 text-[11px]" : "flex flex-col gap-1"}>
-        <div className={`flex items-center gap-1 overflow-hidden rounded-full bg-[var(--border)] ${compact ? "h-1.5 w-16" : "h-2 w-full"}`}>
-          <div className="h-full bg-green-500" style={{ width: `${greenPct}%` }} />
-          <div className="h-full bg-red-500 flex-1" />
-        </div>
-        <span className={compact ? "text-[var(--muted)] whitespace-nowrap" : "text-xs text-[var(--muted)]"}>
-          {leadPct}% {leadLabel} · {total.toLocaleString("en-US")} vote{total === 1 ? "" : "s"}
-        </span>
+  // Shown whenever there's at least one real vote, whether or not this
+  // browser has cast one itself — a visitor deciding whether to vote should
+  // be able to see where things currently stand, not just after joining in.
+  const bar = total > 0 && (
+    <div className={compact ? "flex items-center gap-1.5 text-[11px]" : "flex flex-col gap-1"}>
+      <div className={`flex items-center gap-1 overflow-hidden rounded-full bg-[var(--border)] ${compact ? "h-1.5 w-16" : "h-2 w-full"}`}>
+        <div className="h-full bg-green-500" style={{ width: `${greenPct}%` }} />
+        <div className="h-full bg-red-500 flex-1" />
       </div>
-    );
+      <span className={compact ? "text-[var(--muted)] whitespace-nowrap" : "text-xs text-[var(--muted)]"}>
+        {leadPct}% {leadLabel} · {total.toLocaleString("en-US")} vote{total === 1 ? "" : "s"}
+      </span>
+    </div>
+  );
+
+  if (myVote) {
+    return bar || null;
   }
 
   return (
-    <div className={`flex items-center gap-1.5 ${compact ? "" : ""}`}>
-      <button
-        type="button"
-        onClick={(e) => castVote(e, "green")}
-        disabled={loading}
-        aria-label="Support this project"
-        title="Support this project — you want to see it built"
-        className={`inline-flex items-center gap-1 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60 ${compact ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs font-medium"}`}
-      >
-        <span className="inline-block h-2 w-2 rounded-full shrink-0 bg-green-500" />
-        Support
-      </button>
-      <button
-        type="button"
-        onClick={(e) => castVote(e, "red")}
-        disabled={loading}
-        aria-label="Vote against this project"
-        title="Vote against this project — you don't want to see it built"
-        className={`inline-flex items-center gap-1 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60 ${compact ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs font-medium"}`}
-      >
-        <span className="inline-block h-2 w-2 rounded-full shrink-0 bg-red-500" />
-        Against
-      </button>
+    <div className={compact ? "flex items-center gap-2" : "flex flex-col gap-1.5"}>
+      {bar}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={(e) => castVote(e, "green")}
+          disabled={loading}
+          aria-label="Support this project"
+          title="Support this project — you want to see it built"
+          className={`inline-flex items-center gap-1 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60 ${compact ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs font-medium"}`}
+        >
+          <span className="inline-block h-2 w-2 rounded-full shrink-0 bg-green-500" />
+          Support
+        </button>
+        <button
+          type="button"
+          onClick={(e) => castVote(e, "red")}
+          disabled={loading}
+          aria-label="Vote against this project"
+          title="Vote against this project — you don't want to see it built"
+          className={`inline-flex items-center gap-1 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60 ${compact ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs font-medium"}`}
+        >
+          <span className="inline-block h-2 w-2 rounded-full shrink-0 bg-red-500" />
+          Against
+        </button>
+      </div>
     </div>
   );
 }

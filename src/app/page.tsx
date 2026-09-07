@@ -85,32 +85,22 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <div className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center gap-1">
-              <p className="text-sm text-[var(--muted)]">
-                Every filing and status change as it&rsquo;s detected.
-              </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/projects"
+              className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+              style={{ color: "var(--accent)" }}
+            >
+              {totalProjects.toLocaleString()} Projects Tracked
+            </Link>
+            {upcomingHearings > 0 && (
               <Link
-                href="/projects"
+                href="/policies?tab=hearings"
                 className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
                 style={{ color: "var(--accent)" }}
               >
-                {totalProjects.toLocaleString()} projects tracked →
+                {upcomingHearings.toLocaleString()} Upcoming Public Hearings
               </Link>
-            </div>
-            {upcomingHearings > 0 && (
-              <div className="flex flex-wrap items-center gap-1">
-                <p className="text-sm text-[var(--muted)]">
-                  Every hearing you can attend or follow as it&rsquo;s found.
-                </p>
-                <Link
-                  href="/policies?tab=hearings"
-                  className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-                  style={{ color: "var(--accent)" }}
-                >
-                  {upcomingHearings.toLocaleString()} Upcoming Hearings →
-                </Link>
-              </div>
             )}
           </div>
         </div>

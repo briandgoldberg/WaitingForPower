@@ -152,10 +152,9 @@ export function StatsHeader({
         </div>
       ))}
       <div className="col-span-2 sm:col-span-4 text-[11px] text-[var(--muted)]">
-        Stats update live as you filter below. Clean energy capacity and investment waiting are
-        documented estimates, not precise figures —{" "}
+        Documented estimates, not precise figures.{" "}
         <Link href="/methodology" className="underline">
-          see methodology
+          See methodology
         </Link>
         .
       </div>

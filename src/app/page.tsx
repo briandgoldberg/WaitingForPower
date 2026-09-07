@@ -91,7 +91,7 @@ export default async function HomePage({
               className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
               style={{ color: "var(--accent)" }}
             >
-              {totalProjects.toLocaleString()} Projects Tracked
+              {totalProjects.toLocaleString()} Projects Tracked →
             </Link>
             {upcomingHearings > 0 && (
               <Link
@@ -99,7 +99,7 @@ export default async function HomePage({
                 className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
                 style={{ color: "var(--accent)" }}
               >
-                {upcomingHearings.toLocaleString()} Upcoming Public Hearings
+                {upcomingHearings.toLocaleString()} Upcoming Public Hearings →
               </Link>
             )}
           </div>

@@ -191,13 +191,17 @@ per-data-source version of this list.
    silently misreading a shifted one. Check the current workbook's own
    codebook/field-descriptions tab before relying on either after a new
    annual edition ships.
-6. **Redistribution terms aren't fully confirmed for any source.** Federal
-   (.gov) data is generally public domain under 17 U.S.C. §105, consistent
-   with default federal open-data licensing norms, but no dataset-specific
-   terms page was found for `data.permits.performance.gov` or the EIA API;
-   LBNL's Queued Up asks for citation in a way that reads like an academic
-   norm, not a formal license; and ORNL HydroSource links a Data Use Policy
-   whose exact redistribution terms weren't independently confirmed either.
+6. **Redistribution terms — resolved for every source, see `/data-licensing`.**
+   `data.permits.performance.gov`'s own Socrata license field is explicitly
+   "Public Domain"; EIA-860M and the pipeline tracker are fetched here as
+   EIA's own published Excel workbooks, not via EIA's separate keyed API
+   (whose Terms of Service don't apply to this project as a result); ORNL
+   HydroSource's Data Use Policy states data is shared "without restriction"
+   and asks for a bibliographic citation; LBNL Queued Up is reported as CC
+   BY 4.0 (attribution to LBNL + GridTracker) — flagged on that page as
+   reported-not-independently-refetched, since LBNL's own site blocked an
+   automated re-fetch during this research. See `/data-licensing` for the
+   full per-source writeup rather than duplicating it here.
    Get an explicit answer per source before redistributing bulk data via
    this site's own API at scale.
 7. **Investment-waiting only covers generation/storage projects with MW

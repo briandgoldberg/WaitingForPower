@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.waitingforpower/mcp",
+  "title": "WaitingForPower",
+  "description": "Search U.S. energy permitting projects (generation, transmission, storage, LNG, pipelines) currently stuck waiting on approval — real-time docket status, delay causes, hearing dates, and dollar stakes across 40 state utility commissions plus federal sources, refreshed daily.",
+  "version": "1.0.0",
+  "websiteUrl": "https://waitingforpower.com",
+  "repository": {
+    "url": "https://github.com/briandgoldberg/WaitingForPower",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://waitingforpower.com/mcp"
+    }
+  ]
+}

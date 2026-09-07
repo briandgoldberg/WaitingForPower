@@ -2,9 +2,13 @@
 
 > Live, sourced dataset of U.S. energy projects — generation, transmission, storage,
 > LNG, and pipelines, every fuel type — currently stuck waiting on permitting approval,
-> merged from five public federal/state sources and refreshed automatically weekly.
+> merged from federal sources plus 40 state utility-commission/siting-board docket
+> systems, most refreshed daily (see /methodology for per-source cadence).
 > Structural and bipartisan: solar, gas, nuclear, and transmission projects
 > all get stuck in the same handful of bottlenecks.
+>
+> Full taxonomy reference (cause categories, fuel/stage enums, states covered):
+> https://waitingforpower.com/llms-full.txt
 
 ## MCP server
 
@@ -35,6 +39,18 @@
   projects only — `interconnectionQueueStage` (e.g. "Feasibility Study", "System
   Impact Study") and `networkUpgradeCostUsd` (null for most projects; see
   /methodology for current coverage).
+- [GET /api/changes](https://waitingforpower.com/api/changes): recent project changes (new
+  filings, stage advances, resolutions, capacity revisions) — one row per project per day
+  something changed, not a full audit log. Optional `state`, `limit` (max 100), `offset`.
+- [GET /api/export](https://waitingforpower.com/api/export?format=json): the full dataset in one
+  request — same filters as /api/projects, plus `format=csv` for a flattened spreadsheet-ready
+  file. Use this instead of paging through /api/projects for bulk/offline analysis.
+- [GET /api/snapshots](https://waitingforpower.com/api/snapshots): lists monthly point-in-time
+  captures of the entire dataset (every status, not just still-waiting); fetch one in full at
+  `/api/snapshots/{id}` (e.g. `/api/snapshots/2026-09-01`). Use this to cite an exact past state
+  rather than today's live (changing) numbers.
+- [OpenAPI spec](https://waitingforpower.com/openapi.json): machine-readable schema for the
+  endpoints above.
 
 ## Advocacy
 
@@ -44,7 +60,8 @@
 ## Docs
 
 - [Methodology](https://waitingforpower.com/methodology) — how each field is computed, per-source detail, and known data-quality caveats.
-- [Source](https://github.com/briandgoldberg/WaitingForPower) — the ingestion pipeline and full schema, MIT licensed.
+- [Data licensing](https://waitingforpower.com/data-licensing) — per-source redistribution terms for the underlying government/public datasets, researched directly (not assumed) before redistributing in bulk.
+- [Source](https://github.com/briandgoldberg/WaitingForPower) — the ingestion pipeline and full schema, MIT licensed. `server.json` at the repo root is this MCP server's registry manifest.
 
 ## Use and citation
 

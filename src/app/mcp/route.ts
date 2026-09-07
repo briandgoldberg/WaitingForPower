@@ -131,8 +131,14 @@ const handler = createMcpHandler(
       async ({ slug }) => {
         const project = await getProjectBySlug(slug);
         if (!project) {
+          // Structured alongside the human-readable text — so an agent can
+          // branch on `error.type` (e.g. retry a search_projects query for a
+          // near-miss slug) without re-parsing English, matching this
+          // project's REST error shape (see /api/snapshots/[id]'s 404).
+          const error = { type: "not_found", slug, hint: "Get a valid slug from search_projects first." };
           return {
             content: [{ type: "text", text: `No project found with slug "${slug}".` }],
+            structuredContent: { error },
             isError: true,
           };
         }

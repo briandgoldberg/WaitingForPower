@@ -517,17 +517,39 @@ model VisitorFeedback {
 // `console.log`-replacing write for what's captured.
 model ApiRequestLog {
   id        Int      @id @default(autoincrement())
-  // "mcp" | "api_projects"
+  // "mcp" | "api_projects" | "api_export" | "api_snapshots"
   endpoint  String
   method    String
   userAgent String?
-  // Raw query string for api_projects; null for mcp (its params are in the
-  // JSON-RPC body, not the URL, and not worth parsing just for a log row).
+  // Raw query string for api_projects/api_export/api_snapshots; null for
+  // mcp (its params are in the JSON-RPC body, not the URL, and not worth
+  // parsing just for a log row).
   query     String?
   createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([endpoint])
+}
+
+// One row per monthly point-in-time capture of the entire dataset — the
+// live DB only ever holds current truth (a project's row is updated in
+// place, see upsertNormalizedProject in ingest/common.ts), so without this
+// there was no way for a researcher to re-fetch exactly what the dataset
+// said on a date they already cited, and no way to compute "how has the
+// aggregate picture changed over time" without re-deriving it from
+// ProjectChange's per-project deltas. `id` is the first-of-month UTC date
+// (e.g. "2026-10-01") the snapshot cron ran for, not an opaque id, so
+// listing/fetching by date needs no separate lookup. `data` is every
+// project's full serialized ProjectDTO at capture time (every status
+// bucket, not just "in_permitting") — deliberately NOT filtered, so a past
+// snapshot can answer a question about resolved/cancelled projects too.
+model DatasetSnapshot {
+  id           String   @id
+  createdAt    DateTime @default(now())
+  projectCount Int
+  data         Json
+
+  @@index([createdAt])
 }
 
 // Durable copy of every contact-form submission (src/app/api/contact) —

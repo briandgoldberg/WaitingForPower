@@ -43,10 +43,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" },
     }),
     prisma.projectVerdict.findMany({
-      // Excludes this site's own cold-start seed votes (see SEED_VOTER_PREFIX
-      // in src/lib/ingest/common.ts) — this report is meant to answer "how
-      // many real visitors voted," not count synthetic backfill rows.
-      where: { createdAt: { gte: since }, voterKey: { not: { startsWith: "seed:" } } },
+      where: { createdAt: { gte: since } },
       select: { vote: true, project: { select: { name: true, slug: true } } },
       orderBy: { createdAt: "asc" },
     }),

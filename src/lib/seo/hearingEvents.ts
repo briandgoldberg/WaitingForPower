@@ -54,6 +54,41 @@ const STATE_HEARING_AGENCY: Record<string, string> = {
   NC: "North Carolina Utilities Commission",
 };
 
+// Each agency's real public site — same domains this project's own ingest
+// modules already fetch from live (see src/lib/ingest/<state>*.ts headers),
+// except FL: the ingest module's primary fetch domain is Florida DEP's
+// Siting Coordination Office (floridadep.gov), a different real agency from
+// the one named above. Florida's Power Plant/Transmission Line Siting Acts
+// hearings are actually conducted by the Division of Administrative
+// Hearings (confirmed live at doah.state.fl.us), so that's the URL paired
+// with the DOAH name here rather than reusing DEP's domain.
+const STATE_HEARING_AGENCY_URL: Record<string, string> = {
+  WA: "https://efsec.wa.gov",
+  OH: "https://opsb.ohio.gov",
+  AZ: "https://edocket.azcc.gov",
+  OR: "https://odoe.powerappsportals.us",
+  VA: "https://scc.virginia.gov",
+  VT: "https://epuc.vermont.gov",
+  KY: "https://psc.ky.gov",
+  CT: "https://portal.ct.gov",
+  NH: "https://www.puc.nh.gov",
+  IL: "https://icc.illinois.gov",
+  IN: "https://iurc.portal.in.gov",
+  AR: "https://apps.apsc.arkansas.gov",
+  CA: "https://efiling.energy.ca.gov",
+  SC: "https://dms.psc.sc.gov",
+  SD: "https://puc.sd.gov",
+  LA: "https://lpscpubvalence.lpsc.louisiana.gov",
+  MO: "https://efis.psc.mo.gov",
+  WV: "https://www.psc.state.wv.us",
+  UT: "https://psc.utah.gov",
+  CO: "https://www.dora.state.co.us",
+  FL: "https://doah.state.fl.us",
+  ND: "https://apps.psc.nd.gov",
+  NE: "https://powerreview.nebraska.gov",
+  NC: "https://starw1.ncuc.gov",
+};
+
 interface HearingEventInput {
   projectName: string;
   projectUrl: string;
@@ -78,15 +113,36 @@ export function buildHearingEventsJsonLd(params: HearingEventInput): Record<stri
   const agency = stateCode ? STATE_HEARING_AGENCY[stateCode] : undefined;
 
   const events = hearings.map((h) => {
+    const description = agency
+      ? `Public hearing on ${projectName}, held by the ${agency}${h.location ? ` at ${h.location}` : ""}.`
+      : `Public hearing on ${projectName}${h.location ? ` at ${h.location}` : ""}.`;
+
     const event: Record<string, unknown> = {
       "@type": "Event",
       name: h.label ? `${projectName} — ${h.label}` : `${projectName} — Public Hearing`,
+      description,
       startDate: h.date,
       eventStatus: "https://schema.org/EventScheduled",
       url,
+      image: "https://waitingforpower.com/logo.svg",
+      // Every hearing this site tracks is a government proceeding, legally
+      // open to the public at no cost — not a guess, so a real (not
+      // placeholder) free Offer belongs here rather than being omitted.
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
+        url,
+      },
     };
     if (h.endDate) event.endDate = h.endDate;
-    if (agency) event.organizer = { "@type": "GovernmentOrganization", name: agency };
+    if (agency) {
+      const organizer: Record<string, unknown> = { "@type": "GovernmentOrganization", name: agency };
+      const agencyUrl = stateCode ? STATE_HEARING_AGENCY_URL[stateCode] : undefined;
+      if (agencyUrl) organizer.url = agencyUrl;
+      event.organizer = organizer;
+    }
 
     if (h.location) {
       const hasDigit = /\d/.test(h.location);

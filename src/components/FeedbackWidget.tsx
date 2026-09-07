@@ -89,7 +89,7 @@ export function FeedbackWidget() {
     return (
       <button
         onClick={() => setStep("form")}
-        className="fixed bottom-4 right-4 z-40 flex items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-[var(--panel)] shadow-lg h-10 w-10 text-base sm:h-auto sm:w-auto sm:px-4 sm:py-2.5 sm:text-sm sm:font-medium hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+        className="fixed bottom-1 right-2 sm:bottom-4 sm:right-4 z-40 flex items-center justify-center gap-2 rounded-full border border-[var(--border)] bg-[var(--panel)] shadow-lg h-10 w-10 text-base sm:h-auto sm:w-auto sm:px-4 sm:py-2.5 sm:text-sm sm:font-medium hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
         aria-label="Open feedback form"
       >
         💬<span className="hidden sm:inline">Feedback</span>

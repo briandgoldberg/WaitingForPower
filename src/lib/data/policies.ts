@@ -57,9 +57,9 @@ export const POLICIES: Policy[] = [
     oneLiner: "A fast, real yes or no on grid connection.",
     badgeLabel: "Interconnection",
     summary:
-      "Grid queues can outlast the construction itself — thousands of projects stuck behind one plant's paperwork, with no deadline forcing an answer. The fix: first-ready-first-served cluster studies with hard deadlines and readiness deposits that weed out speculative filings — full enforcement of FERC Order No. 2023, which is already final law.",
+      "Grid queues can outlast the construction itself. Thousands of projects sit stuck behind one plant's paperwork with no deadline forcing an answer. The fix is first-ready-first-served cluster studies with hard deadlines and readiness deposits that weed out speculative filings, plus full enforcement of FERC Order No. 2023, which is already final law.",
     strengths: [
-      "Already federal law — the gap is enforcement, not legislation.",
+      "Already federal law. The gap is enforcement, not legislation.",
       "Readiness deposits fast-track serious projects, cut the rest.",
     ],
     weaknesses: [
@@ -70,7 +70,7 @@ export const POLICIES: Policy[] = [
       {
         label: "FERC Order No. 2023",
         url: "https://www.ferc.gov/explainer-interconnection-final-rule",
-        note: "Already final — the ask is enforcement, not new legislation.",
+        note: "Already final. The ask is enforcement, not new legislation.",
       },
       { label: "Congress.gov: interconnection queue reform", url: billSearch("interconnection queue reform") },
     ],
@@ -83,8 +83,8 @@ export const POLICIES: Policy[] = [
     summary:
       "Environmental reviews routinely run past a decade with no real deadline, often re-studying effects already well understood from comparable projects. Citizens' Climate Lobby's ask: hard time limits (1-2 years) and page limits (75-300 pages), one lead agency, and reuse of prior review findings instead of starting from scratch every time.",
     strengths: [
-      "Bipartisan precedent — the 2023 debt-limit deal already did this once.",
-      "Same questions get answered — just on a clock, not indefinitely.",
+      "This already has bipartisan precedent, since the 2023 debt-limit deal did the same thing once before.",
+      "Same questions get answered, just on a clock instead of indefinitely.",
     ],
     weaknesses: [
       "Hard deadlines can pressure rushed reviews.",
@@ -95,7 +95,7 @@ export const POLICIES: Policy[] = [
       {
         label: "Fiscal Responsibility Act of 2023 (H.R. 3746)",
         url: "https://www.congress.gov/bill/118th-congress/house-bill/3746",
-        note: "Public Law 118-5 — enacted the current NEPA page limits and deadlines.",
+        note: "Public Law 118-5. Enacted the current NEPA page limits and deadlines.",
       },
     ],
   },
@@ -105,10 +105,10 @@ export const POLICIES: Policy[] = [
     oneLiner: "One review. Not a relay race.",
     badgeLabel: "Multi-agency",
     summary:
-      "A project can need sign-off from several federal agencies running separate, sequential reviews — so the single slowest one sets the pace for everyone else's already-finished work. The fix: one shared schedule and record of decision across every agency involved, the FAST-41 model, extended beyond its current small set of covered projects.",
+      "A project can need sign-off from several federal agencies running separate, sequential reviews. The single slowest one sets the pace for everyone else's already-finished work. The fix is one shared schedule and record of decision across every agency involved, using the FAST-41 model extended beyond its current small set of covered projects.",
     strengths: [
       "Already proven at smaller scale under FAST-41 today.",
-      "No agency loses its say — just its veto over the calendar.",
+      "No agency loses its say. It just loses its veto over the calendar.",
     ],
     weaknesses: [
       "Real interagency coordination is hard, not just paperwork.",
@@ -118,7 +118,7 @@ export const POLICIES: Policy[] = [
       {
         label: "FAST Act of 2015 (H.R. 22), Title 41",
         url: "https://www.congress.gov/bill/114th-congress/house-bill/22",
-        note: "Public Law 114-94 — established the One Federal Decision framework this would extend.",
+        note: "Public Law 114-94 established the One Federal Decision framework this would extend.",
       },
     ],
   },
@@ -126,11 +126,11 @@ export const POLICIES: Policy[] = [
     slug: "transmission_siting_land_rights",
     title: "Federal backstop transmission siting",
     oneLiner: "One state can't veto a national grid.",
-    badgeLabel: "Siting",
+    badgeLabel: "Transmission siting",
     summary:
-      "A single state — or one county within it — can block a transmission line meant to serve an entire region, with no federal option if local approval stalls. The fix: federal backstop siting authority for nationally significant lines, the same model that already governs interstate gas pipelines.",
+      "A single state, or even just one county within it, can block a transmission line meant to serve an entire region, with no federal option if local approval stalls. The fix is federal backstop siting authority for nationally significant lines, the same model that already governs interstate gas pipelines.",
     strengths: [
-      "Direct precedent: interstate gas pipelines already work this way.",
+      "Interstate gas pipelines already work this way, so there's a direct precedent to follow.",
       "Targets the #1 reason big multi-state lines die.",
     ],
     weaknesses: [
@@ -142,7 +142,7 @@ export const POLICIES: Policy[] = [
       {
         label: "Grid Expansion and Reliability Act (H.R. 8248, 119th Congress)",
         url: "https://www.congress.gov/bill/119th-congress/house-bill/8248",
-        note: "Introduced by Rep. Gottheimer (D-NJ), April 2026 — shifts NIETC transmission-corridor designation to FERC and allows self-certification for transmission facilities within them.",
+        note: "Introduced by Rep. Gottheimer, a Democrat from New Jersey, in April 2026. It shifts NIETC transmission-corridor designation to FERC and allows self-certification for transmission facilities within them.",
       },
       { label: "Congress.gov: federal transmission siting authority", url: billSearch("federal transmission siting authority") },
     ],
@@ -152,9 +152,9 @@ export const POLICIES: Policy[] = [
     title: "Judicial review reform",
     oneLiner: "Give lawsuits an end date.",
     summary:
-      "A fully-approved project can still be re-litigated for years — no deadline to file a challenge, no deadline to decide it. Citizens' Climate Lobby has proposed cutting the filing window from 6 years down to 5 months, paired with a single consolidated venue and expedited briefing.",
+      "A fully-approved project can still be re-litigated for years, with no deadline to file a challenge and no deadline to decide it. Citizens' Climate Lobby has proposed cutting the filing window from 6 years down to 5 months, paired with a single consolidated venue and expedited briefing.",
     strengths: [
-      "Doesn't remove the right to sue — just puts a clock on it.",
+      "Doesn't remove the right to sue. Just puts a clock on it.",
       "Today, litigation risk hits good and bad projects equally; a deadline fixes that.",
     ],
     weaknesses: [
@@ -166,7 +166,7 @@ export const POLICIES: Policy[] = [
       {
         label: "Energy Permitting Reform Act (S. 4753, 118th Congress)",
         url: "https://www.congress.gov/bill/118th-congress/senate-bill/4753",
-        note: "Bipartisan (Manchin, Barrasso) — includes judicial review provisions.",
+        note: "Written on a bipartisan basis by Senators Manchin and Barrasso. It includes judicial review provisions.",
       },
     ],
   },
@@ -176,9 +176,9 @@ export const POLICIES: Policy[] = [
     oneLiner: "Talk to communities before the fight, not after.",
     badgeLabel: "Local input",
     summary:
-      "Local opposition usually shows up only after the site and design are already locked in — by then it's an all-or-nothing fight instead of a negotiation. The fix: real engagement and binding community benefit agreements early, before decisions are set in stone.",
+      "Local opposition usually shows up only after the site and design are already locked in. By then it's an all-or-nothing fight instead of a negotiation. The fix is real engagement and binding community benefit agreements early, before decisions are set in stone.",
     strengths: [
-      "Fixes the actual cause: no say, no benefit — not just the symptom.",
+      "It fixes the real cause of opposition, not just the symptom, since people get no say and no benefit today.",
       "Fewer late-stage fights tend to mean fewer lawsuits too.",
     ],
     weaknesses: [

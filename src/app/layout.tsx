@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
+import { ReachOutButton } from "@/components/ReachOutButton";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -80,9 +81,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/blog" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                 Blog
               </Link>
-              <Link href="/contact" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
-                Contact Us
-              </Link>
             </nav>
           </div>
         </header>
@@ -91,11 +89,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <p>
-              We&rsquo;re always adding more data sources.{" "}
-              <Link href="/contact?topic=data" className="underline">
-                Reach out
-              </Link>{" "}
-              if you know of a U.S. energy project that isn&rsquo;t listed.
+              We&rsquo;re always adding more data sources. <ReachOutButton /> if you know of a
+              U.S. energy project that isn&rsquo;t listed.
             </p>
             <div className="flex items-center gap-3">
               <a

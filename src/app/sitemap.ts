@@ -19,7 +19,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/policies`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${BASE_URL}/methodology`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE_URL}/about`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${BASE_URL}/contact`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   const projectRoutes: MetadataRoute.Sitemap = projects.map((p) => ({

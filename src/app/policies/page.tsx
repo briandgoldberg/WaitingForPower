@@ -28,13 +28,6 @@ export default async function PoliciesPage({
 
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Advocacy</h1>
-        <p className="text-sm text-[var(--muted)] mt-2 max-w-2xl">
-          Push for faster energy permitting through national policy or hearings happening now.
-        </p>
-      </div>
-
       <AdvocacyTabs
         defaultTab={defaultTab}
         hearingCount={hearingCount}

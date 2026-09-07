@@ -2,55 +2,69 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "wfp_feedback_answered";
+const STORAGE_KEY = "wfp_feedback_auto_shown";
 const SHOW_AFTER_MS = 15000;
 
-type Step = "form" | "thanks";
+// Fired by anything site-wide that wants to open the feedback form on
+// demand — see the footer's "Reach out" button in src/app/layout.tsx, the
+// replacement for the old dedicated /contact page.
+export const OPEN_FEEDBACK_EVENT = "wfp:open-feedback";
 
-// A single optional-comment-and-email screen — shown once per browser (a
-// localStorage flag), never re-prompted. Closing it without typing
-// anything writes nothing; see src/app/api/feedback/route.ts.
+type Step = "minimized" | "form" | "thanks";
+
+// This is the site's only "contact us" surface (the old /contact page was
+// removed in favor of this) — auto-opens once per browser so it's
+// discoverable, then minimizes into a small always-visible pill rather
+// than disappearing, so feedback stays reachable indefinitely afterward.
 export function FeedbackWidget() {
-  const [visible, setVisible] = useState(false);
-  const [step, setStep] = useState<Step>("form");
+  const [step, setStep] = useState<Step>("minimized");
   const [feedbackText, setFeedbackText] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    let alreadyAnswered = false;
+    let alreadyAutoShown = false;
     try {
-      alreadyAnswered = localStorage.getItem(STORAGE_KEY) === "1";
+      alreadyAutoShown = localStorage.getItem(STORAGE_KEY) === "1";
     } catch {
-      // Private browsing / storage blocked — treat as not-yet-answered
-      // rather than crash; worst case this shows every visit for that
+      // Private browsing / storage blocked — treat as not-yet-shown rather
+      // than crash; worst case this auto-opens every visit for that
       // browser instead of once.
     }
-    if (alreadyAnswered) return;
 
-    const timer = setTimeout(() => setVisible(true), SHOW_AFTER_MS);
-    return () => clearTimeout(timer);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (!alreadyAutoShown) {
+      timer = setTimeout(() => {
+        setStep("form");
+        try {
+          localStorage.setItem(STORAGE_KEY, "1");
+        } catch {
+          // Nothing to do if storage is blocked — it'll just auto-open
+          // again next visit for this browser, not a functional break.
+        }
+      }, SHOW_AFTER_MS);
+    }
+
+    function onOpenRequest() {
+      setStep("form");
+    }
+    window.addEventListener(OPEN_FEEDBACK_EVENT, onOpenRequest);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(OPEN_FEEDBACK_EVENT, onOpenRequest);
+    };
   }, []);
 
-  function markAnswered() {
-    try {
-      localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // Nothing to do if storage is blocked — it'll just show again next
-      // visit for this browser, not a functional break.
-    }
-  }
-
-  function close() {
-    markAnswered();
-    setVisible(false);
+  function minimize() {
+    setStep("minimized");
   }
 
   async function send() {
     const text = feedbackText.trim();
     const email = contactEmail.trim();
     if (!text && !email) {
-      close();
+      minimize();
       return;
     }
     setSending(true);
@@ -65,18 +79,29 @@ export function FeedbackWidget() {
       // already-dismissible widget.
     }
     setSending(false);
-    markAnswered();
+    setFeedbackText("");
+    setContactEmail("");
     setStep("thanks");
-    setTimeout(() => setVisible(false), 1400);
+    setTimeout(minimize, 1400);
   }
 
-  if (!visible) return null;
+  if (step === "minimized") {
+    return (
+      <button
+        onClick={() => setStep("form")}
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--panel)] shadow-lg px-4 py-2.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+        aria-label="Open feedback form"
+      >
+        💬 Feedback
+      </button>
+    );
+  }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-72 rounded-lg border border-[var(--border)] bg-[var(--panel)] shadow-lg p-4">
+    <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-40 w-auto sm:w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--border)] bg-[var(--panel)] shadow-lg p-4">
       <button
-        onClick={close}
-        aria-label="Dismiss"
+        onClick={minimize}
+        aria-label="Minimize"
         className="absolute top-2 right-2 text-[var(--muted)] hover:text-[var(--foreground)] text-sm leading-none"
       >
         ✕
@@ -103,7 +128,7 @@ export function FeedbackWidget() {
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm mb-3"
           />
           <div className="flex items-center justify-between gap-2">
-            <button onClick={close} className="text-xs text-[var(--muted)] hover:underline">
+            <button onClick={minimize} className="text-xs text-[var(--muted)] hover:underline">
               Skip
             </button>
             <button

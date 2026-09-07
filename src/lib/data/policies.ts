@@ -55,6 +55,7 @@ export const POLICIES: Policy[] = [
     slug: "interconnection_queue_backlog",
     title: "Interconnection process reform",
     oneLiner: "A fast, real yes or no on grid connection.",
+    badgeLabel: "Interconnection",
     summary:
       "Grid queues can outlast the construction itself — thousands of projects stuck behind one plant's paperwork, with no deadline forcing an answer. The fix: first-ready-first-served cluster studies with hard deadlines and readiness deposits that weed out speculative filings — full enforcement of FERC Order No. 2023, which is already final law.",
     strengths: [
@@ -78,6 +79,7 @@ export const POLICIES: Policy[] = [
     slug: "environmental_review_nepa",
     title: "NEPA timeline & review reform",
     oneLiner: "Faster reviews. Same rigor.",
+    badgeLabel: "NEPA",
     summary:
       "Environmental reviews routinely run past a decade with no real deadline, often re-studying effects already well understood from comparable projects. Citizens' Climate Lobby's ask: hard time limits (1-2 years) and page limits (75-300 pages), one lead agency, and reuse of prior review findings instead of starting from scratch every time.",
     strengths: [
@@ -101,6 +103,7 @@ export const POLICIES: Policy[] = [
     slug: "multi_agency_permitting",
     title: "One Federal Decision",
     oneLiner: "One review. Not a relay race.",
+    badgeLabel: "Multi-agency",
     summary:
       "A project can need sign-off from several federal agencies running separate, sequential reviews — so the single slowest one sets the pace for everyone else's already-finished work. The fix: one shared schedule and record of decision across every agency involved, the FAST-41 model, extended beyond its current small set of covered projects.",
     strengths: [
@@ -123,6 +126,7 @@ export const POLICIES: Policy[] = [
     slug: "transmission_siting_land_rights",
     title: "Federal backstop transmission siting",
     oneLiner: "One state can't veto a national grid.",
+    badgeLabel: "Siting",
     summary:
       "A single state — or one county within it — can block a transmission line meant to serve an entire region, with no federal option if local approval stalls. The fix: federal backstop siting authority for nationally significant lines, the same model that already governs interstate gas pipelines.",
     strengths: [
@@ -170,7 +174,7 @@ export const POLICIES: Policy[] = [
     slug: "local_state_opposition",
     title: "Earlier community engagement",
     oneLiner: "Talk to communities before the fight, not after.",
-    badgeLabel: "Local engagement",
+    badgeLabel: "Local input",
     summary:
       "Local opposition usually shows up only after the site and design are already locked in — by then it's an all-or-nothing fight instead of a negotiation. The fix: real engagement and binding community benefit agreements early, before decisions are set in stone.",
     strengths: [

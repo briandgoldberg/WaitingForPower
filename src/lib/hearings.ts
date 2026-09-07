@@ -13,6 +13,8 @@ export interface UpcomingHearingGroup {
     name: string;
     state: string | null;
     hearingDetailsLink: string | null;
+    greenVotes: number;
+    redVotes: number;
   };
   hearings: UpcomingHearingEntry[];
 }
@@ -30,7 +32,15 @@ export async function getUpcomingPublicHearingGroups(): Promise<UpcomingHearingG
     },
     orderBy: { date: "asc" },
     include: {
-      project: { select: { slug: true, name: true, state: true, hearingDetailsLink: true } },
+      project: {
+        select: {
+          slug: true,
+          name: true,
+          state: true,
+          hearingDetailsLink: true,
+          verdicts: { select: { vote: true } },
+        },
+      },
     },
   });
 
@@ -46,7 +56,15 @@ export async function getUpcomingPublicHearingGroups(): Promise<UpcomingHearingG
     if (existing) {
       existing.hearings.push(entry);
     } else {
-      byProject.set(row.project.slug, { project: row.project, hearings: [entry] });
+      const { verdicts, ...project } = row.project;
+      byProject.set(row.project.slug, {
+        project: {
+          ...project,
+          greenVotes: verdicts.filter((v) => v.vote === "green").length,
+          redVotes: verdicts.filter((v) => v.vote === "red").length,
+        },
+        hearings: [entry],
+      });
     }
   }
   return Array.from(byProject.values());

@@ -1,7 +1,8 @@
 // Daily summary email to briandgoldberg@gmail.com covering the previous
 // ~24 hours: bot/MCP/API calls (ApiRequestLog), visitor feedback
-// (VisitorFeedback), contact form submissions (ContactSubmission), new
-// feed subscriptions (FeedSubscription), and community votes
+// (VisitorFeedback — this is now the site's only contact channel, since
+// /contact and ContactSubmission were retired in favor of the feedback
+// widget), new feed subscriptions (FeedSubscription), and community votes
 // (ProjectVerdict). A rolling 24-hour window ending at
 // run time, not a strict UTC calendar day — same convention as
 // notify-feed-subscribers, and simpler than reasoning about calendar-day
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, contactSubmissions, newSubscriptions, voteRows] = await Promise.all([
+  const [apiLogs, feedbackRows, newSubscriptions, voteRows] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -35,11 +36,6 @@ export async function GET(req: NextRequest) {
     prisma.visitorFeedback.findMany({
       where: { createdAt: { gte: since } },
       select: { feedbackText: true, contactEmail: true, path: true },
-    }),
-    prisma.contactSubmission.findMany({
-      where: { createdAt: { gte: since } },
-      select: { topic: true, name: true, email: true, organization: true, message: true },
-      orderBy: { createdAt: "asc" },
     }),
     prisma.feedSubscription.findMany({
       where: { createdAt: { gte: since } },
@@ -71,7 +67,6 @@ export async function GET(req: NextRequest) {
     apiUserAgents: [...userAgentSet].slice(0, 20),
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
-    contactSubmissions,
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
     votes: voteRows.map((v) => ({ projectName: v.project.name, projectSlug: v.project.slug, vote: v.vote as "green" | "red" })),
   });
@@ -85,7 +80,6 @@ export async function GET(req: NextRequest) {
     windowLabel,
     apiCallCount: apiLogs.length,
     feedbackCount: feedbackRows.length,
-    contactSubmissionCount: contactSubmissions.length,
     newSubscriptionCount: newSubscriptions.length,
     voteCount: voteRows.length,
   };

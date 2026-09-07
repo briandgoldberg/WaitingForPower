@@ -19,7 +19,6 @@ export interface DailyDigestData {
   apiUserAgents: string[];
   feedbackTotal: number;
   feedbackDetails: { feedbackText: string | null; contactEmail: string | null; path: string }[];
-  contactSubmissions: { topic: string; name: string; email: string; organization: string | null; message: string }[];
   // scope is already the human label ("California" or "All states") — see
   // src/app/api/cron/daily-digest/route.ts.
   newSubscriptions: { scope: string; email: string; confirmed: boolean }[];
@@ -56,19 +55,9 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
          <ul>${data.feedbackDetails
            .map(
              (d) =>
-               `<li>${d.contactEmail ? `${escapeHtml(d.contactEmail)}` : "(no email)"}${d.feedbackText ? `<br>${escapeHtml(d.feedbackText)}` : ""}</li>`,
+               `<li>${d.contactEmail ? `${escapeHtml(d.contactEmail)}` : "(no email)"} <span style="color:#666;font-size:12px;">— ${escapeHtml(d.path)}</span>${d.feedbackText ? `<br>${escapeHtml(d.feedbackText)}` : ""}</li>`,
            )
            .join("")}</ul>`;
-
-  const contactSectionHtml =
-    data.contactSubmissions.length === 0
-      ? "<p>None.</p>"
-      : `<ul>${data.contactSubmissions
-          .map(
-            (c) =>
-              `<li><strong>${escapeHtml(c.topic)}</strong> — ${escapeHtml(c.name)} (${escapeHtml(c.email)})${c.organization ? ` — ${escapeHtml(c.organization)}` : ""}<br>${escapeHtml(c.message)}</li>`,
-          )
-          .join("")}</ul>`;
 
   const subsSectionHtml =
     data.newSubscriptions.length === 0
@@ -94,7 +83,6 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     <p style="color:#666;font-size:13px;">WaitingForPower daily digest — ${escapeHtml(data.windowLabel)}</p>
     ${section("Bot / MCP / API calls", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
-    ${section("Contact form submissions", contactSectionHtml)}
     ${section("New feed subscriptions", subsSectionHtml)}
     ${section("Community votes", votesSectionHtml)}
   `;
@@ -110,15 +98,8 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     "VISITOR FEEDBACK",
     data.feedbackTotal === 0 ? "No responses." : `${data.feedbackTotal} total.`,
     ...data.feedbackDetails.map(
-      (d) => `- ${d.contactEmail ?? "(no email)"}${d.feedbackText ? `\n  ${d.feedbackText}` : ""}`,
+      (d) => `- ${d.contactEmail ?? "(no email)"} — ${d.path}${d.feedbackText ? `\n  ${d.feedbackText}` : ""}`,
     ),
-    "",
-    "CONTACT FORM SUBMISSIONS",
-    data.contactSubmissions.length === 0
-      ? "None."
-      : data.contactSubmissions
-          .map((c) => `- ${c.topic} — ${c.name} (${c.email})${c.organization ? ` — ${c.organization}` : ""}\n  ${c.message}`)
-          .join("\n"),
     "",
     "NEW FEED SUBSCRIPTIONS",
     data.newSubscriptions.length === 0

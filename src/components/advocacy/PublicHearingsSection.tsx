@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GreenlightVote } from "@/components/GreenlightVote";
 import type { UpcomingHearingGroup } from "@/lib/hearings";
 
 export function PublicHearingsSection({ groups }: { groups: UpcomingHearingGroup[] }) {
@@ -29,6 +30,13 @@ export function PublicHearingsSection({ groups }: { groups: UpcomingHearingGroup
                   </span>
                 )}
               </div>
+
+              <GreenlightVote
+                slug={g.project.slug}
+                initialGreen={g.project.greenVotes}
+                initialRed={g.project.redVotes}
+                compact
+              />
 
               <ul className="flex flex-col gap-2 text-sm text-[var(--text-secondary)]">
                 {g.hearings.map((h, i) => (

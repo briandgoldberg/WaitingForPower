@@ -22,7 +22,7 @@ export function NationalAdvocacySection() {
           className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
           style={{ color: "var(--accent)" }}
         >
-          Contact Your Representative
+          Contact Your Representative →
         </a>
         <a
           href="https://www.senate.gov/senators/senators-contact.htm"
@@ -31,7 +31,7 @@ export function NationalAdvocacySection() {
           className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
           style={{ color: "var(--accent)" }}
         >
-          Contact Your Senator
+          Contact Your Senator →
         </a>
       </div>
 

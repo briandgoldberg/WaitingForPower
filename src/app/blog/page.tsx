@@ -4,6 +4,7 @@ import { BLOG_POSTS } from "@/lib/data/blogPosts";
 import { LeastEfficientStatesPreview } from "@/components/blog/previews/LeastEfficientStatesPreview";
 import { FortEdwardSolarPreview } from "@/components/blog/previews/FortEdwardSolarPreview";
 import { GasTakingOverNewFilingsPreview } from "@/components/blog/previews/GasTakingOverNewFilingsPreview";
+import { InterconnectionQueueCrisisPreview } from "@/components/blog/previews/InterconnectionQueueCrisisPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 // src/app/blog/[slug]/page.tsx's POST_COMPONENTS for the equivalent
 // full-post registry these pair with.
 const PREVIEW_COMPONENTS: Record<string, React.ComponentType> = {
+  "interconnection-queue-crisis": InterconnectionQueueCrisisPreview,
   "gas-taking-over-new-filings": GasTakingOverNewFilingsPreview,
   "least-efficient-states-for-permitting": LeastEfficientStatesPreview,
   "fort-edward-solar-approved": FortEdwardSolarPreview,

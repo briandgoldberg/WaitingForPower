@@ -10,6 +10,13 @@ export interface BlogPostMeta {
 // this array is only the listing metadata for /blog and generateMetadata.
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
+    slug: "interconnection-queue-crisis",
+    title: "778 GW is stuck in interconnection queues right now, and most of it is clean energy",
+    excerpt:
+      "The median project in an active U.S. interconnection queue has already waited 2.4 years. We broke down our own tracked dataset by year, region, and fuel type to see how big the backlog really is.",
+    publishedAt: "2026-09-08",
+  },
+  {
     slug: "gas-taking-over-new-filings",
     title: "Gas is taking over new power plant filings",
     excerpt:

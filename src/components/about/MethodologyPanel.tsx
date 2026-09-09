@@ -615,7 +615,7 @@ export function MethodologyPanel() {
         <p className="text-sm mb-3">
           Every source above runs on an automated job (Vercel Cron) — there is no manual,
           hand-curated data on this site. Cadence is matched to how often each source actually
-          publishes: the 40 state PUC/PSC/siting-authority dockets and the Federal Permitting
+          publishes: the 41 state PUC/PSC/siting-authority dockets and the Federal Permitting
           Dashboard&rsquo;s live API are checked daily, since same-day filings are exactly what
           the homepage changes feed is built to surface. The four sources whose underlying data
           only republishes monthly, quarterly, or annually (EIA-860M, LBNL Queued Up, ORNL

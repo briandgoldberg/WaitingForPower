@@ -55,8 +55,9 @@ sources that can be re-run and stay current on their own).
 | `ndPscDockets.ts` | North Dakota Public Service Commission (PSC) Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) | Yes — server-rendered HTML + real order PDFs (parsed via `pdf-parse`), no auth | None (no auth) | Cron daily (12:30 UTC), `/api/cron/ingest-nd-psc`. |
 | `ncNcucDockets.ts` | North Carolina Utilities Commission (NCUC) Electric Generation Certificate (EGC) + Electric Transmission Line Certificate (ETL) dockets | Yes — server-rendered HTML (ASP.NET WebForms behind Cloudflare, non-standard `__VIEWSTATE1` postback counter), no auth | None (no auth) | Cron daily (13:30 UTC), `/api/cron/ingest-nc-ncuc`. |
 | `wyIscDockets.ts` | Wyoming DEQ Industrial Siting Council (ISC) permit dockets | Yes — a public Google Drive folder, listed via Drive's legacy unauthenticated `embeddedfolderview` HTML endpoint (the state's own embedded file-browser widget is broken site-wide; the folder's own "click here" fallback link is what this module actually uses), no auth | None (no auth) | Cron daily (14:30 UTC), `/api/cron/ingest-wy-isc`. |
+| `gaPscDockets.ts` | Georgia Public Service Commission (PSC) electric dockets | Yes — real JSON XHR endpoint (`docket-filter-service`), no auth | None (no auth) | Cron daily (15:00 UTC), `/api/cron/ingest-ga-psc`. |
 
-## Iowa: deliberately not a 41st state module
+## Iowa: deliberately not a 42nd state module
 
 Investigated 2026-09-03 (real search demand for it showed up in Search
 Console query data). Iowa's Electronic Filing System (efs.iowa.gov) recently
@@ -67,7 +68,7 @@ There is a real JSON API underneath the SPA (`/api/docket/search-view`,
 `/api/docket/{id}`, etc.) — technically the same shape as every module
 above — but its bearer token expires in 24 hours and refreshes via an
 httpOnly cookie that isn't capturable for durable storage. That's a real,
-confirmed difference from all 40 sources above, which are every one of
+confirmed difference from all 41 sources above, which are every one of
 them no-auth: there's no long-lived credential to put in an env var the
 way `EIA_API_KEY`/`CRON_SECRET` work, so this can't run as an unattended
 Vercel Cron job without either periodic manual re-login or a full
@@ -83,7 +84,7 @@ as a static, one-time `ProjectSource` on the existing ND PSC-sourced
 module rather than added directly via the DB so it survives that
 source's own daily re-normalization instead of being silently
 overwritten). It will not reflect future status changes on the Iowa
-side. This is why the site's own "N states live" count stays at 40 —
+side. This is why the site's own "N states live" count stays at 41 —
 that count means "auto-updating ingestion module," and Iowa doesn't
 have one.
 
@@ -91,7 +92,7 @@ Every source runs via Vercel Cron (see `vercel.json`) with no manual step
 required. Cadence changed twice: every 3 days at launch, moved to weekly on
 2026-08-23 to cut Vercel invocation volume on a Hobby plan, and moved again
 2026-08-25 (after upgrading off Hobby) to match each source's own real
-publish cadence instead of one uniform schedule — the 40 state PUC/PSC/
+publish cadence instead of one uniform schedule — the 41 state PUC/PSC/
 siting-authority dockets plus the Permitting Dashboard's live API now run
 **daily**, since same-day filings are exactly what the homepage changes
 feed (see `src/lib/changes.ts`) is built to surface; `eia860mPlanned.ts`,

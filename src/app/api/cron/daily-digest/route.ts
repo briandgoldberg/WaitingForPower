@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendDailyDigestEmail } from "@/lib/dailyDigestEmail";
 import { stateName } from "@/lib/data/usStates";
+import { classifyUserAgent } from "@/lib/classifyUserAgent";
 
 export const dynamic = "force-dynamic";
 
@@ -50,18 +51,32 @@ export async function GET(req: NextRequest) {
   ]);
 
   const apiCallsByEndpoint = new Map<string, number>();
-  const userAgentSet = new Set<string>();
+  // Real vs. discovery-bot breakdown — see classifyUserAgent.ts for why this
+  // exists: raw call counts are dominated by the MCP registry/directory
+  // crawler ecosystem (confirmed live 2026-09-08: ~79% of one day's /mcp
+  // traffic was self-described liveness/health/census bots), so a plain
+  // "N calls today" number reads as far more real usage than it is.
+  const trafficBreakdown = { bot: 0, ambiguous: 0, real: 0 };
+  const realUaCounts = new Map<string, number>();
   for (const log of apiLogs) {
     apiCallsByEndpoint.set(log.endpoint, (apiCallsByEndpoint.get(log.endpoint) ?? 0) + 1);
-    if (log.userAgent) userAgentSet.add(log.userAgent);
+    const cls = classifyUserAgent(log.userAgent);
+    trafficBreakdown[cls]++;
+    if (cls === "real" && log.userAgent) {
+      realUaCounts.set(log.userAgent, (realUaCounts.get(log.userAgent) ?? 0) + 1);
+    }
   }
 
   const result = await sendDailyDigestEmail({
     windowLabel,
     apiCalls: [...apiCallsByEndpoint.entries()].map(([endpoint, count]) => ({ endpoint, count })),
-    // Capped — a runaway crawler shouldn't blow up the email with hundreds
-    // of near-duplicate UA strings.
-    apiUserAgents: [...userAgentSet].slice(0, 20),
+    apiTrafficBreakdown: trafficBreakdown,
+    // Capped — a genuinely new real client showing up in volume would still
+    // be worth seeing, but this isn't meant to survive a targeted flood.
+    apiRealUserAgents: [...realUaCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([userAgent, count]) => ({ userAgent, count })),
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
@@ -76,6 +91,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     windowLabel,
     apiCallCount: apiLogs.length,
+    apiTrafficBreakdown: trafficBreakdown,
     feedbackCount: feedbackRows.length,
     newSubscriptionCount: newSubscriptions.length,
     voteCount: voteRows.length,

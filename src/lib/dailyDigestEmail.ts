@@ -16,7 +16,13 @@ function escapeHtml(s: string): string {
 export interface DailyDigestData {
   windowLabel: string;
   apiCalls: { endpoint: string; count: number }[];
-  apiUserAgents: string[];
+  // See src/lib/classifyUserAgent.ts — "bot" is a self-described MCP
+  // directory/registry crawler, "ambiguous" is a bare generic HTTP client
+  // (curl/node/python-httpx/...) with no identifying string either way,
+  // "real" is everything else (a real browser, a named company, a
+  // specific AI-agent client). Only "real" is a genuine usage signal.
+  apiTrafficBreakdown: { bot: number; ambiguous: number; real: number };
+  apiRealUserAgents: { userAgent: string; count: number }[];
   feedbackTotal: number;
   feedbackDetails: { feedbackText: string | null; contactEmail: string | null; path: string }[];
   // scope is already the human label ("California" or "All states") — see
@@ -40,13 +46,18 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
   const resend = new Resend(apiKey);
 
   const totalApiCalls = data.apiCalls.reduce((s, c) => s + c.count, 0);
+  const { bot: botCalls, ambiguous: ambiguousCalls, real: realCalls } = data.apiTrafficBreakdown;
 
   const apiSectionHtml =
     totalApiCalls === 0
       ? "<p>No requests.</p>"
-      : `<p><strong>${totalApiCalls}</strong> total.</p>
+      : `<p><strong>${totalApiCalls}</strong> total — <strong style="color:#1B6B3C;">${realCalls} real</strong>, ${ambiguousCalls} ambiguous, ${botCalls} discovery-bot/crawler.</p>
          <ul>${data.apiCalls.map((c) => `<li>${escapeHtml(c.endpoint)}: ${c.count}</li>`).join("")}</ul>
-         ${data.apiUserAgents.length > 0 ? `<p style="color:#666;font-size:13px;">User-agents seen: ${data.apiUserAgents.map(escapeHtml).join(", ")}</p>` : ""}`;
+         ${
+           data.apiRealUserAgents.length > 0
+             ? `<p style="color:#1B6B3C;font-size:13px;"><strong>Real clients:</strong> ${data.apiRealUserAgents.map((u) => `${escapeHtml(u.userAgent)} (${u.count})`).join(", ")}</p>`
+             : `<p style="color:#666;font-size:13px;">No real (non-bot, non-ambiguous) clients this window.</p>`
+         }`;
 
   const feedbackSectionHtml =
     data.feedbackTotal === 0
@@ -91,9 +102,11 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     `WaitingForPower daily digest — ${data.windowLabel}`,
     "",
     "BOT / MCP / API CALLS",
-    totalApiCalls === 0 ? "No requests." : `${totalApiCalls} total.`,
+    totalApiCalls === 0 ? "No requests." : `${totalApiCalls} total — ${realCalls} real, ${ambiguousCalls} ambiguous, ${botCalls} discovery-bot/crawler.`,
     ...data.apiCalls.map((c) => `- ${c.endpoint}: ${c.count}`),
-    data.apiUserAgents.length > 0 ? `User-agents seen: ${data.apiUserAgents.join(", ")}` : "",
+    data.apiRealUserAgents.length > 0
+      ? `Real clients: ${data.apiRealUserAgents.map((u) => `${u.userAgent} (${u.count})`).join(", ")}`
+      : "No real (non-bot, non-ambiguous) clients this window.",
     "",
     "VISITOR FEEDBACK",
     data.feedbackTotal === 0 ? "No responses." : `${data.feedbackTotal} total.`,

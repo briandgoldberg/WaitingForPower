@@ -128,11 +128,19 @@ export function buildHearingEventsJsonLd(params: HearingEventInput): Record<stri
       // Every hearing this site tracks is a government proceeding, legally
       // open to the public at no cost — not a guess, so a real (not
       // placeholder) free Offer belongs here rather than being omitted.
+      // validFrom: no field anywhere in this pipeline records when a hearing
+      // was first publicly announced (ProjectHearing rows are deleted and
+      // recreated on every ingestion run, so even the DB row's own
+      // createdAt just reflects "last touched by ingestion," not "first
+      // seen"). Rather than fabricate a discovery date, this uses the
+      // moment this page itself was generated — an honest "valid as of
+      // today" rather than an invented announcement date.
       offers: {
         "@type": "Offer",
         price: "0",
         priceCurrency: "USD",
         availability: "https://schema.org/InStock",
+        validFrom: new Date().toISOString(),
         url,
       },
     };

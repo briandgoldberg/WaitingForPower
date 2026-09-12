@@ -22,15 +22,7 @@ export async function getRecentChanges(
     capacityValue: true,
     capacityUnit: true,
     isAggregateExample: true,
-    verdicts: { select: { vote: true } },
   } as const;
-
-  function tallyVerdicts(verdicts: { vote: string }[]): { greenVotes: number; redVotes: number } {
-    return {
-      greenVotes: verdicts.filter((v) => v.vote === "green").length,
-      redVotes: verdicts.filter((v) => v.vote === "red").length,
-    };
-  }
 
   // Project.state can hold multiple comma-joined codes (a multi-state
   // transmission/pipeline project — see splitStateCodes) — a plain SQL
@@ -64,7 +56,6 @@ export async function getRecentChanges(
         fuelType: r.project.fuelType as FuelType,
         capacityValue: r.project.capacityValue,
         capacityUnit: r.project.capacityUnit,
-        ...tallyVerdicts(r.project.verdicts),
       },
     }));
     return { changes, hasMore };
@@ -106,7 +97,6 @@ export async function getRecentChanges(
         fuelType: r.project.fuelType as FuelType,
         capacityValue: r.project.capacityValue,
         capacityUnit: r.project.capacityUnit,
-        ...tallyVerdicts(r.project.verdicts),
       },
     }));
 

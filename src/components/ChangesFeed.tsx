@@ -5,7 +5,6 @@ import Link from "next/link";
 import type { ProjectChangeDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { stateName } from "@/lib/data/usStates";
-import { GreenlightVote } from "@/components/GreenlightVote";
 
 // Bundled changeTypes are shown as one card — this picks which single
 // badge/color represents the whole bundle when more than one fired in the
@@ -131,14 +130,6 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
           </div>
         </div>
       </Link>
-      <div className="pl-5 mt-1.5">
-        <GreenlightVote
-          slug={change.project.slug}
-          initialGreen={change.project.greenVotes}
-          initialRed={change.project.redVotes}
-          compact
-        />
-      </div>
     </div>
   );
 }

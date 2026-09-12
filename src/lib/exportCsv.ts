@@ -40,8 +40,6 @@ const COLUMNS: { header: string; get: (p: ProjectDTO) => string | number | boole
   { header: "investment_waiting_usd", get: (p) => p.investmentWaiting.estimatedUsd ?? null },
   { header: "verification_status", get: (p) => p.verificationStatus },
   { header: "data_quality_note", get: (p) => p.dataQualityNote },
-  { header: "green_votes", get: (p) => p.greenVotes },
-  { header: "red_votes", get: (p) => p.redVotes },
   { header: "milestone_count", get: (p) => p.milestones.length },
   { header: "hearing_count", get: (p) => p.hearings.length },
   { header: "sources", get: (p) => p.sources.map((s) => `${s.label} (${s.url})`).join(";") },

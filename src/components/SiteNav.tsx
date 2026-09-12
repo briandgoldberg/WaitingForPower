@@ -30,7 +30,7 @@ export function SiteNav() {
             href={link.href}
             aria-current={active ? "page" : undefined}
             className={`shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 ${
-              active ? "bg-black/10 dark:bg-white/15 font-medium" : ""
+              active ? "bg-[var(--border)] font-medium" : ""
             }`}
           >
             {link.label}

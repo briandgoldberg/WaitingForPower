@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Link from "next/link";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { ReachOutButton } from "@/components/ReachOutButton";
+import { SiteNav } from "@/components/SiteNav";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -65,23 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 (previously "Contact Us" alone dropped to its own third
                 header row on mobile). Scrollbar hidden since the row fits
                 without scrolling on anything past a small phone anyway. */}
-            <nav className="flex flex-nowrap items-center gap-1 text-sm overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <Link href="/" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
-                Home
-              </Link>
-              <Link href="/projects" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
-                Projects
-              </Link>
-              <Link
-                href="/policies"
-                className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10"
-              >
-                Advocacy
-              </Link>
-              <Link href="/blog" className="shrink-0 px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
-                Blog
-              </Link>
-            </nav>
+            <SiteNav />
           </div>
         </header>
         <main className="flex-1 flex flex-col">{children}</main>

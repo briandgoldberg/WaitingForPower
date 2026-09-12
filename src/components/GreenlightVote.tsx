@@ -113,7 +113,7 @@ export function GreenlightVote({
   }
 
   return (
-    <div className={compact ? "flex items-center gap-2" : "flex flex-col gap-1.5"}>
+    <div className={compact ? "flex items-center flex-wrap gap-2" : "flex flex-col gap-1.5"}>
       {bar}
       <div className="flex items-center gap-1.5">
         <button

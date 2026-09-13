@@ -94,6 +94,42 @@
 // closed=0 list to "cancelled" generically, same as ctCscDockets.ts's and
 // wvPscDockets.ts's "closed-unclear"/generic-cancelled bucket for resolutions
 // this module doesn't itself distinguish further.
+//
+// RESOLUTION DATE — confirmed live 2026-09-13, resolving a prior audit's
+// open question ("no FINAL_ORDER-named document" was found — true, but only
+// because that audit checked the 4 real currently-OPEN candidates, none of
+// which has reached a final order yet, not because Idaho never publishes
+// one). Checked instead against all 4 real CLOSED CPCN candidates named
+// elsewhere in this header (IPC-E-24-45, IPC-E-24-46, IPC-E-25-08,
+// IPC-E-25-29): every one of their own case detail pages carries a real
+// "Orders & Notices" list where each entry is its own plain
+// "MM/DD/YYYY&nbsp;<a>FILENAME</a>" line — i.e. a real, structured,
+// per-document filed date, directly in the case detail HTML already fetched
+// by fetchCaseDetail, no PDF fetch needed (confirmed separately that the
+// underlying documents live behind lf-puc.idaho.gov's Laserfiche WebLink
+// viewer, a JS-rendered app that does not serve raw PDF bytes to a plain
+// `fetch()` — irrelevant here since the date is on the case page itself,
+// but worth recording as the reason this module still doesn't parse order
+// PDF text for granted-vs-denied, consistent with the STATUS section
+// above). All 4 real closed candidates carry a document named
+// "FINAL_ORDER_NO_<n>.PDF" (case-insensitive match on "final_order"); two of
+// the four (IPC-E-24-46, IPC-E-25-08) carry TWO such entries — apparently a
+// later reconsideration/clarifying order, not independently confirmed since
+// this module can't read the PDF text — so extractResolutionDate takes the
+// EARLIEST "final_order"-named entry's own filed date as the date the case
+// was first finally resolved, not the latest. Written as `resolutionDate`
+// (confidence "exact") only when this candidate's own defense-in-depth
+// Status check above resolves it to "cancelled" (see STATUS) — i.e. exactly
+// when this project reaches a RESOLVED_STAGES value in the first place.
+// Left undefined for every case still at "local_review", or where a case
+// does resolve but its Orders & Notices list carries no "final_order"-named
+// entry (not observed in the 4-case sample, but the field is left unset
+// rather than guessed if it ever happens). Not exercised by any of this
+// module's real currently-tracked candidates as of this writing (all 4 real
+// open candidates are, correctly, still open — see STATUS), so a live run
+// today upserts zero resolutionDate values; wired correctly for the day one
+// of them closes, or for the defensive closed-on-detail-page-only branch.
+//
 //   Real calibration data behind CONTENT_RE (see FUEL/PROJECT TYPE below)
 // deliberately used the bare word "certificate" rather than the fuller
 // phrase "certificate of public convenience" for exactly this kind of
@@ -197,6 +233,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -312,6 +349,7 @@ async function fetchOpenCaseList(): Promise<OpenCaseRow[]> {
 interface CaseDetail {
   filedDate: Date | null;
   status: string | null;
+  resolutionDate: Date | null;
 }
 
 // Real observed format: "03/11/2026". Same parseMDY shape as every other
@@ -335,11 +373,45 @@ function extractDataCell(html: string, title: string): string | null {
   return m ? stripTags(m[1]) : null;
 }
 
+// See module header RESOLUTION DATE. Isolates the "Orders & Notices" block
+// (bounded by the next `div-header-box` section, e.g. "Company"/"Staff", or
+// end of document if none follows) so a same-shaped date/link line filed
+// under a different section (e.g. "Company") can never be mistaken for an
+// order.
+const ORDERS_SECTION_RE = /Orders &amp; Notices<\/div>([\s\S]*?)(?:<div class="div-header-box">|<\/main>|$)/;
+// Each real entry observed: "MM/DD/YYYY&nbsp;<a href="...">FILENAME</a>".
+const ORDER_ENTRY_RE = /(\d{1,2}\/\d{1,2}\/\d{4})\s*&nbsp;<a[^>]*>([^<]*)<\/a>/g;
+// Real observed filename pattern for the order that actually resolves a
+// case, confirmed live across all 4 real closed CPCN candidates sampled
+// (IPC-E-24-45, IPC-E-24-46, IPC-E-25-08, IPC-E-25-29) — see module header.
+const FINAL_ORDER_NAME_RE = /final_order/i;
+
+// Extracts the earliest "FINAL_ORDER"-named document's own filed date from
+// the case detail page's "Orders & Notices" list — see module header
+// RESOLUTION DATE. Two of the four real closed candidates sampled carry
+// TWO such entries (a second, later "FINAL_ORDER_NO_..." — apparently a
+// reconsideration/clarifying order, not independently confirmed since this
+// module cannot fetch the underlying PDF text, see header); the EARLIEST is
+// used as the date the case was first finally resolved, not the latest.
+// Returns null when no such entry exists (e.g. every real currently-open
+// candidate, none of which has reached a final order yet).
+function extractResolutionDate(html: string): Date | null {
+  const section = ORDERS_SECTION_RE.exec(html)?.[1];
+  if (!section) return null;
+  let earliest: Date | null = null;
+  for (const m of section.matchAll(ORDER_ENTRY_RE)) {
+    if (!FINAL_ORDER_NAME_RE.test(m[2])) continue;
+    const d = parseMDY(m[1]);
+    if (d && (earliest === null || d.getTime() < earliest.getTime())) earliest = d;
+  }
+  return earliest;
+}
+
 async function fetchCaseDetail(caseId: string): Promise<CaseDetail> {
   const html = await fetchText(DETAIL_URL(caseId));
   const filedRaw = extractDataCell(html, "Date Filed");
   const status = extractDataCell(html, "Status");
-  return { filedDate: filedRaw ? parseMDY(filedRaw) : null, status };
+  return { filedDate: filedRaw ? parseMDY(filedRaw) : null, status, resolutionDate: extractResolutionDate(html) };
 }
 
 // See module header STATUS for why a bare "certificate" (not the fuller
@@ -471,6 +543,9 @@ function normalizeCase(row: OpenCaseRow, detail: CaseDetail): NormalizedProject 
     dateConfidence: "exact",
     currentStatus: `Idaho PUC Case ${row.caseNumber}: ${detail.status ?? "open"}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && detail.resolutionDate
+      ? { resolutionDate: detail.resolutionDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Idaho Public Utilities Commission — Case No. ${row.caseNumber}, "${row.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

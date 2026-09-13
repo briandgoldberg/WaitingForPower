@@ -172,6 +172,36 @@
 //   by chance, since a REAL Electric-utility-type §203F filing could exist
 //   in the future and must not be excluded by construction.
 //
+// RESOLUTION DATE — checked live 2026-09-13, resolving a prior audit's open
+// question (a real numbered Order document — "PSC Docket No 23-0572 Order
+// No. 10270" — was found attached to Docket 23-0572 above, but no
+// per-document date had been confirmed). Genuinely NOT available, for two
+// independent reasons, not one:
+//   (1) DelaFile's own DocketDetails.aspx page (this module's own `sources`
+//       URL) publishes an "Attached Documents" table with exactly three
+//       columns — Attachments (filename), Description, Security Level — no
+//       date column at all, confirmed against Docket 23-0572's own real
+//       attachment list; the Order's own filename ("PSC Docket No 23-0572
+//       Order No. 10270_ver_1.pdf") embeds no date either, unlike some other
+//       real filenames in the same list that do (e.g. "...(Staff Memo)
+//       07-05-2023..."). The page carries no working link, `onclick`, or
+//       `__doPostBack` for any attachment either — confirmed live it is a
+//       plain, read-only listing in this unauthenticated GET flow, so there
+//       is no way to open the actual Order PDF (to look for an internal
+//       issue date, the way ndPscDockets.ts does for North Dakota) from this
+//       page at all.
+//   (2) Independent of (1), and more fundamental: see STATUS above — this
+//       module deliberately never determines GRANTED vs. DENIED vs.
+//       WITHDRAWN, and every real candidate this module upserts is hardcoded
+//       to currentStage="local_review" (never a RESOLVED_STAGES value). A
+//       docket whose Status flips to Closed simply stops being returned by
+//       every future OPEN_STATUS_IDS search and is left untouched, not
+//       surfaced as resolved (see VANISHED-CANDIDATE FIX below). So even if
+//       a real per-document date existed, this source has no path today for
+//       a candidate to ever reach a RESOLVED_STAGES stage in the first
+//       place — resolutionDate would have nowhere to attach. Left
+//       unimplemented; not forced.
+//
 // FUEL/PROJECT TYPE & CAPACITY: §203F ("Transmission CPCN") dockets are
 // classified projectType="transmission"/fuelType="transmission" — matching
 // this series' standing convention for docket types that gate a pure

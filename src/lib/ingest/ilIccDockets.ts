@@ -114,6 +114,37 @@
 // distinguish them — every resolved (CaseStatus contains "closed") docket
 // maps to the same currentStage, and dataQualityNote says so honestly.
 //
+// RESOLUTION DATE — investigated 2026-09-13, could NOT be resolved either
+// way: a prior audit found docket P2023-0658's own Docket Sheet filing
+// history shows an "Order Entered - Final" entry (see STATUS above) but
+// hadn't confirmed whether that entry, or a linked order document, carries a
+// real date. Checking this live requires fetching a per-docket page
+// (`/docket/{id}`, `/docket/{id}/schedule`, and presumably the Docket Sheet
+// sub-page itself) — and every one of those now returns a real Google
+// reCAPTCHA gate ("Please, no robots or crawlers beyond this point.",
+// confirmed live against P2023-0658, P2026-0156, and P2015-0277 alike) that
+// did NOT exist when this module was built (2026-08-23 header date; this
+// module's own FETCHING note above says the CAPTCHA lives only on
+// /Docket/Search, which is still true — but ICC has since ALSO put one on
+// every per-docket page, not just that form). This project's own standing
+// rules prohibit solving or bypassing CAPTCHAs, so the Docket Sheet (and any
+// linked order document) could not be inspected this session — resolution
+// left genuinely undetermined, not implemented, and not worked around.
+//   This is a bigger problem than just resolutionDate: fetchDetail's own
+// CaseStatus lookup (see STATUS above) hits the exact same now-CAPTCHA'd
+// `/docket/{id}` page, so this module's EXISTING granted/denied/still-open
+// determination — not just this new resolutionDate work — is confirmed
+// broken in production as of this finding (parseDetail's own "structure
+// likely changed" error fires on every real candidate today, since
+// CASE_STATUS_RE can no longer match). The search-results endpoint itself
+// (`/docket/search/cases/results?...`, used by searchCandidates) is
+// confirmed still open, no CAPTCHA — only the per-docket sub-pages are
+// gated. Flagged as a separate, out-of-scope production issue (see the
+// spawn_task filed alongside this change) rather than patched here, since
+// fixing it is a materially different problem (and may not be fixable at
+// all without solving a CAPTCHA, which this project does not do) from the
+// resolutionDate investigation this header section documents.
+//
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields. Captions are
 // consistent enough to regex (same style as TX/SC/AZ): county names appear
 // as "...in <County[, County...]> Count(y|ies), Illinois." (single, "X

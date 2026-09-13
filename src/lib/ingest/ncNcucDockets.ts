@@ -163,6 +163,27 @@
 //   module always requests Show All whenever any orders are found, rather
 //   than trying to detect whether pagination is needed.
 //
+// RESOLUTION DATE — attempted 2026-09-13, could NOT be investigated: a
+// prior audit found the Orders portal returns real order titles ("Order
+// Issuing Certificate...", see STATUS above) but hadn't confirmed whether a
+// real date field accompanies them. Checking this live requires the same
+// starw1.ncuc.gov Orders search this module's own fetchResolution already
+// uses — and every real attempt this session (an initial request, plus one
+// retry after a pause, matching this module's own header guidance not to
+// retry in a tight loop) got Cloudflare's "Just a moment..." interstitial,
+// HTTP 403 with a `Cf-Mitigated: challenge` response header — the exact
+// "elevated suspicion" state this module's own CLOUDFLARE section above
+// already documents and warns can persist. This matches a separately
+// reported live-audit block on this same module from before this session.
+// Solving or working around a Cloudflare bot challenge is outside this
+// project's rules, so this was not attempted — resolution genuinely could
+// not be determined this session, honestly left uninvestigated rather than
+// guessed at or faked. (Sanity check: a plain, non-Cloudflare NCUC page —
+// www.ncuc.gov/Hearings/hearings.html, the same host this module's own
+// HEARING CALENDAR section already fetches — returned a normal 200 in the
+// same session, confirming the block is specific to starw1.ncuc.gov, not a
+// general connectivity problem.)
+//
 // FUEL/PROJECT TYPE, CAPACITY, COUNTY, APPLICANT: not structured fields,
 // extracted from the caption text with the same regex approach and caveats
 // as SC/AZ. Capacity in particular sometimes reflects a tap line's load

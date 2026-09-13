@@ -212,6 +212,17 @@
 // guessed at, same as ctCscDockets.ts's and maEfsbDockets.ts's own admitted
 // calibration gaps for their least-common outcomes.
 //
+// RESOLUTION DATE: detectResolution now also returns the resolving filing's
+// own Tab date (the same M/D/YYYY parsed for every filing in
+// parseDocketFilings) — that IS the real date SEC granted or denied the
+// Certificate, not a guess or this run's own fetch date. IMPORTANT: this is
+// deliberately NOT the 1/5/2026 "Order Rejecting Application for Certificate
+// of Site and Facility" filing on SEC 25-072 mentioned above — that filing
+// is a confirmed-live procedural incompleteness bounce, not a denial (see
+// STATUS above for why DENY_RE never matches "reject"), and the docket
+// continued 190+ filings past it. Set only from a filing DENY_RE/GRANT_RE
+// itself actually matches; left undefined for a still-pending docket.
+//
 // VANISHED-CANDIDATE FIX: does NOT apply here, and no diffing/stub code is
 // needed — unlike the WV/CT/TN/CA bug class this project's brief warns
 // about, this module's own candidate-fetching query is never scoped to
@@ -486,12 +497,22 @@ const DENY_RE =
 const GRANT_RE =
   /\bcertificate of site and facility\b[\s\S]{0,100}?\b(?:is\s+granted|is\s+hereby\s+granted|is\s+approved)\b|\b(?:grants?|granting|approv(?:es|ing|ed))\b[\s\S]{0,100}?\bcertificate of site and facility\b|\border\s+approving\b[\s\S]{0,150}?\b(?:application|transfer)\b/i;
 
-function detectResolution(filings: DocketFiling[]): Resolution {
+interface ResolutionResult {
+  resolution: Resolution;
+  // The resolving filing's own filed date (Tab date from Docket.aspx's
+  // filing table) — the real date SEC granted/denied the Certificate, not a
+  // guess. Null when no resolving filing was found (still pending), or
+  // (rare, defensive) when the resolving filing itself has no parseable
+  // date — see FILING_RE/parseDocketFilings.
+  date: Date | null;
+}
+
+function detectResolution(filings: DocketFiling[]): ResolutionResult {
   for (const f of filings) {
-    if (DENY_RE.test(f.title)) return "denied";
-    if (GRANT_RE.test(f.title)) return "granted";
+    if (DENY_RE.test(f.title)) return { resolution: "denied", date: f.date };
+    if (GRANT_RE.test(f.title)) return { resolution: "granted", date: f.date };
   }
-  return null;
+  return { resolution: null, date: null };
 }
 
 const TRANSMISSION_RE = /\btransmission\s+line\b|\bsubstation\b|(?:^|[^0-9])\d[\d,]*\s*kv\b/i;
@@ -584,7 +605,7 @@ function normalizeCandidate(
   const filedDates = filings.map((f) => f.date).filter((d): d is Date => d !== null);
   const filedDate = filedDates.length > 0 ? new Date(Math.min(...filedDates.map((d) => d.getTime()))) : null;
 
-  const resolution = detectResolution(filings);
+  const { resolution, date: resolutionFilingDate } = detectResolution(filings);
   const currentStage: ProjectStage = resolution === "granted" ? "approved_awaiting_construction" : resolution === "denied" ? "cancelled" : "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -625,6 +646,12 @@ function normalizeCandidate(
       ? `NH Docket ${row.docketNumber}: ${resolution} (no longer pending before the Site Evaluation Committee)`
       : `NH Docket ${row.docketNumber}: pending before the Site Evaluation Committee`,
     currentStage,
+    // See module header STATUS "RESOLUTION DATE": the resolving filing's own
+    // Tab date is the real date SEC granted/denied the Certificate — left
+    // undefined (not null) for a still-pending docket, or in the defensive
+    // case where the resolving filing itself carried no parseable date.
+    resolutionDate: resolutionFilingDate ?? undefined,
+    resolutionDateConfidence: resolutionFilingDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Site and Facility (or related siting approval) from the New Hampshire Site Evaluation Committee — Docket ${row.docketNumber}, "${row.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

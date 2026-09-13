@@ -153,6 +153,17 @@
 //     own service area covered the site after all, so Auburn no longer
 //     needed its own line. Both correctly classified `cancelled` and
 //     verified by hand against the live minutes text before shipping.
+//   - RESOLUTION DATE: because this source's real per-item outcome IS a
+//     single dated Board meeting (see above — PRB-4074 was "approved at the
+//     very same May 15, 2026 meeting the filing is first mentioned," and
+//     nothing here is ever a vaguer "sometime this quarter" filing), the
+//     meeting date of whichever mention pickResolutionMention selects as the
+//     resolving one (resolutionMention.meeting.date) IS the real,
+//     exact calendar date the Board granted/denied/dismissed/withdrew the
+//     application — not a guess, not this run's own fetch date. Set as
+//     resolutionDate/resolutionDateConfidence="exact" below whenever a
+//     resolution was actually detected; left undefined for a still-pending
+//     case (no resolving paragraph found in the window).
 //   - DENY_RE remains under-confirmed, the same documented gap as
 //     mdPscDockets.ts's own DENY_APPLICATION_RE: no real denial exists
 //     anywhere in the 24-month scanned window. A real denial IS confirmed to
@@ -911,6 +922,11 @@ function normalizeCase(
     applicant,
     currentStatus: `Nebraska PRB ${caseDisplay}: ${resolution ?? "pending before the Board"}`,
     currentStage,
+    // See module header STATUS "RESOLUTION DATE": the resolving mention's own
+    // meeting date IS the real date the Board voted, whenever a resolution
+    // was actually found — undefined (not null) for a still-pending case.
+    resolutionDate: resolution ? resolutionMention.meeting.date : undefined,
+    resolutionDateConfidence: resolution ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on approval from the Nebraska Power Review Board under Neb. Rev. Stat. §§70-1013 to 70-1014.01 — ${caseDisplay}, "${facts.text.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

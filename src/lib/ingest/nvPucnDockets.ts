@@ -130,6 +130,17 @@
 // azAccLineSiting.ts for AZ) — DENY_RE/DISMISS_RE below are a best-effort
 // keyword match, not confirmed against a real instance.
 //
+// RESOLUTION DATE: the disposition ORDER document identified above (the one
+// whose bare GRANTED/DENIED/DISMISSED note is the real signal, confirmed
+// against docket 16-06017's 1/22/2025 "GRANTED" order) carries its own real
+// filed date in the OnBase KeywordSearch response (cols[2], same field this
+// module already parses into OnBaseDoc.date) — that IS the actual date PUCN
+// issued the decision, not a guess or this run's own fetch date.
+// fetchDocketResolution now returns it alongside the resolution verdict;
+// normalizeDocket sets resolutionDate/resolutionDateConfidence="exact" from
+// it whenever a real disposition was found, left undefined for a still-
+// active docket (no order, or a later substantive filing supersedes it).
+//
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields, extracted from the
 // docket description text (identical in style/caveats to the other
 // keyword-based sources in this series). One real gotcha found by testing:
@@ -337,6 +348,11 @@ interface OnBaseDoc {
 
 interface DocketResolution {
   resolution: "granted" | "denied" | "dismissed" | null;
+  // The disposition ORDER document's own filed date (cols[2] above) — the
+  // real date PUCN issued that grant/denial/dismissal, e.g. the bare
+  // "GRANTED" order confirmed live on docket 16-06017 dated 1/22/2025 (see
+  // module header STATUS). Null whenever resolution is null.
+  resolutionDate: Date | null;
 }
 
 // See module header STATUS: an ORDER document's note is the real signal, a
@@ -385,7 +401,7 @@ async function fetchDocketResolution(docketNumber: string): Promise<DocketResolu
   }
 
   const orders = docs.filter((d) => d.type === "ORDER" && DISPOSITION_RE.test(d.note.trim()));
-  if (orders.length === 0) return { resolution: null };
+  if (orders.length === 0) return { resolution: null, resolutionDate: null };
 
   orders.sort((a, b) => b.date.getTime() - a.date.getTime());
   const latestDisposition = orders[0];
@@ -393,12 +409,12 @@ async function fetchDocketResolution(docketNumber: string): Promise<DocketResolu
   const laterSubstantiveDoc = docs.some(
     (d) => !ADMINISTRATIVE_DOC_TYPES.has(d.type) && d.date.getTime() > latestDisposition.date.getTime(),
   );
-  if (laterSubstantiveDoc) return { resolution: null };
+  if (laterSubstantiveDoc) return { resolution: null, resolutionDate: null };
 
   const note = latestDisposition.note.trim().toUpperCase();
-  if (note === "GRANTED") return { resolution: "granted" };
-  if (note === "DENIED") return { resolution: "denied" };
-  return { resolution: "dismissed" };
+  if (note === "GRANTED") return { resolution: "granted", resolutionDate: latestDisposition.date };
+  if (note === "DENIED") return { resolution: "denied", resolutionDate: latestDisposition.date };
+  return { resolution: "dismissed", resolutionDate: latestDisposition.date };
 }
 
 // Requires an explicit generating-facility phrase to co-occur with a fuel
@@ -520,6 +536,11 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
     applicant,
     currentStatus: `Nevada PUCN docket ${candidate.docket}: ${resolution.resolution ?? "active"}`,
     currentStage,
+    // See module header STATUS "RESOLUTION DATE": the disposition ORDER's own
+    // filed date is the real date PUCN granted/denied/dismissed this permit —
+    // undefined (not null) whenever no such order was found (still active).
+    resolutionDate: resolution.resolutionDate ?? undefined,
+    resolutionDateConfidence: resolution.resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Utility Environmental Protection Act permit from the Public Utilities Commission of Nevada — Docket No. ${candidate.docket}, "${candidate.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

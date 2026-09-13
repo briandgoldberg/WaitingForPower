@@ -101,6 +101,24 @@
 //     denial was available to confirm DENY_RE positively fires on one —
 //     same caveat azAccLineSiting.ts documented for its own DENY_RE.
 //
+// RESOLUTION DATE — a real, confirmed-live field gotcha found while wiring
+// this up, not assumed: the PublicDocuments response's `FiledDate` field
+// (.NET JSON date format) is the ASP.NET DateTime.MinValue sentinel
+// ("/Date(-62135578800000)/", i.e. "no real date") on EVERY real
+// Orders/Correspondence document checked, including both of this module's
+// own calibration examples — 06-T-1040's real grant order ("Order Adopting
+// the Terms of a Joint Proposal ... and Granting Certificate...") and Alfred
+// Oaks Solar's real Track 2 grant ("2024.09.10_Alfred_Oaks_Solar_-_Final_
+// Siting_Permit_-_Signed"). A SEPARATE plain "MM/DD/YYYY" string field on the
+// same document, `DateFiled` (not `FiledDate`), holds the real value in both
+// cases — confirmed against 06-T-1040 (DateFiled "04/24/2009", i.e. the
+// Certificate was actually granted in 2009, distinct from the docket's own
+// 8/25/2006 application StartDate the header example above cites) and
+// Alfred Oaks Solar (DateFiled "09/10/2024", matching that document's own
+// filename date). fetchDetail reads `DateFiled` via parseMDY for exactly
+// this reason; using `FiledDate` here would have produced a garbage 1st-
+// century "resolution date" on every single real candidate.
+//
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields, but both tracks'
 // titles are unusually descriptive and consistent (DPS's own template
 // language: "...to Construct and Operate a 100 MW Major Renewable Energy
@@ -255,6 +273,10 @@ const EXCLUDE_RE = /\bfor\s+an?\s+amendment\b|\btransfer\s+of\s+an?\s+certificat
 
 interface DocketDetail {
   resolution: "granted" | "denied" | null;
+  // The resolving document's own `DateFiled` (see fetchDetail for why this,
+  // not `FiledDate`, is the real field to read) — the actual date DPS issued
+  // the grant/denial. Null whenever resolution is null.
+  resolutionDate: Date | null;
 }
 
 // See module header STATUS. Runs against every filed document's title
@@ -273,7 +295,7 @@ async function fetchDetail(matterId: number): Promise<DocketDetail> {
   const res = await fetch(`${BASE_URL}/CaseMaster/PublicDocuments/${matterId}`);
   if (!res.ok) throw new Error(`NY DPS detail request failed (${res.status}) for matter ${matterId}`);
   const text = await res.text();
-  if (text.trim().length === 0) return { resolution: null };
+  if (text.trim().length === 0) return { resolution: null, resolutionDate: null };
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -287,20 +309,35 @@ async function fetchDetail(matterId: number): Promise<DocketDetail> {
       `NY DPS detail response for matter ${matterId} wasn't a JSON array — the endpoint shape likely changed. Check fetchDetail in src/lib/ingest/nyDpsDockets.ts against a fresh response.`,
     );
   }
-  const titles = (raw as Record<string, unknown>[]).map((d) => normalizeSeparators(stripTags(String(d.DocTitle ?? ""))));
+  // See module header RESOLUTION DATE: each document's own `FiledDate` (.NET
+  // JSON date field) was confirmed live to be the ASP.NET DateTime.MinValue
+  // sentinel ("/Date(-62135578800000)/") on EVERY real Orders/Correspondence
+  // document checked — never a real value — while a separate plain
+  // "MM/DD/YYYY" string field, `DateFiled`, holds the real filed date
+  // (confirmed against 06-T-1040's real grant order, DateFiled "04/24/2009",
+  // and Alfred Oaks Solar's real Track 2 grant, DateFiled "09/10/2024",
+  // matching that document's own filename date). This module therefore
+  // reads `DateFiled`, not `FiledDate`, for the resolution date.
+  const docs = (raw as Record<string, unknown>[]).map((d) => ({
+    title: normalizeSeparators(stripTags(String(d.DocTitle ?? ""))),
+    date: parseMDY(d.DateFiled as string | undefined),
+  }));
 
   let resolution: DocketDetail["resolution"] = null;
-  for (const title of titles) {
-    if (GRANT_RE.test(title)) {
+  let resolutionDate: Date | null = null;
+  for (const doc of docs) {
+    if (GRANT_RE.test(doc.title)) {
       resolution = "granted";
+      resolutionDate = doc.date;
       break;
     }
-    if (DENY_RE.test(title)) {
+    if (DENY_RE.test(doc.title)) {
       resolution = "denied";
+      resolutionDate = doc.date;
       break;
     }
   }
-  return { resolution };
+  return { resolution, resolutionDate };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -423,6 +460,10 @@ function normalizeMatter(search: MatterSearchResult, detail: DocketDetail, track
     applicant,
     currentStatus: `New York DPS Case ${search.caseOrMatterNumber}: ${detail.resolution ?? "active"}`,
     currentStage,
+    // See module header RESOLUTION DATE: the resolving document's own real
+    // `DateFiled` — undefined (not null) for a still-active docket.
+    resolutionDate: detail.resolutionDate ?? undefined,
+    resolutionDateConfidence: detail.resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a determination from the New York Department of Public Service under ${trackLabel} — Case No. ${search.caseOrMatterNumber}, "${search.matterTitle}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

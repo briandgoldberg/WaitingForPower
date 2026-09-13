@@ -136,6 +136,16 @@
 // filed documents and zero in the ORDERS folder), the docket is still
 // pending — the correct default.
 //
+// RESOLUTION DATE: fetchDocketResolution now also returns the resolving
+// ORDERS-folder document's own filed date (the CaseSummary.aspx date column
+// already parsed for every document) — that IS the real date BPU issued the
+// decision, confirmed against EO15030383's own "DECISION AND ORDER" filed
+// 11/30/2017 (see STATUS above). normalizeCandidate sets
+// resolutionDate/resolutionDateConfidence="exact" from it whenever a real
+// grant/deny disposition was found in that order's text; left undefined for
+// a still-pending docket (no ORDERS-folder document yet, or the fetched PDF
+// exceeded MAX_ORDER_PDF_BYTES and was skipped).
+//
 // PDF TEXT EXTRACTION — a real engineering finding, not assumed: BPU order
 // PDFs are digitally generated (not scanned images), confirmed by hand by
 // inflating their FlateDecode content streams and finding real Tj/TJ
@@ -514,6 +524,12 @@ const DENY_RE = /\bis hereby\s+DENIED\b|\bDENIES?\s+the\s+waiver\b/i;
 
 interface DocketResolution {
   resolution: "granted" | "denied" | null;
+  // The most-recent ORDERS-folder document's own filed date (CaseSummary.aspx
+  // date column, same field parseMDY already reads for every doc) — the real
+  // date BPU issued that order, confirmed against EO15030383's own "DECISION
+  // AND ORDER" (filed 11/30/2017) — not this run's own fetch date. Null
+  // whenever resolution is null.
+  date: Date | null;
 }
 
 async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<DocketResolution> {
@@ -521,7 +537,7 @@ async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<Do
   const orders = docs
     .filter((d) => d.folder === "ORDERS")
     .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
-  if (orders.length === 0) return { resolution: null };
+  if (orders.length === 0) return { resolution: null, date: null };
 
   const latest = orders[0];
   const headRes = await fetchWithCookieBootstrap(
@@ -531,7 +547,7 @@ async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<Do
   ).catch(() => null);
   const contentLength = headRes?.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_ORDER_PDF_BYTES) {
-    return { resolution: null };
+    return { resolution: null, date: null };
   }
 
   const res = await fetchWithCookieBootstrap(jar, `${BASE_URL}/DocumentHandler.ashx?document_id=${latest.docId}`, {
@@ -539,11 +555,11 @@ async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<Do
   });
   if (!res.ok) throw new Error(`NJ BPU DocumentHandler.ashx request failed (${res.status}) for document ${latest.docId}`);
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > MAX_ORDER_PDF_BYTES) return { resolution: null };
+  if (buf.length > MAX_ORDER_PDF_BYTES) return { resolution: null, date: null };
   const text = extractPdfText(buf);
-  if (GRANT_RE.test(text)) return { resolution: "granted" };
-  if (DENY_RE.test(text)) return { resolution: "denied" };
-  return { resolution: null };
+  if (GRANT_RE.test(text)) return { resolution: "granted", date: latest.date };
+  if (DENY_RE.test(text)) return { resolution: "denied", date: latest.date };
+  return { resolution: null, date: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -685,6 +701,12 @@ function normalizeCandidate(candidate: TrackedCandidate, resolution: DocketResol
     applicant,
     currentStatus: `New Jersey BPU Docket ${search.docket}: ${resolution.resolution ?? "active"}`,
     currentStage,
+    // See module header STATUS "RESOLUTION DATE": the ORDERS-folder document's
+    // own filed date is the real date BPU granted/denied — undefined (not
+    // null) for a still-pending docket (no order found, over-size, or no
+    // disposition text matched).
+    resolutionDate: resolution.date ?? undefined,
+    resolutionDateConfidence: resolution.date ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on ${trackLabel} from the New Jersey Board of Public Utilities -- Docket No. ${search.docket}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

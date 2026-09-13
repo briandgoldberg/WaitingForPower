@@ -91,6 +91,17 @@
 // string blindly — consistent with this series' standing practice, even
 // though in NM's case the field turned out to be trustworthy.
 //
+// RESOLUTION DATE: the per-candidate document-detail endpoint (see FETCHING)
+// returns each filed document's own `fileddate` — for whichever "FINAL
+// ORDER"-named document classifyResolution used to determine the
+// grant/deny/dismiss outcome above, that `fileddate` IS the real date PRC
+// issued the decision, not a guess. Set only when a real FINAL_ORDER_RE
+// document was actually found (hasFinalOrder); a docket whose
+// `casedatastatus` alone says "Closed"/"Rejected" with no such document in
+// its history (not observed live as of this writing, but structurally
+// possible — see STATUS above) is left with resolutionDate undefined rather
+// than guessed, and flagged in its own dataQualityNote.
+//
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields; caption-text
 // keyword extraction, same approach and caveats as the other keyword-based
 // sources in this series. One NM-specific wrinkle: this CCN_PPA category
@@ -330,18 +341,28 @@ const FINAL_ORDER_RE = /\bfinal order\b/i;
 
 // Cross-checks `casedatastatus` against the docket's actual document
 // history rather than trusting it blindly — see module header STATUS.
-function classifyResolution(documents: RawDocument[]): { hasFinalOrder: boolean; resolution: Resolution } {
+// Also surfaces the resolving "FINAL ORDER" document's own `fileddate` (see
+// RESOLUTION DATE in the module header) — the real date PRC issued that
+// order, not a guess. Null whenever no FINAL_ORDER_RE document was found
+// (including the case where `casedatastatus` alone says "Closed" but no
+// document actually matching "final order" backs that up — a real gap
+// documented in normalizeDocket, not papered over with a fabricated date).
+function classifyResolution(documents: RawDocument[]): { hasFinalOrder: boolean; resolution: Resolution; resolutionDate: Date | null } {
   let hasFinalOrder = false;
   let resolution: Resolution = null;
+  let resolutionDate: Date | null = null;
   for (const doc of documents) {
     if (!FINAL_ORDER_RE.test(doc.documentname)) continue;
     hasFinalOrder = true;
+    const docDate = parseIsoDate(doc.fileddate);
     if (DISMISS_RE.test(doc.documentname)) {
       resolution = "dismissed";
+      resolutionDate = docDate;
       break;
     }
     if (DENY_RE.test(doc.documentname)) {
       resolution = "denied";
+      resolutionDate = docDate;
       break;
     }
     // A "FINAL ORDER" with no denial/dismissal language is treated as a
@@ -349,8 +370,9 @@ function classifyResolution(documents: RawDocument[]): { hasFinalOrder: boolean;
     // confirmed real denial was observed in NM's CCN_PPA history to
     // calibrate against either).
     resolution = "granted";
+    resolutionDate = docDate;
   }
-  return { hasFinalOrder, resolution };
+  return { hasFinalOrder, resolution, resolutionDate };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -416,7 +438,7 @@ function normalizeDocket(
   const county = extractCounty(search.caption);
   const isPortfolio = PORTFOLIO_RE.test(search.caption);
 
-  const { hasFinalOrder, resolution } = classifyResolution(documents);
+  const { hasFinalOrder, resolution, resolutionDate } = classifyResolution(documents);
   const isActive = search.status === "Active" && !hasFinalOrder;
 
   let currentStage: ProjectStage;
@@ -434,6 +456,11 @@ function normalizeDocket(
   if (hasFinalOrder) {
     dataQualityNoteParts.push(
       `Docket status field reads "${search.status}" but a document matching "final order" was found in its filing history, so this is treated as resolved rather than still waiting — see the ingestion module header for how this was calibrated.`,
+    );
+  }
+  if (!isActive && !resolutionDate) {
+    dataQualityNoteParts.push(
+      `Docket status field reads "${search.status}" but no document matching "final order" was found in its filing history, so no confirmed resolution date could be extracted.`,
     );
   }
   if (isPortfolio) {
@@ -468,6 +495,14 @@ function normalizeDocket(
     dateConfidence: "exact",
     currentStatus: `New Mexico PRC docket ${search.docketNumber}: ${isActive ? "active" : (resolution ?? "closed")}`,
     currentStage,
+    // See module header RESOLUTION DATE: the resolving FINAL ORDER document's
+    // own fileddate is the real date PRC issued it — undefined (not null)
+    // whenever this docket is still active, OR when `casedatastatus` alone
+    // says "Closed"/"Rejected" but no document actually matching "final
+    // order" was found to confirm a real date against (a real, documented gap
+    // — not a guess).
+    resolutionDate: !isActive ? resolutionDate ?? undefined : undefined,
+    resolutionDateConfidence: !isActive && resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the New Mexico Public Regulation Commission — Docket No. ${search.docketNumber}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

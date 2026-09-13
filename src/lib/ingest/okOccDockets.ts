@@ -109,6 +109,28 @@
 // calibrate DENY_RE against — same gap noted in nvPucnDockets.ts/
 // azAccLineSiting.ts for their own unconfirmed DENY_RE.
 //
+// RESOLUTION DATE — confirmed live 2026-09-13: every one of the 4 real
+// cases' own dispositive order/dismissal document carries the exact same
+// "CORPORATION COMMISSION OF OKLAHOMA / DONE AND PERFORMED THIS <Nth> DAY
+// OF <MONTH> <YEAR>." boilerplate on page 1, right above the Commission
+// Secretary's signature — the order's own real issuance date. This is used
+// INSTEAD OF the WebLink "CreationDate" grid column (see APPLICANT / FILED
+// DATE / COUNTY below, and parseWebLinkDate): CreationDate is an imaging-
+// system timestamp that was confirmed live to be WRONG for this purpose —
+// PUD2025-000069's real Final Order has CreationDate 4/8/2026 but its own
+// printed text reads "DONE AND PERFORMED THIS 23rd DAY OF APRIL 2026" (a
+// real 15-day gap; WebLink's separate LastModified column happens to match
+// here, but that's incidental, not something to rely on either — the
+// order's own printed text is the only genuinely reliable source). Fetched
+// via DocumentService.aspx/GetTextHtmlForPage (found the same way the
+// three JSON endpoints above were: reading the compiled Angular bundle,
+// then confirming live) for the specific dispositive document only (never
+// every document in the case, to keep the extra per-case request count
+// small). Written as `resolutionDate` with confidence "exact" (a full
+// day-level date). Left undefined for the one still-open case (if any) and
+// for the rare case whose dispositive order's text doesn't match this
+// boilerplate.
+//
 // APPLICANT / FILED DATE / COUNTY: no free-text case title exists to
 // extract from (unlike title-based states in this series) — instead pulled
 // from each case's own opening filing: "ECF Applicant" (present on every
@@ -167,6 +189,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -330,6 +353,10 @@ function deriveCaseNumber(doc: WebLinkDocument): string | null {
 
 interface CaseResolution {
   resolution: "granted" | "denied" | "dismissed" | null;
+  // The dispositive order/dismissal document itself — kept so its own
+  // printed text can be fetched separately for a real resolution date (see
+  // RESOLUTION DATE below); null whenever resolution is null.
+  dispositiveDoc: WebLinkDocument | null;
 }
 
 const GRANT_RE = /\bgrant/i;
@@ -343,17 +370,61 @@ function determineResolution(docs: WebLinkDocument[]): CaseResolution {
   const dismissal = docs.find(
     (d) => d.metadata["ECF Document Type"] === "Dismissal Order" || d.metadata["Order Type"] === "Dismissal Order",
   );
-  if (dismissal) return { resolution: "dismissed" };
+  if (dismissal) return { resolution: "dismissed", dispositiveDoc: dismissal };
 
   const finalOrders = docs
     .filter((d) => d.metadata["Order Type"] === "Final")
     .sort((a, b) => (b.creationDate?.getTime() ?? 0) - (a.creationDate?.getTime() ?? 0));
-  if (finalOrders.length === 0) return { resolution: null };
+  if (finalOrders.length === 0) return { resolution: null, dispositiveDoc: null };
 
   const title = finalOrders[0].metadata["Order Title"] ?? "";
-  if (DENY_RE.test(title)) return { resolution: "denied" };
-  if (GRANT_RE.test(title)) return { resolution: "granted" };
-  return { resolution: null };
+  if (DENY_RE.test(title)) return { resolution: "denied", dispositiveDoc: finalOrders[0] };
+  if (GRANT_RE.test(title)) return { resolution: "granted", dispositiveDoc: finalOrders[0] };
+  return { resolution: null, dispositiveDoc: null };
+}
+
+// See module header RESOLUTION DATE — confirmed live 2026-09-13 against all
+// 4 real cases' own dispositive order/dismissal documents: every one's
+// printed page 1 carries the SAME "CORPORATION COMMISSION OF OKLAHOMA /
+// DONE AND PERFORMED THIS <Nth> DAY OF <MONTH> <YEAR>." boilerplate right
+// above the Commission Secretary's signature line — the order's own real
+// issuance date, structurally guaranteed present on every OCC order this
+// way (not a one-off). This is deliberately used INSTEAD OF the
+// "CreationDate" WebLink grid column (see the module's WebLinkDocument
+// type/parseWebLinkDate): confirmed live that CreationDate can be wrong for
+// this purpose — PUD2025-000069's real Final Order has CreationDate
+// 4/8/2026 but its own printed text says "DONE AND PERFORMED THIS 23rd DAY
+// OF APRIL 2026" (matching WebLink's separate LastModified timestamp, not
+// CreationDate) — a 15-day gap between an imaging-system timestamp and the
+// order's own real date. Fetched via DocumentService.aspx/
+// GetTextHtmlForPage (repoName, documentId=entryId, pageNum, showAnn,
+// searchUuid) — found by reading the same compiled Angular bundle
+// (app/dist/search/main.js) the module header's FETCHING section already
+// used to find the other endpoints; confirmed to return real extracted
+// document text (not just formatted HTML) in a `text` field.
+const DONE_AND_PERFORMED_RE = /DONE AND PERFORMED THIS\s+(\d{1,2})(?:st|nd|rd|th)?\s+DAY OF\s+([A-Za-z]+)\s+(\d{4})/i;
+
+function parseDoneAndPerformedDate(text: string): Date | null {
+  const m = DONE_AND_PERFORMED_RE.exec(text);
+  if (!m) return null;
+  const d = new Date(`${m[2]} ${m[1]}, ${m[3]}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+async function fetchOrderFirstPageText(entryId: number): Promise<string | null> {
+  try {
+    const data = await postJson("DocumentService.aspx/GetTextHtmlForPage", {
+      repoName: REPO_NAME,
+      documentId: entryId,
+      pageNum: 1,
+      showAnn: false,
+      searchUuid: "",
+    });
+    const text = (data as { text?: string }).text;
+    return typeof text === "string" ? text : null;
+  } catch {
+    return null;
+  }
 }
 
 // The case's opening filing — identified by lowest ECF Docket Entry Number,
@@ -395,7 +466,12 @@ export interface IngestSummary {
   errors: { matchKey: string; message: string }[];
 }
 
-function normalizeCase(caseNumber: string, docs: WebLinkDocument[], resolution: CaseResolution): NormalizedProject | null {
+function normalizeCase(
+  caseNumber: string,
+  docs: WebLinkDocument[],
+  resolution: CaseResolution,
+  resolutionDate: Date | null,
+): NormalizedProject | null {
   const opening = findOpeningFiling(docs);
   const applicant = opening?.metadata["ECF Applicant"] ?? `OCC Docket ${caseNumber}`;
   const filedDate = opening?.creationDate ?? null;
@@ -443,6 +519,9 @@ function normalizeCase(caseNumber: string, docs: WebLinkDocument[], resolution: 
     dateConfidence: "approximate",
     currentStatus: `Oklahoma OCC PUD Case ${caseNumber}: ${resolution.resolution ?? "active"}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && resolutionDate
+      ? { resolutionDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on a High Voltage Transmission Certificate of Authority from the Oklahoma Corporation Commission — PUD Case No. ${caseNumber}, filed by ${applicant}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -499,7 +578,13 @@ export async function ingestOkOccDockets(maxCandidates = MAX_CANDIDATES): Promis
       // carry the same Relief Types tag as its case's opening filing.
       const docs = await searchByCaseNumber(candidate.caseNumber);
       const resolution = determineResolution(docs);
-      const normalized = normalizeCase(candidate.caseNumber, docs, resolution);
+      let resolutionDate: Date | null = null;
+      if (resolution.dispositiveDoc) {
+        await sleep(REQUEST_DELAY_MS);
+        const pageText = await fetchOrderFirstPageText(resolution.dispositiveDoc.entryId);
+        if (pageText) resolutionDate = parseDoneAndPerformedDate(pageText);
+      }
+      const normalized = normalizeCase(candidate.caseNumber, docs, resolution, resolutionDate);
       if (normalized) {
         toUpsert.push(normalized);
         if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);

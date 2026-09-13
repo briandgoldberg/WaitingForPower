@@ -68,6 +68,22 @@
 // wrong" convention this series already uses elsewhere (see
 // vtPucDockets.ts's own REAL REGEX GOTCHA note).
 //
+// RESOLUTION DATE — confirmed live 2026-09-12 against PU-24-079's real
+// order PDF (the same one ORDER PDF PARSING above already fetches for
+// grant/deny/dismiss classification): its caption carries a bare "ORDER"
+// line immediately followed, on its own next line, by the order's real
+// issue date ("Case No. PU-24-79\nORDER\nApril 29, 2024\n"). That date —
+// not this case's stale "Date Closed" field (see STALE/UNRELIABLE above)
+// and not the date this ingestion run happened to execute — is written as
+// `resolutionDate` (confidence "exact", a full calendar date) whenever the
+// order resolves the case to "approved_awaiting_construction" or
+// "cancelled". Falls back to the Commission's signature-block "Bismarck,
+// North Dakota, <date>." line (last occurrence, since a reissuance order's
+// own recital text can reference OLDER orders' dates earlier in the body)
+// if the caption match ever fails. Left undefined (not null) for every
+// case still at "local_review" or where no date could be parsed from the
+// order text — see extractOrderDate/ORDER_CAPTION_DATE_RE below.
+//
 // EXCLUDED: cases whose own Description contains "Transfer" — a real,
 // confirmed pattern (PU-24-079: "Joint Consolidated Application for
 // Transfer of Certificates of Corridor Compatibility and Route Permits")
@@ -135,6 +151,7 @@
 import { PDFParse } from "pdf-parse";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -377,26 +394,65 @@ const GRANT_RE = /\bis (?:hereby )?(?:approved|granted)\b|\bare issued to\b|\bce
 const DENY_RE = /\bis (?:hereby )?denied\b|\bapplication is denied\b/i;
 const DISMISS_RE = /\bis (?:hereby )?dismissed\b|\bis (?:hereby )?withdrawn\b/i;
 
-async function resolveStageFromOrders(getId: string, getId2: string, entries: DocketEntry[]): Promise<ProjectStage> {
+// See module header RESOLUTION DATE — confirmed live 2026-09-12 against
+// PU-24-079's real order PDF (webdocs/case/24-0079/020-010.pdf): the
+// caption always carries a bare "ORDER" line immediately followed, on its
+// own next line, by the order's real issue date — "Case No. PU-24-79\n
+// ORDER\nApril 29, 2024\n". That caption date is the primary signal (first
+// in the document, unambiguous). Fallback: the Commission's own signature
+// block on any attached certificate/permit page repeats it as "Bismarck,
+// North Dakota, <date>." — the LAST such occurrence is used since a
+// reissued-certificate order (like PU-24-079) can also reference OLDER
+// orders' dates earlier in its own recital text (e.g. "Orders dated April
+// 8, 2015, and April 29, 2015, in Case No. PU-14-689"), so scanning
+// anywhere in the body for a bare date is not safe. Based on one confirmed
+// real order — same "one real example, documented, iterate if wrong"
+// convention as GRANT_RE/DENY_RE/DISMISS_RE above.
+const ORDER_CAPTION_DATE_RE = /\bORDER\s*\r?\n\s*([A-Za-z]+ \d{1,2},\s*\d{4})/;
+const ORDER_SIGNOFF_DATE_RE = /Bismarck,\s*North Dakota,\s*([A-Za-z]+ \d{1,2},\s*\d{4})/gi;
+
+function extractOrderDate(text: string): Date | null {
+  const captionMatch = ORDER_CAPTION_DATE_RE.exec(text);
+  if (captionMatch) {
+    const d = new Date(captionMatch[1]);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  let lastSignoff: string | null = null;
+  for (const m of text.matchAll(ORDER_SIGNOFF_DATE_RE)) lastSignoff = m[1];
+  if (lastSignoff) {
+    const d = new Date(lastSignoff);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+interface OrderResolution {
+  stage: ProjectStage;
+  orderDate: Date | null;
+}
+
+async function resolveStageFromOrders(getId: string, getId2: string, entries: DocketEntry[]): Promise<OrderResolution> {
   const orderEntries = entries.filter((e) => e.type.toLowerCase() === "order");
-  if (orderEntries.length === 0) return "local_review";
+  if (orderEntries.length === 0) return { stage: "local_review", orderDate: null };
 
   // Most recent order (highest docket sequence number) governs.
   const latest = orderEntries.reduce((a, b) => (Number(b.getId3) > Number(a.getId3) ? b : a));
   await sleep(REQUEST_DELAY_MS);
   const pdfUrl = await findOrderPdfUrl(getId, getId2, latest.getId3);
-  if (!pdfUrl) return "local_review";
+  if (!pdfUrl) return { stage: "local_review", orderDate: null };
 
   await sleep(REQUEST_DELAY_MS);
   const res = await fetch(pdfUrl, { headers: { "User-Agent": USER_AGENT } });
-  if (!res.ok) return "local_review";
+  if (!res.ok) return { stage: "local_review", orderDate: null };
   const buf = Buffer.from(await res.arrayBuffer());
   const parser = new PDFParse({ data: buf });
   const { text } = await parser.getText();
 
-  if (DENY_RE.test(text) || DISMISS_RE.test(text)) return "cancelled";
-  if (GRANT_RE.test(text)) return "approved_awaiting_construction";
-  return "local_review";
+  let stage: ProjectStage = "local_review";
+  if (DENY_RE.test(text) || DISMISS_RE.test(text)) stage = "cancelled";
+  else if (GRANT_RE.test(text)) stage = "approved_awaiting_construction";
+
+  return { stage, orderDate: stage !== "local_review" ? extractOrderDate(text) : null };
 }
 
 const COUNTY_RE = /-\s*([A-Z][a-zA-Z]+(?:\s(?:and|&)\s[A-Z][a-zA-Z]+)*)\s+Ct(?:y|ys|ies)?\.?$|-\s*([A-Z][a-zA-Z]+(?:\s(?:and|&)\s[A-Z][a-zA-Z]+)*)\s+Count(?:y|ies)\.?$/i;
@@ -457,7 +513,7 @@ async function normalizeCandidate(
   await sleep(REQUEST_DELAY_MS);
   const detailHtml = await getPage(`pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}`);
   const entries = parseDocketEntries(detailHtml);
-  const currentStage = await resolveStageFromOrders(listing.getId, listing.getId2, entries);
+  const { stage: currentStage, orderDate } = await resolveStageFromOrders(listing.getId, listing.getId2, entries);
 
   const matchKey = resolveMatchKey("nd-psc", listing.caseNumber);
   const hearings = upcomingHearings.get(listing.caseNumber) ?? [];
@@ -515,6 +571,9 @@ async function normalizeCandidate(
     dateConfidence: "exact",
     currentStatus: `ND PSC Case ${listing.caseNumber}: ${currentStage === "local_review" ? "Pending (no order yet)" : currentStage}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && orderDate
+      ? { resolutionDate: orderDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility siting permit from the North Dakota Public Service Commission, pursuant to N.D.C.C. Ch. 49-22 — Case No. ${listing.caseNumber}, "${listing.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

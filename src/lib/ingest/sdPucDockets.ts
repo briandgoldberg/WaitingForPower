@@ -54,6 +54,31 @@
 // GRANT_RE/DENY_RE/WITHDRAW_RE), the only place this source's data is
 // actually kept current.
 //
+// RESOLUTION DATE — confirmed live 2026-09-13 against EL21-018's real order
+// history: each "Orders:" list entry is its own bullet with a leading
+// "MM/DD/YY - <order title>" — parsed per-entry (parseOrderEntries) rather
+// than the old whole-blob GRANT_RE/DENY_RE/WITHDRAW_RE scan, so the SPECIFIC
+// order that actually resolves the docket carries its own real date forward
+// as resolutionDate (confidence "exact"): EL21-018's real disposition entry,
+// "01/10/23 - Order Granting Joint Motion for Approval of Settlement
+// Stipulation; Order Granting Permit to Construct Facility; Notice of
+// Entry," yields 2023-01-10 — matching this module's own confirmed real
+// finding above exactly. The most recent classifying entry wins (same
+// "most recent order governs" convention this series' other order-scanning
+// modules use), so a later denial/withdrawal correctly supersedes an
+// earlier grant if one is ever found.
+//   A real, confirmed-live false positive was found and fixed doing this:
+// the SAME EL21-018 docket also has "01/10/23 - Order Granting Motion to
+// Withdraw Party Status" — an INTERVENOR (Judi & Michael Bollweg) dropping
+// their own party status, not the applicant withdrawing the permit
+// application. The old whole-blob scan happened to still classify this
+// docket correctly (GRANT_RE matched somewhere in the combined text
+// regardless of this false signal), but the per-entry scan this feature
+// needs would otherwise misattribute "withdrawn" to some other real docket
+// whose party-status withdrawal has no later grant order in the same text —
+// classifyEntry now excludes any entry mentioning "party status" for
+// exactly this reason.
+//
 // LOCATION: unlike Vermont's town-only captions elsewhere in this series,
 // SD's own docket captions name the county (or counties, for a line that
 // crosses more than one) directly in the caption text — e.g. "in Hyde
@@ -110,6 +135,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -280,17 +306,89 @@ const GRANT_RE = /order granting[\s\S]{0,120}?(?:permit|facility permit)/i;
 const DENY_RE = /order denying[\s\S]{0,120}?permit/i;
 const WITHDRAW_RE = /order (?:granting[\s\S]{0,40}?motion to )?(?:dismiss|withdraw)/i;
 
-async function fetchOrdersSectionText(year: string, docketNumber: string): Promise<string> {
+// See module header RESOLUTION DATE. Each real "Orders:" list entry is its
+// own `<li>` — confirmed live against EL21-018's real order history — whose
+// own text always leads with a "MM/DD/YY - <order title>" date, e.g. "01/10/
+// 23 - Order Granting Joint Motion for Approval of Settlement Stipulation;
+// Order Granting Permit to Construct Facility; Notice of Entry". Parsed here
+// per-entry (rather than the old whole-section blob scan) so the SPECIFIC
+// order that actually decides the docket carries its own real date forward.
+const ORDER_LI_RE = /<li>([\s\S]*?)<\/li>/g;
+const ORDER_ENTRY_DATE_RE = /^(\d{2})\/(\d{2})\/(\d{2})\s*-\s*/;
+
+interface OrderEntry {
+  date: Date | null;
+  text: string;
+}
+
+function parseOrderEntries(ordersHtml: string): OrderEntry[] {
+  const entries: OrderEntry[] = [];
+  for (const m of ordersHtml.matchAll(ORDER_LI_RE)) {
+    const text = decodeHtmlEntities(m[1]);
+    const dm = ORDER_ENTRY_DATE_RE.exec(text);
+    let date: Date | null = null;
+    if (dm) {
+      const [, mm, dd, yy] = dm;
+      const d = new Date(2000 + Number(yy), Number(mm) - 1, Number(dd));
+      if (!Number.isNaN(d.getTime())) date = d;
+    }
+    entries.push({ date, text: dm ? text.slice(dm[0].length) : text });
+  }
+  return entries;
+}
+
+async function fetchOrderEntries(year: string, docketNumber: string): Promise<OrderEntry[]> {
   const url = `${BASE_URL}/${year}/${docketNumber}.aspx`;
   const html = await fetchText(url);
   const ordersMatch = /Orders:<\/strong>([\s\S]*?)(?:<p><strong>|<\/div>\s*<\/div>)/i.exec(html);
-  return ordersMatch ? decodeHtmlEntities(ordersMatch[1]) : "";
+  return ordersMatch ? parseOrderEntries(ordersMatch[1]) : [];
 }
 
-function resolveStage(ordersText: string): ProjectStage {
-  if (GRANT_RE.test(ordersText)) return "approved_awaiting_construction";
-  if (DENY_RE.test(ordersText) || WITHDRAW_RE.test(ordersText)) return "cancelled";
-  return "local_review";
+type Resolution = "granted" | "denied" | "withdrawn" | null;
+
+// A real, confirmed-live false positive found while adding resolutionDate
+// support (2026-09-13): EL21-018's own real order history has an entry
+// "Order Granting Motion to Withdraw Party Status" (an INTERVENOR — Judi &
+// Michael Bollweg — withdrawing only their own party status, not the
+// applicant withdrawing the permit application) alongside the real
+// disposition, "Order Granting Joint Motion for Approval of Settlement
+// Stipulation; Order Granting Permit to Construct Facility," on the SAME
+// date. The old whole-blob GRANT_RE/WITHDRAW_RE scan happened to still get
+// this specific docket right (GRANT_RE was checked first and matched
+// somewhere in the combined text regardless), but the per-entry scan this
+// resolutionDate feature needs would otherwise misattribute "withdrawn" to
+// this docket if a future one has a party-status withdrawal with no later
+// grant order in the same text — excluded here rather than left as a latent
+// bug, same "found while doing real work, fixed rather than shipped broken"
+// standard as this project's other real fixes.
+function classifyEntry(text: string): Resolution {
+  if (/\bparty status\b/i.test(text)) return null;
+  if (GRANT_RE.test(text)) return "granted";
+  if (DENY_RE.test(text)) return "denied";
+  if (WITHDRAW_RE.test(text)) return "withdrawn";
+  return null;
+}
+
+// Entries are in the source's own chronological (oldest-first) order —
+// confirmed live against EL21-018's real list — so the LAST entry that
+// classifies at all is the most recent, most authoritative real
+// disposition; an earlier grant later superseded by, say, a denial on
+// rehearing would correctly end up "denied" rather than "granted", the same
+// "most recent order governs" convention this series' other order-scanning
+// modules (ndPscDockets.ts, etc.) already use.
+function resolveStageAndDate(entries: OrderEntry[]): { stage: ProjectStage; resolutionDate: Date | null } {
+  let resolution: Resolution = null;
+  let resolutionDate: Date | null = null;
+  for (const entry of entries) {
+    const classification = classifyEntry(entry.text);
+    if (classification) {
+      resolution = classification;
+      resolutionDate = entry.date;
+    }
+  }
+  const stage: ProjectStage =
+    resolution === "granted" ? "approved_awaiting_construction" : resolution ? "cancelled" : "local_review";
+  return { stage, resolutionDate: stage === "local_review" ? null : resolutionDate };
 }
 
 // See module header LOCATION. SD's own titles render in an inconsistent
@@ -377,8 +475,8 @@ async function normalizeCandidate(
   upcomingAgendaHearings: Map<string, UpcomingAgendaHearing[]>,
 ): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
-  const ordersText = await fetchOrdersSectionText(listing.year, listing.docketNumber);
-  const currentStage = resolveStage(ordersText);
+  const orderEntries = await fetchOrderEntries(listing.year, listing.docketNumber);
+  const { stage: currentStage, resolutionDate } = resolveStageAndDate(orderEntries);
 
   const matchKey = resolveMatchKey("sd-puc", listing.docketNumber);
   const projectType = inferProjectType(listing.rawTitle);
@@ -419,6 +517,9 @@ async function normalizeCandidate(
     applicant,
     currentStatus: `SD PUC Docket ${listing.docketNumber}: ${currentStage === "local_review" ? "Pending" : currentStage}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && resolutionDate
+      ? { resolutionDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility permit from the South Dakota Public Utilities Commission, pursuant to SDCL 49-41B — Docket No. ${listing.docketNumber}, "${listing.rawTitle.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -176,6 +176,39 @@
 // example, flagged honestly the same way ctCscDockets.ts/nhSecDockets.ts
 // both admit for their own least-common real outcome.
 //
+// RESOLUTION DATE — confirmed live 2026-09-13, reusing this module's own
+// already-extracted signals rather than any new fetch: real detail pages
+// publish a trailing "(M/D/YY)" right after many a document's own anchor
+// (already parsed for applicationFiledDate purposes — see LOCATION/
+// extractEarliestDate below — via parseTrailingDate/TRAILING_DATE_RE), e.g.
+// SB-2024-04's own "...Rebuild Project...</a> (3/5/25)". detectResolution/
+// the withdrawal check both now return WHICH document decided the docket's
+// resolution (not just the resolution type, previously discarded) so that
+// SPECIFIC document's own date — not just any date on the page — becomes
+// resolutionDate. Not every dispositive document's anchor carries a
+// trailing date, though — confirmed live against SB-2022-02's real, actually
+// dispositive "EFSB Decision and Order No. 173" (no trailing date at all on
+// its anchor) — so a second fallback was added: parseDateFromHref pulls the
+// same real date straight out of the PDF's own filename when the page's
+// trailing text is absent (Order No. 173's own file is literally named
+// "...SouthCoast Wind SB-2022-02 1-22-26 w-seal.pdf" — a real "1-22-26"
+// embedded by whoever at EFSB uploaded it). Confidence "exact" either way
+// (a full day-level date). Left undefined only when NEITHER signal is
+// present for the dispositive document (a real, confirmed gap for some
+// documents, e.g. Order No. 157's own anchor/filename, neither of which
+// carry a date) — not guessed from some other, less specific date on the
+// page.
+//   A SECOND, more serious bug surfaced by this same work and fixed here:
+// detectResolution's withdrawal check was, before this fix, matching ANY
+// "Notice of Withdrawal"-labeled document regardless of who filed it —
+// confirmed live this produced a real wrong result for SB-2022-02 itself,
+// whose own docket has a real "The Town of Little Compton Notice of
+// Withdrawal" (an intervening MUNICIPALITY withdrawing only its own
+// participation, not the applicant withdrawing the application), which was
+// wrongly classifying this docket "cancelled" when its real, confirmed
+// disposition is a GRANT (the same Order No. 173 above). See
+// isRealApplicantWithdrawal's own doc comment.
+//
 // VANISHED-CANDIDATE FIX (superseded 2026-08-25): this module only
 // fetches a detail page for rows the master list's OWN Status column
 // marks "Open" (to keep the run's request count bounded — fetching all
@@ -244,6 +277,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 import zlib from "node:zlib";
@@ -344,13 +378,24 @@ const EXCLUDE_RE =
 interface DetailDocument {
   label: string;
   href: string;
+  // Trailing "(M/D/YY)" text right after the anchor, when the docket's own
+  // detail page happens to publish one — see RESOLUTION DATE below and
+  // parseTrailingDate/TRAILING_DATE_RE further down this file. Best-effort
+  // only; not every document carries one (e.g. Order No. 157's own anchor
+  // has none) — null in that case, not guessed.
+  date: Date | null;
 }
 
 // Scopes extraction to the docket's own real content — between its `<h1>`
 // and the site's own footer address block — so nav/footer links are never
 // mistaken for docket documents. See module header FETCHING.
 const FOOTER_MARKER = "Public Utilities Commission &amp; Division of Public Utilities and Carriers";
-const DOC_ANCHOR_RE = /<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+// Captures up to 20 trailing plain-text characters right after the anchor's
+// closing tag in the SAME match as the anchor itself, so each document's own
+// (if any) "(M/D/YY)" suffix can be associated with it directly — see
+// module header RESOLUTION DATE. Same 20-char window extractEarliestDate
+// below already uses for the same real trailing-date convention.
+const DOC_ANCHOR_RE = /<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>([^<]{0,20})/g;
 
 function extractDetailDocuments(html: string): DetailDocument[] {
   const h1Idx = html.indexOf("<h1>");
@@ -360,7 +405,7 @@ function extractDetailDocuments(html: string): DetailDocument[] {
   for (const m of slice.matchAll(DOC_ANCHOR_RE)) {
     const label = stripHtml(m[2]);
     if (!label) continue;
-    docs.push({ href: resolveHref(m[1]), label });
+    docs.push({ href: resolveHref(m[1]), label, date: parseTrailingDate(m[3]) });
   }
   return docs;
 }
@@ -375,12 +420,29 @@ const ORDER_LIKE_RE = /\border\b|\bdecision\b/i;
 // see module header STATUS DETECTION MECHANICS).
 const PROCEDURAL_ORDER_RE =
   /\bpreliminary\b|\bshow cause\b|\bscheduling\b|\bprotective\b|\bdiscovery\b|\bintervention\b|\bextend\w*\b|\bcontinuance\b|\brehearing\b|\breconsideration\b|\bdeadline\b/i;
-// "Notice of Withdrawal" (a real, confirmed-live case: SB-2025-05's TNEC
-// withdrawal) resolves without a PDF fetch — excluding "of counsel"/"of
-// appearance" per the real attorney-withdrawal false positive
-// maEfsbDockets.ts's own header documents (not confirmed live in RI's own
-// data, but guarded against defensively for the same reason).
+// "Notice of Withdrawal" (a real, confirmed-live case: SB-2025-05's own
+// "TNEC's Notice of Withdrawal," TNEC being the applicant) resolves without
+// a PDF fetch — excluding "of counsel"/"of appearance" per the real
+// attorney-withdrawal false positive maEfsbDockets.ts's own header
+// documents (not confirmed live in RI's own data, but guarded against
+// defensively for the same reason).
+//   A SECOND real false positive found live 2026-09-13 while adding
+// resolutionDate support (see RESOLUTION DATE below): SB-2022-02
+// (SouthCoast Wind) has its own real "The Town of Little Compton Notice of
+// Withdrawal" document — Little Compton being an intervening MUNICIPALITY
+// (a real party opposing the application), not the applicant, withdrawing
+// only ITS OWN intervention/participation, not the application itself. The
+// docket's real disposition is in fact a GRANT (EFSB Decision and Order No.
+// 173) — this false positive was previously mis-marking a genuinely
+// approved docket as "cancelled." isRealApplicantWithdrawal below excludes
+// any "Notice of Withdrawal" whose own label names a "Town of <X>" —
+// confirmed to fix this real case; a future non-"Town of"-named intervenor
+// withdrawal is not yet guarded against, flagged honestly rather than
+// over-fitted to one example.
 const WITHDRAWAL_RE = /\bnotice of withdrawal\b(?!\s+of\s+(?:counsel|appearance))/i;
+function isRealApplicantWithdrawal(label: string): boolean {
+  return WITHDRAWAL_RE.test(label) && !/\btown of\b/i.test(label);
+}
 
 function isOrderCandidate(label: string): boolean {
   return ORDER_LIKE_RE.test(label) && !PROCEDURAL_ORDER_RE.test(label);
@@ -464,13 +526,21 @@ async function fetchOrderPdfText(href: string): Promise<string> {
   return extractPdfText(buf);
 }
 
+interface ResolutionResult {
+  resolution: Resolution;
+  // The specific document whose label/content actually decided
+  // `resolution` — kept so its own (if any) trailing filed-date can be used
+  // as this docket's real resolutionDate. See module header RESOLUTION DATE.
+  dispositiveDoc: DetailDocument | null;
+}
+
 // Scans a docket's own order/decision documents, newest-first, for a real
 // disposition — see module header STATUS DETECTION MECHANICS for the full
 // rationale, including the scanned-PDF fallback.
-async function detectResolution(docs: DetailDocument[]): Promise<Resolution> {
+async function detectResolution(docs: DetailDocument[]): Promise<ResolutionResult> {
   const candidates = docs.filter((d) => isOrderCandidate(d.label)).reverse();
   for (const candidate of candidates) {
-    if (WITHDRAWAL_RE.test(candidate.label)) return "withdrawn";
+    if (isRealApplicantWithdrawal(candidate.label)) return { resolution: "withdrawn", dispositiveDoc: candidate };
     let text: string;
     try {
       text = await fetchOrderPdfText(candidate.href);
@@ -479,20 +549,20 @@ async function detectResolution(docs: DetailDocument[]): Promise<Resolution> {
       // order candidate rather than aborting the whole docket.
       continue;
     }
-    if (GRANT_RE.test(text)) return "granted";
-    if (DENY_RE.test(text)) return "denied";
-    if (NOT_ALTERATION_RE.test(text)) return "granted";
-    if (text.trim().length < MIN_REAL_PDF_TEXT_LENGTH) return "resolved-unclear";
+    if (GRANT_RE.test(text)) return { resolution: "granted", dispositiveDoc: candidate };
+    if (DENY_RE.test(text)) return { resolution: "denied", dispositiveDoc: candidate };
+    if (NOT_ALTERATION_RE.test(text)) return { resolution: "granted", dispositiveDoc: candidate };
+    if (text.trim().length < MIN_REAL_PDF_TEXT_LENGTH) return { resolution: "resolved-unclear", dispositiveDoc: candidate };
     await sleep(REQUEST_DELAY_MS);
   }
-  return null;
+  return { resolution: null, dispositiveDoc: null };
 }
 
 // Also checked directly against every document's label (not just
 // order-candidates) since a withdrawal notice may not itself contain
 // "order"/"decision" in its own label.
-function hasWithdrawalNotice(docs: DetailDocument[]): boolean {
-  return docs.some((d) => WITHDRAWAL_RE.test(d.label));
+function findWithdrawalNotice(docs: DetailDocument[]): DetailDocument | null {
+  return docs.find((d) => isRealApplicantWithdrawal(d.label)) ?? null;
 }
 
 const TRANSMISSION_RE = /\btransmission\b|\btap line\b|\bloop line\b|\bsubstation\b|(?:^|[^0-9])\d[\d,]*\s*kv\b/i;
@@ -616,6 +686,36 @@ function parseTrailingDate(afterAnchor: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// See module header RESOLUTION DATE — a fallback for the (real, confirmed)
+// case where a dispositive document's own anchor carries no trailing
+// "(M/D/YY)" text at all: SB-2022-02's real "EFSB Decision and Order No.
+// 173" anchor has none, yet the PDF's own filename embeds its real date —
+// "...SouthCoast%20Wind%20SB-2022-02%201-22-26%20w-seal.pdf" decodes to
+// "...SB-2022-02 1-22-26 w-seal.pdf", i.e. a real "1-22-26" (1/22/2026)
+// hyphen-separated date. Applied only to the file's own basename (not the
+// full path, which can contain an unrelated "YYYY-MM" upload-folder segment
+// — e.g. ".../files/2026-01/..." — that must never be mistaken for a
+// M-D-YY date) and only as a last resort after parseTrailingDate fails.
+const HREF_DATE_RE = /\b(\d{1,2})-(\d{1,2})-(\d{2,4})\b/;
+
+function parseDateFromHref(href: string): Date | null {
+  let basename: string;
+  try {
+    basename = decodeURIComponent(href.split("/").pop() ?? href);
+  } catch {
+    basename = href.split("/").pop() ?? href;
+  }
+  const m = HREF_DATE_RE.exec(basename);
+  if (!m) return null;
+  const [, mm, dd, yyRaw] = m;
+  const yy = yyRaw.length === 2 ? 2000 + Number(yyRaw) : Number(yyRaw);
+  const mNum = Number(mm);
+  const dNum = Number(dd);
+  if (mNum < 1 || mNum > 12 || dNum < 1 || dNum > 31) return null;
+  const d = new Date(yy, mNum - 1, dNum);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 // Best-effort applicationFiledDate: the earliest dated document found on the
 // docket's own detail page (no structured "filed date" field exists on
 // either the master list or the detail page — see module header FETCHING).
@@ -633,7 +733,12 @@ function extractEarliestDate(html: string): Date | null {
   return new Date(Math.min(...dates.map((d) => d.getTime())));
 }
 
-function normalizeDocket(row: DocketListRow, resolution: Resolution, filedDate: Date | null): NormalizedProject {
+function normalizeDocket(
+  row: DocketListRow,
+  resolution: Resolution,
+  filedDate: Date | null,
+  resolutionDate: Date | null,
+): NormalizedProject {
   const matchKey = resolveMatchKey("ri-efsb", row.docketNumber);
 
   const projectType = inferProjectType(row.description);
@@ -678,6 +783,11 @@ function normalizeDocket(row: DocketListRow, resolution: Resolution, filedDate: 
   } else {
     dataQualityNoteParts.push("applicationFiledDate is approximated as the earliest dated document found in this docket's own filing history, not a dedicated \"application filed\" field.");
   }
+  if (currentStage !== "local_review" && resolutionDate == null) {
+    dataQualityNoteParts.push(
+      "This docket resolved, but the document that decided it doesn't carry a trailing filed-date on its own anchor on the docket's detail page (a real, confirmed-live gap — not every document does, e.g. Order No. 157's own anchor), so no resolutionDate could be determined.",
+    );
+  }
 
   return {
     matchKey,
@@ -694,6 +804,9 @@ function normalizeDocket(row: DocketListRow, resolution: Resolution, filedDate: 
     dateConfidence: "approximate",
     currentStatus: `RI EFSB Docket ${row.docketNumber}: ${resolution ?? "pending before the Energy Facility Siting Board"}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && resolutionDate
+      ? { resolutionDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on a license (or Notice-of-Intent determination) from the Rhode Island Energy Facility Siting Board — Docket ${row.docketNumber}, "${row.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -737,8 +850,12 @@ export async function ingestRiEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
       const detailHtml = await fetchText(resolveHref(row.href));
       const docs = extractDetailDocuments(detailHtml);
       const filedDate = extractEarliestDate(detailHtml);
-      const resolution: Resolution = hasWithdrawalNotice(docs) ? "withdrawn" : await detectResolution(docs);
-      const normalized = normalizeDocket(row, resolution, filedDate);
+      const withdrawalDoc = findWithdrawalNotice(docs);
+      const { resolution, dispositiveDoc }: ResolutionResult = withdrawalDoc
+        ? { resolution: "withdrawn", dispositiveDoc: withdrawalDoc }
+        : await detectResolution(docs);
+      const resolutionDate = dispositiveDoc ? dispositiveDoc.date ?? parseDateFromHref(dispositiveDoc.href) : null;
+      const normalized = normalizeDocket(row, resolution, filedDate, resolutionDate);
       toUpsert.push(normalized);
       if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

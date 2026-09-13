@@ -164,6 +164,44 @@
 // Certificate..."). Exact day is always given, so dateConfidence "exact"
 // (unlike WA EFSEC's month/year-only dates).
 //
+// RESOLUTION DATE / RESOLVED-FACILITY CLASSIFICATION (added 2026-09-13) —
+// this module originally tracked ONLY still-pending candidates (see STATUS
+// above); every resolved facility was simply excluded from `candidates`
+// entirely, so nothing here ever wrote a RESOLVED_STAGES currentStage or a
+// resolutionDate. Confirmed live this predates (and was never updated for)
+// this site's 2026-08-25 "keep every project regardless of outcome" policy
+// (see RESOLVED_STAGES in taxonomies.ts) — every other state module in this
+// series already tracks resolved projects. Fixed here: `candidates` now
+// also includes any facility whose leading status clause resolves via
+// `resolvedStageFromLead` to a calibrated real outcome (Approved ->
+// approved_awaiting_construction, Under Construction -> under_construction,
+// Operating/Decommissioned -> completed, Terminated/Withdrawn -> cancelled,
+// a granted ORS 469.320(2)(f) Exempt -> approved_awaiting_construction —
+// the practical equivalent of an approval), checked by real-world
+// advancement rank rather than word order so a combo lead like "Approved/
+// Under Construction" or "Operating/Approved" classifies correctly (see
+// resolvedStageFromLead's own doc comment for the real confirmed combos).
+// A facility whose lead has no calibrated mapping (no real current example
+// of "Transitioned"/"Temporarily Shut Down") is left alone, same as before.
+//   The real resolutionDate itself is extracted via `extractResolutionDate`:
+// primary signal is the structured `Date_x0020_Terminated` field — despite
+// its name, confirmed live (side-by-side against several facilities' own
+// narrative text, e.g. Saddle Butte Wind Park: field says 2019-11-22,
+// narrative says "Site Certificate terminated November 22, 2019") to hold
+// the real date THIS RECORD's Council review concluded for ANY outcome
+// (approval, termination, withdrawal, or a reorganizational split into
+// successor records), not just literal terminations. Only populated for
+// 25 of 97 real facilities (confirmed live 2026-09-13), so most resolved
+// facilities fall back to parsing the narrative's own free text — see
+// extractResolutionDate's own doc comment for the real, deliberately
+// conservative extraction rules (exactly one date in the narrative is
+// trusted; two or more is left undefined rather than guessed, since a real
+// amended/split site certificate's narrative can and does lead a naive
+// "first" or "last" date heuristic to the wrong event).
+//   MAX_CANDIDATES raised from 40 to 100 accordingly (real candidate count
+// is now roughly 70, not ~12) — still one cheap bulk list fetch, no new
+// per-candidate requests (see GOTCHA #2), so this costs nothing extra.
+//
 // Wired to Vercel Cron weekly, 00:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-or-efsc/route.ts) — real run timing measured
 // 2026-08-23: the entire ingestion (one bulk list fetch, zero per-candidate
@@ -172,6 +210,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -179,10 +218,14 @@ const SITE_BASE = "https://www.oregon.gov/energy/facilities";
 const API_BASE = `${SITE_BASE}/_api/web/lists/getbytitle('facilities')/items`;
 const PAGE_BASE = `${SITE_BASE}/Pages`;
 
-// Comfortably above the current 12-real-candidate count (of 97 total
-// facilities ever tracked) — see module header FETCHING for why no
-// date-based lookback is needed (the whole list is one cheap request).
-export const MAX_CANDIDATES = 40;
+// Comfortably above the entire 97-facility population — see module header
+// FETCHING for why no date-based lookback is needed (the whole list is one
+// cheap request, no per-candidate fetch). Raised from an earlier 40 once
+// this module started also tracking resolved facilities (not just the ~12
+// still-pending ones) — see RESOLUTION DATE / RESOLVED-FACILITY
+// CLASSIFICATION above — since the real candidate population is now roughly
+// 70 (pending + calibrated-resolved), not 12.
+export const MAX_CANDIDATES = 100;
 // See selectWithRotation in common.ts: the newest ROTATING_RECENT_SLOTS
 // candidates are checked every run; the rest of the budget rotates
 // through anything beyond that so a source whose real population exceeds
@@ -276,6 +319,7 @@ interface RawFacility {
   Details: string | null;
   Certificate_x0020_holder: string | null;
   Page_x0020_URL: string | null;
+  Date_x0020_Terminated: string | null;
 }
 
 async function fetchAllFacilities(): Promise<RawFacility[]> {
@@ -290,6 +334,7 @@ async function fetchAllFacilities(): Promise<RawFacility[]> {
     "Details",
     "Certificate_x0020_holder",
     "Page_x0020_URL",
+    "Date_x0020_Terminated",
   ].join(",");
   let url: string | null = `${API_BASE}?$top=500&$select=${fields}`;
   const all: RawFacility[] = [];
@@ -344,15 +389,53 @@ const RESOLVED_KEYWORDS_RE =
   /\b(Approved|Operating|Under Construction|Terminated|Decommissioned|Exempt|Withdrawn|Transitioned|Temporarily Shut Down|Notice of Intent to Terminate)\b/i;
 const PENDING_KEYWORDS_RE = /\b(Under Review|Proposed)\b/i;
 
-function isPendingCandidate(statusDetailsHtml: string | null): boolean {
+function statusLeadFromHtml(statusDetailsHtml: string | null): string {
   const text = stripHtml(statusDetailsHtml);
   const m = /^([^.]{0,80})\./.exec(text);
-  const lead = m ? m[1] : text.slice(0, 80);
+  return (m ? m[1] : text.slice(0, 80)).trim();
+}
+
+function isPendingCandidate(statusDetailsHtml: string | null): boolean {
+  const lead = statusLeadFromHtml(statusDetailsHtml);
   return PENDING_KEYWORDS_RE.test(lead) && !RESOLVED_KEYWORDS_RE.test(lead);
+}
+
+// See module header RESOLUTION DATE / RESOLVED-FACILITY CLASSIFICATION.
+// Checked in priority order by REAL-WORLD ADVANCEMENT, not by which keyword
+// happens to appear first in the source's own leading clause — confirmed
+// necessary against real combo leads like "Approved/Under Construction"
+// (Boardman to Hemingway, Wagon Trail Solar): "Under Construction" there
+// means construction has physically started, a more advanced state than a
+// bare "Approved", even though "Approved" is the first word in the string.
+// "Operating/Under Construction" (Biglow Canyon) and "Operating/Approved"
+// (Mist Underground Gas Storage) are real confirmed combos too — Operating
+// (construction finished, facility running) outranks both. No real facility
+// currently has a "Decommissioned" lead on its own (only combined with
+// "Under Review", already excluded — see AMENDMENT-REVIEW EXCLUSION), but
+// it's included for completeness/future-proofing at the same "facility was
+// actually built" rank as Operating. "Transitioned" and "Temporarily Shut
+// Down" have zero real current examples to calibrate a mapping against —
+// left unclassified (returns null, same "don't guess, iterate later" stance
+// as GRANT_RE/DENY_RE gaps elsewhere in this series) rather than guessed.
+function resolvedStageFromLead(lead: string): ProjectStage | null {
+  if (/\bDecommissioned\b/i.test(lead)) return "completed";
+  if (/\bOperating\b/i.test(lead)) return "completed";
+  if (/\bUnder Construction\b/i.test(lead)) return "under_construction";
+  if (/\bApproved\b/i.test(lead)) return "approved_awaiting_construction";
+  // A granted ORS 469.320(2)(f) exemption means the Council cleared the
+  // facility to proceed WITHOUT a site certificate — the practical
+  // equivalent of an approval for this site's purposes (confirmed live
+  // against Port Westward Renewable Fuels Project's real narrative: "Council
+  // approved an Order Granting the Request for exemption").
+  if (/\bExempt\b/i.test(lead)) return "approved_awaiting_construction";
+  if (/\bTerminated\b/i.test(lead)) return "cancelled";
+  if (/\bWithdrawn\b/i.test(lead)) return "cancelled";
+  return null;
 }
 
 const MONTH_DATE_RE =
   /(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*(\d{4})/;
+const MONTH_DATE_RE_G = new RegExp(MONTH_DATE_RE.source, "g");
 
 // The first "Month DD, YYYY" date in the narrative is, in every real
 // candidate observed, the date ODOE received the NOI/(p)ASC that opened the
@@ -363,6 +446,87 @@ function extractFiledDate(statusDetailsHtml: string | null): Date | null {
   if (!m) return null;
   const d = new Date(`${m[1]} ${m[2]}, ${m[3]}`);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// See module header RESOLUTION DATE. Two real, confirmed narrative
+// phrasings for a facility that's Operating with no day-level date anywhere
+// in its narrative: "The facility commenced commercial operation in
+// <Month> <Year>"/"in late <Year>" (Klondike III, Leaning Juniper IIB) and
+// the reordered "Commercial operation of the facility commenced in/on
+// <date>" (Montague Wind, Pachwáywit Fields) — both handled by one regex
+// with two alternations. "Operating since <Year>" (Beaver Power Plant, an
+// exempt pre-1976 facility) is a third, distinct real phrasing.
+const OPERATION_COMMENCED_RE =
+  /(?:commenced (?:commercial )?operation|commercial operation[^.]*?commenced)\s+(?:on|in)\s+(?:late\s+)?(?:(January|February|March|April|May|June|July|August|September|October|November|December)\s+)?(\d{4})/i;
+const OPERATING_SINCE_RE = /\boperating since\s+(\d{4})\b/i;
+
+interface ExtractedDate {
+  date: Date;
+  confidence: "exact" | "approximate";
+}
+
+// See module header RESOLUTION DATE — the real, confirmed extraction
+// priority, applied only to facilities `resolvedStageFromLead` above
+// already classified as resolved:
+//   1. The structured `Date_x0020_Terminated` field, when populated —
+//      confirmed live (side-by-side against several facilities' own
+//      narrative text, e.g. Saddle Butte Wind Park: field says
+//      2019-11-22, narrative says "Site Certificate terminated November
+//      22, 2019" — exact match) to be the real date THIS RECORD's Council
+//      review concluded, whatever the outcome (approval, termination,
+//      withdrawal, or a reorganizational split into successor records) —
+//      not literally restricted to terminations despite its SharePoint
+//      internal name. Confidence "exact" (a full date is always given).
+//   2. Exactly one "Month DD, YYYY" date anywhere in the narrative — used
+//      as-is, confidence "exact". Confirmed against several real
+//      single-date narratives (South Dunes Power Plant's withdrawal date,
+//      Summit Ridge Wind Farm's termination date, Golden Hills Wind's
+//      commercial-operation date, etc.) that this single date really is
+//      the resolution event, not some other unrelated date.
+//   3. TWO OR MORE "Month DD, YYYY" dates anywhere in the narrative is
+//      deliberately NOT auto-resolved — confirmed live this is genuinely
+//      ambiguous, not just cautious: Well Springs Solar Project's real
+//      narrative has an NOI-received date (December 22, 2025) followed by
+//      its real withdrawal date (March 19, 2026) — picking "first" or
+//      "last" blindly gets some real multi-date facilities right and
+//      others (an amended/split site certificate's narrative, e.g. Oregon
+//      Trail Solar Facility or Sunstone Solar Project, whose most recent
+//      mentioned date is an AMENDMENT action, not the original
+//      resolution) wrong. Left undefined rather than guessed — same
+//      "don't force a fake one in" convention this whole task follows.
+//   4. A month/year-only "commenced operation" or "operating since"
+//      phrasing (no day given) — confidence "approximate", 1st of the
+//      month (or January 1st for a bare year) per this project's own
+//      convention (see eia860mPlanned.ts's expectedOnlineDate).
+//   5. Nothing found — undefined (RESOLVED_STAGES stage is still recorded,
+//      just without a resolutionDate — real, confirmed gap, not guessed).
+function extractResolutionDate(statusDetailsHtml: string | null, terminatedRaw: string | null): ExtractedDate | null {
+  if (terminatedRaw) {
+    const d = new Date(terminatedRaw);
+    if (!Number.isNaN(d.getTime())) return { date: d, confidence: "exact" };
+  }
+
+  const text = stripHtml(statusDetailsHtml);
+  const dayMatches = [...text.matchAll(MONTH_DATE_RE_G)];
+  if (dayMatches.length === 1) {
+    const [, month, day, year] = dayMatches[0];
+    const d = new Date(`${month} ${day}, ${year}`);
+    if (!Number.isNaN(d.getTime())) return { date: d, confidence: "exact" };
+  }
+  if (dayMatches.length === 0) {
+    const commenced = OPERATION_COMMENCED_RE.exec(text);
+    if (commenced) {
+      const [, month, year] = commenced;
+      const d = month ? new Date(`${month} 1, ${year}`) : new Date(Number(year), 0, 1);
+      if (!Number.isNaN(d.getTime())) return { date: d, confidence: "approximate" };
+    }
+    const since = OPERATING_SINCE_RE.exec(text);
+    if (since) {
+      const d = new Date(Number(since[1]), 0, 1);
+      if (!Number.isNaN(d.getTime())) return { date: d, confidence: "approximate" };
+    }
+  }
+  return null;
 }
 
 interface Capacity {
@@ -434,12 +598,23 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
   const capacity = parseCapacity(facility.Description);
   const county = cleanCounties(facility.Location);
   const filedDate = extractFiledDate(facility.Status_x0020_details);
-  const statusText = stripHtml(facility.Status_x0020_details);
-  const statusLead = (/^([^.]{0,80})\./.exec(statusText)?.[1] ?? statusText.slice(0, 80)).trim();
+  const statusLead = statusLeadFromHtml(facility.Status_x0020_details);
   const holder = facility.Certificate_x0020_holder?.trim() || null;
   const detailsText = stripHtml(facility.Details);
 
-  const currentStage: ProjectStage = "local_review";
+  // See module header RESOLUTION DATE / RESOLVED-FACILITY CLASSIFICATION —
+  // this module now also tracks facilities whose own status narrative is
+  // clearly resolved (not just "still Under Review/Proposed"), consistent
+  // with this project's site-wide "keep every project regardless of
+  // outcome" policy (see RESOLVED_STAGES in taxonomies.ts) — previously
+  // every facility normalized here was hardcoded "local_review" since only
+  // pending candidates were ever selected; resolvedStageFromLead returns
+  // null (not a guess) for the small remainder with no calibrated real
+  // example (see its own doc comment), which keeps currentStage
+  // "local_review" for those, same as this module's original behavior.
+  const resolvedStage = resolvedStageFromLead(statusLead);
+  const currentStage: ProjectStage = resolvedStage ?? "local_review";
+  const resolutionInfo = resolvedStage ? extractResolutionDate(facility.Status_x0020_details, facility.Date_x0020_Terminated) : null;
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -472,6 +647,11 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
   } else {
     dataQualityNoteParts.push("No structured location field is published; this project will not appear on the map until geocoded another way.");
   }
+  if (resolvedStage && !resolutionInfo) {
+    dataQualityNoteParts.push(
+      "This facility's status narrative resolves to a real outcome, but no unambiguous real date could be parsed for it (either the narrative has no date at all, or it mentions more than one and it's not safe to guess which one is the real resolution date) — see the ingestion module header for the extraction rules.",
+    );
+  }
 
   const pageUrl = facility.Page_x0020_URL ? `${PAGE_BASE}/${facility.Page_x0020_URL}` : `${SITE_BASE}/Pages/facilities-under-efsc.aspx`;
   const openForComment = hasOpenCommentPeriod(facility.Title, openCommentCoreNames);
@@ -491,6 +671,9 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
     dateConfidence: "exact",
     currentStatus: `OR EFSC status: ${statusLead}${holder ? ` — applicant ${holder}` : ""}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && resolutionInfo
+      ? { resolutionDate: resolutionInfo.date, resolutionDateConfidence: resolutionInfo.confidence }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on a site certificate decision from the Oregon Energy Facility Siting Council, administered by the Oregon Department of Energy — ${facility.Title}${detailsText ? `, "${detailsText.slice(0, 300)}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -514,6 +697,10 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
 
 export interface IngestSummary {
   candidatesFound: number;
+  // Pending AND classifiable-resolved candidates combined — see module
+  // header RESOLUTION DATE / RESOLVED-FACILITY CLASSIFICATION. Field name
+  // kept for interface stability; no longer "pending-only" as of that
+  // change.
   pendingCandidates: number;
   upserted: number;
   removedResolved: number;
@@ -527,8 +714,18 @@ export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Pr
   const openCommentNames = await fetchOpenCommentProjectNames().catch(() => [] as string[]);
   const openCommentCoreNames = openCommentNames.map(coreProjectName);
 
+  // See module header RESOLUTION DATE / RESOLVED-FACILITY CLASSIFICATION:
+  // this module now tracks both still-pending candidates AND facilities
+  // whose narrative resolves to a real, calibrated outcome (so they can
+  // carry a real resolutionDate/currentStage instead of never being
+  // normalized at all) — a facility whose lead clause is neither a real
+  // pending signal nor a calibrated resolved one (e.g. "Transitioned",
+  // "Temporarily Shut Down", or one with no matching keyword at all) is
+  // still left untouched, same as this module's original behavior.
   const candidates = selectWithRotation(
-    allFacilities.filter((f) => isPendingCandidate(f.Status_x0020_details)),
+    allFacilities.filter(
+      (f) => isPendingCandidate(f.Status_x0020_details) || resolvedStageFromLead(statusLeadFromHtml(f.Status_x0020_details)) !== null,
+    ),
     maxCandidates,
     ROTATING_RECENT_SLOTS,
   );
@@ -570,8 +767,8 @@ if (require.main === module) {
     .then((summary) => {
       console.log(
         `Oregon EFSC facility ingestion complete: ${summary.candidatesFound} total facilities, ` +
-          `${summary.pendingCandidates} pending original-site-certificate candidates, upserted ${summary.upserted}, ` +
-          `removed ${summary.removedResolved} resolved, ${summary.errors.length} errors.`,
+          `${summary.pendingCandidates} pending + classifiable-resolved candidates, upserted ${summary.upserted}, ` +
+          `${summary.removedResolved} of those resolved-stage, ${summary.errors.length} errors.`,
       );
       if (summary.errors.length > 0) console.error(summary.errors);
     })

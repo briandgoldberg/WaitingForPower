@@ -171,6 +171,21 @@
 // tracked, same low-stakes caveat this series documents elsewhere for
 // under-confirmed denial/cancellation branches.
 //
+// RESOLUTION DATE — confirmed live 2026-09-13 by fetching Docket 1400036
+// (Plains & Eastern Clean Line) directly (it has long since aged out of the
+// 160-docket Active Index — see FETCHING and SCOPING above — but its detail
+// page is still reachable at the same fixed URL): its own most recent
+// filing, "10/01/2018 - Order Granting Cancellation Of Authority To
+// Construct A Transmission Line And To Operate As An Electric Transmission
+// Public Utility.", is exactly the same filing resolveDocket already reads
+// (detail.filings[0], sorted newest-first) to determine the resolution type
+// itself — so that filing's own already-parsed date is used as-is for
+// resolutionDate (confidence "exact"), no new fetch or parsing needed.
+// Yields 2018-10-01 for this real example, matching this module's own
+// confirmed STATUS finding above exactly. Left undefined for any Closed
+// docket whose most recent filing has no parseable date (a real, possible
+// gap — not observed in the one confirmed example, which parses cleanly).
+//
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields, extracted from the
 // ALL-CAPS "IN RE:" caption text (confirmed ALL CAPS on every real caption
 // checked, both recent and decades-old). Only one real example exists to
@@ -216,6 +231,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -525,6 +541,13 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
     currentStage = "cancelled";
   } else currentStage = "local_review";
 
+  // See module header RESOLUTION DATE — resolveDocket's own resolution
+  // determination already reads ONLY the docket's single most recent filing
+  // (detail.filings[0], sorted newest-first above); that same filing's own
+  // date is the real date the docket was actually resolved, not a guess and
+  // not the date this ingestion run executed.
+  const resolutionDate = resolution ? detail.filings[0]?.date ?? null : null;
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -559,6 +582,9 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
     applicant,
     currentStatus: `Tennessee TPUC Docket No. ${detail.docketNumber}: ${resolution ?? "active"}`,
     currentStage,
+    ...(RESOLVED_STAGES.includes(currentStage) && resolutionDate
+      ? { resolutionDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Tennessee Public Utility Commission — Docket No. ${detail.docketNumber}, "${detail.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

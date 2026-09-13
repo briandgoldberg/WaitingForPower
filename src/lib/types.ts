@@ -49,6 +49,11 @@ export interface ProjectDTO {
   expectedOnlineDateConfidence: "exact" | "approximate" | null;
   currentStatus: string;
   currentStage: ProjectStage;
+  // The REAL date this project reached its resolved stage, only for sources
+  // an ingest module has been wired to extract one from — null otherwise,
+  // including every project that hasn't resolved yet. See schema.prisma.
+  resolutionDate: string | null; // ISO date
+  resolutionDateConfidence: "exact" | "approximate" | null;
   // See Project.noLongerReported in schema.prisma — true only for a
   // still-pending project whose source stopped listing it in a later run.
   noLongerReported: boolean;

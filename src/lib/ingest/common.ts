@@ -72,6 +72,18 @@ export interface NormalizedProject {
   expectedOnlineDateConfidence?: "exact" | "approximate";
   currentStatus: string;
   currentStage: ProjectStage;
+  /**
+   * The REAL date this project reached its resolved stage, extracted from a
+   * genuine dated order/decision document — not the date our cron happened
+   * to notice it. Leave `undefined` (not `null`) if this module doesn't
+   * extract real resolution dates at all, so a routine re-ingestion run
+   * never wipes out a value a one-time extraction pass already set — see
+   * keepExistingIfUnmanaged below. Pass an explicit `null` only if this
+   * module DOES manage the field and genuinely found no date for this
+   * particular project. See schema.prisma.
+   */
+  resolutionDate?: Date | null;
+  resolutionDateConfidence?: "exact" | "approximate";
   causeSlugs: CauseSlug[];
   causeDetail: string;
   /** Interconnection-queue-source-specific stage detail — see schema.prisma. */
@@ -370,6 +382,8 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     expectedOnlineDateConfidence: p.expectedOnlineDate ? (p.expectedOnlineDateConfidence ?? "exact") : (isMerged ? existing?.expectedOnlineDateConfidence ?? null : null),
     currentStatus: p.currentStatus,
     currentStage: p.currentStage,
+    resolutionDate: keepExistingIfUnmanaged(p.resolutionDate, existing?.resolutionDate),
+    resolutionDateConfidence: keepExistingIfUnmanaged(p.resolutionDateConfidence, existing?.resolutionDateConfidence),
     causeDetail: p.causeDetail,
     interconnectionQueueStage: p.interconnectionQueueStage ?? null,
     networkUpgradeCostUsd: keepExistingIfNull(p.networkUpgradeCostUsd, existing?.networkUpgradeCostUsd),

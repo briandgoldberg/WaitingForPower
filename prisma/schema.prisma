@@ -89,6 +89,18 @@ model Project {
   // under_construction | cancelled | completed
   currentStage String
 
+  // The REAL calendar date this project reached a resolved stage (see
+  // RESOLVED_STAGES in taxonomies.ts) — as opposed to ProjectChange.createdAt,
+  // which only records when our own cron run happened to notice it. Only set
+  // by the handful of ingest modules that actually extract a real dated
+  // order/decision document from their source; every other module leaves
+  // this field alone entirely (undefined, not null) rather than overwriting
+  // it — see keepExistingIfUnmanaged in common.ts. Null for every project
+  // from a source that's never been wired for this, or that hasn't resolved
+  // yet. See src/lib/ingest/README.md for current per-state coverage.
+  resolutionDate DateTime?
+  resolutionDateConfidence String? // "exact" | "approximate", same convention as dateConfidence above
+
   causeDetail String
 
   // Finer-grained than currentStage for interconnection-queue sources only

@@ -54,6 +54,8 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     expectedOnlineDateConfidence: p.expectedOnlineDateConfidence as "exact" | "approximate" | null,
     currentStatus: p.currentStatus,
     currentStage: p.currentStage as ProjectStage,
+    resolutionDate: p.resolutionDate ? p.resolutionDate.toISOString() : null,
+    resolutionDateConfidence: p.resolutionDateConfidence as "exact" | "approximate" | null,
     noLongerReported: p.noLongerReported,
     causeSlugs: p.causes.map((c) => c.causeSlug as CauseSlug),
     causeDetail: p.causeDetail,

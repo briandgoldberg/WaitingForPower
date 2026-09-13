@@ -140,24 +140,94 @@ non-interconnection source.
   non-ISO-BA joins aren't built yet — same approach, different source file
   and column names per region.
 
-## RESOLVED_STAGES: what never appears on the site
+## RESOLVED_STAGES: tracked once seen pending, never created already-resolved
 
-This site tracks projects still waiting on a regulatory yes — a project
-that's already been approved and is awaiting construction, is under
-construction, was cancelled/withdrawn, or is already operating/completed
-is excluded entirely, not just deprioritized. Enforced in one place
-(`upsertNormalizedProject`, `common.ts`) rather than per-module: any
+This site's core framing is projects still waiting on a regulatory yes, but
+a project doesn't disappear the moment it stops waiting — since 2026-08-25,
+a project this site was already tracking as pending stays tracked after it
+resolves (approved and awaiting construction, under construction,
+cancelled/withdrawn, or completed), surfaced via the site's own Status
+filter rather than removed. What's still guarded against, in one place
+(`upsertNormalizedProject`, `common.ts`) rather than per-module: a project
+this site *never* tracked while pending is not retroactively created just
+because a source's export happens to include it already resolved — any
 `NormalizedProject` whose `currentStage` is one of `RESOLVED_STAGES`
-(`src/lib/data/taxonomies.ts`) gets deleted (if it previously existed) and
-is never created. `eia860mPlanned.ts`, `permittingDashboard.ts`, and
-`eiaPipelineProjects.ts` all normalize *every* row — including
-already-approved/cancelled/operating ones — and let this shared guard
-decide, specifically so a project this site previously tracked as waiting
-gets removed the moment a source reports it's moved on, rather than
-freezing in a stale "still waiting" state forever. `lbnlQueuedUp.ts` and
-`ornlHydropowerRelicensing.ts` still filter these rows out *before*
-normalizing (see open question #9) — a narrower, currently-safe gap, not
-the same guarantee.
+(`src/lib/data/taxonomies.ts`) with no existing row is skipped, not
+inserted (added after a real incident: an unguarded LBNL run once created
+~30,000 fake historical rows for decades-old withdrawn/operational
+interconnection requests this site had never tracked). `eia860mPlanned.ts`,
+`permittingDashboard.ts`, and `eiaPipelineProjects.ts` all normalize *every*
+row — including already-approved/cancelled/operating ones — and let this
+shared guard decide. `lbnlQueuedUp.ts` and `ornlHydropowerRelicensing.ts`
+still filter these rows out *before* normalizing (see open question #9) —
+a narrower, currently-safe gap, not the same guarantee.
+
+## resolutionDate / resolutionDateConfidence: the real event date, not the discovery date
+
+Every ingestion run is daily-or-slower, so by default the only date this
+site can record for a stage transition is `ProjectChange.createdAt` — when
+our own cron happened to notice it, not when the state agency actually
+acted. `Project.resolutionDate` (+ `resolutionDateConfidence`, "exact" |
+"approximate") exists to close that gap wherever a source publishes a real,
+dated order/decision document: the ingest module extracts that real date
+and stores it directly, independent of when the run that noticed the
+transition happened to fire. Convention, enforced via `keepExistingIfUnmanaged`
+in `common.ts` (the same pattern `hearingDetailsLink` already uses): a
+module that doesn't extract real dates leaves both fields `undefined`
+(never `null`, never touching what's already there); a module that does
+sets a real `Date` only once a project's `currentStage` is genuinely a
+`RESOLVED_STAGES` value and a real source date was found for that specific
+resolution — never guessed, never backfilled from an unrelated date on the
+same page.
+
+As of 2026-09-13, 30 of the 41 state modules extract a real resolution
+date, each from its own already-fetched order/decision document (no new
+fetch added purely for this): `alPscDockets.ts`, `arPscDockets.ts`,
+`azAccLineSiting.ts`, `caCecDockets.ts`, `coPucDockets.ts`,
+`ctCscDockets.ts`, `flPscDockets.ts`, `inIurcDockets.ts`, `kyPscDockets.ts`,
+`laPscDockets.ts`, `maEfsbDockets.ts`, `moPscDockets.ts`, `nePrbDockets.ts`,
+`nvPucnDockets.ts`, `nhSecDockets.ts`, `njBpuDockets.ts`, `nmPrcDockets.ts`,
+`nyDpsDockets.ts`, `ndPscDockets.ts`, `okOccDockets.ts`,
+`orEfscFacilities.ts`, `riEfsbDockets.ts`, `sdPucDockets.ts`,
+`tnTpucDockets.ts`, `txPuctDockets.ts`, `utPscDockets.ts`, `vaSccDockets.ts`,
+`waEfsecFacilities.ts`, `wvPscDockets.ts`, `wiPscDockets.ts`. Several of
+these currently show zero real rows with a populated `resolutionDate` even
+though the extraction logic is confirmed correct — that's real-world
+timing (nothing has actually resolved yet in that state's live data since
+this was wired up), a site-side safety guard (a project never tracked while
+pending doesn't get backfilled just to attach a date, per the section
+above), or a source-side gap for one specific document (honestly left
+`undefined`, documented per-case in that module's own header) — never a
+bug papered over. Building this out surfaced several real, independent
+bugs beyond the date extraction itself, each fixed and documented in its
+own module's header: New York's document-date field was confirmed to
+always be a null-date sentinel (the real date lives in a different field);
+Massachusetts and Oregon had never been updated for the 2026-08-25
+keep-resolved-projects policy above and were silently dropping/excluding
+every resolved project instead of tracking it; Colorado was skipping its
+own detail-page fetch entirely for resolved-status candidates (a stale
+pre-2026-08-25 optimization); Washington's candidate list was scoped to
+"still under review" only, so a tracked facility silently stopped being
+processed at all — frozen at its last-known stage — the moment it
+resolved; Wisconsin's resolution-check request had been silently failing
+in production since the state's site was placed behind Cloudflare at some
+point after the module was first written; and Rhode Island and South
+Dakota were each vulnerable to the same false positive, a third-party
+intervenor's own "Notice of Withdrawal" being misread as the applicant
+withdrawing the whole application.
+
+**4 states have no real date available from their source at all, and
+never will without a fundamentally different source**: `gaPscDockets.ts`
+(Georgia), `meDepSiteLawPermits.ts` (Maine), `mdPscDockets.ts` (Maryland),
+`wyIscDockets.ts` (Wyoming) — none of these publish any dated order/decision
+document to extract from, confirmed by hand, not assumed.
+
+**7 states are still unresolved** — genuinely live/current sources (not
+batch-updated), but whether a real date can be extracted from what they
+publish hasn't been checked yet: `dePscDockets.ts` (Delaware),
+`idPucDockets.ts` (Idaho), `ilIccDockets.ts` (Illinois), `ncNcucDockets.ts`
+(North Carolina), `ohOpsbCases.ts` (Ohio), `scPscDockets.ts` (South
+Carolina), `vtPucDockets.ts` (Vermont).
 
 ## Open questions (flagged, not guessed at)
 

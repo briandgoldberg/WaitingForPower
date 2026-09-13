@@ -157,6 +157,28 @@
 // WA's module did storing multiple counties in one string; flagged in
 // dataQualityNote.
 //
+// RESOLUTION-DATE EXTRACTION (added 2026-09-13) — this module previously
+// just silently dropped a resolved docket (isResolved()==true) instead of
+// tracking it, on the theory that this site only tracked still-pending
+// projects; that's now out of step with this project's 2026-08-25 product
+// direction change (every other module in this series keeps a resolved
+// project tracked, surfaced via the frontend's Status filter, rather than
+// omitting it — see common.ts's own RESOLVED_STAGES doc). Brought in line
+// here: a resolved docket is now upserted with a real resolved stage
+// (Final-Decision-granted -> "approved_awaiting_construction", ClosedDate-
+// without-a-Final-Decision -> "cancelled", matching STATUS's own two
+// resolution signals above) and, wherever findable, a real resolutionDate —
+// confirmed live against the exact same two dockets STATUS already cites:
+// EFSB22-01's sole "Final Decision" filing carries FiledDate
+// "2022-11-30T12:40:39" (the granted-certificate date, matching this
+// header's own long-standing citation of 2022-11-30); EFSB21-03's
+// ClosedDate "2025-12-04T05:00:00" matches the Presiding Officer's own
+// "designating the proceeding ... as closed" correspondence filed that same
+// day. A docket this site never tracked while it was still pending is
+// still never retroactively created just because it happens to already be
+// resolved — see common.ts's own RESOLVED_STAGES guard, shared by every
+// module in this series.
+//
 // Wired to Vercel Cron weekly, 00:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ma-efsb/route.ts). A real run against the live
 // site (71 candidates before lookback/exclude filtering, 24 after) was
@@ -288,9 +310,49 @@ async function fetchDocketDetail(id: number): Promise<DocketDetail> {
 // EFSB21-03 for the ClosedDate path).
 const FINAL_DECISION_TYPE = "final decision";
 
-function isResolved(detail: DocketDetail): boolean {
-  if (detail.ClosedDate) return true;
-  return detail.Filings.some((f) => f.Type?.Name?.trim().toLowerCase() === FINAL_DECISION_TYPE);
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13, reusing exactly
+// the two STATUS signals above rather than adding a new fetch: a "Final
+// Decision" filing's own FiledDate is the real date the Board actually
+// granted the Certificate — confirmed against EFSB22-01 (NSTAR Electric,
+// cited above), whose sole "Final Decision" filing carries FiledDate
+// "2022-11-30T12:40:39", exactly the date this header already cited by
+// hand. A docket resolved the other way (withdrawn/otherwise closed with
+// no Final Decision on file) is dated by the docket's own ClosedDate
+// instead — confirmed against EFSB21-03 (Mayflower Wind / SouthCoast Wind,
+// also cited above), whose ClosedDate "2025-12-04T05:00:00" matches the
+// Presiding Officer's own "designating the proceeding ... as closed"
+// correspondence filed that same day. If a docket somehow has more than
+// one "Final Decision" filing on record, the OLDEST is used (the original
+// certificate grant, not a later amendment/compliance redetermination) —
+// no real live example of more than one was found to calibrate against,
+// same unconfirmed-edge-case caveat this series uses elsewhere.
+interface ResolutionInfo {
+  stage: "approved_awaiting_construction" | "cancelled";
+  date: Date | null;
+}
+
+function parseIsoDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function detectResolution(detail: DocketDetail): ResolutionInfo | null {
+  const finalDecisions = detail.Filings.filter((f) => f.Type?.Name?.trim().toLowerCase() === FINAL_DECISION_TYPE);
+  if (finalDecisions.length > 0) {
+    const oldest = finalDecisions.reduce((earliest, f) => {
+      const d = parseIsoDate(f.FiledDate);
+      const e = parseIsoDate(earliest.FiledDate);
+      if (!e) return f;
+      if (d && d < e) return f;
+      return earliest;
+    });
+    return { stage: "approved_awaiting_construction", date: parseIsoDate(oldest.FiledDate) };
+  }
+  if (detail.ClosedDate) {
+    return { stage: "cancelled", date: parseIsoDate(detail.ClosedDate) };
+  }
+  return null;
 }
 
 const TRANSMISSION_RE = /transmission (?:line|facilit)|(?:^|[^0-9])\d[\d,]*[\s-]*kv\b/i;
@@ -357,7 +419,7 @@ function extractApplicant(desc: string): string {
   return desc.slice(0, 80);
 }
 
-function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): NormalizedProject {
+function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, resolution: ResolutionInfo | null): NormalizedProject {
   const sourceId = String(search.Id);
   const matchKey = resolveMatchKey("ma-efsb", sourceId);
 
@@ -376,7 +438,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
 
   const filedDate = search.OpenedDate ? new Date(search.OpenedDate) : null;
 
-  const currentStage: ProjectStage = "local_review";
+  const currentStage: ProjectStage = resolution?.stage ?? "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -412,11 +474,20 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     applicationFiledDate: filedDate,
     dateConfidence: "exact",
     applicant,
-    currentStatus: `MA EFSB Docket ${search.Number}: pending before the Energy Facilities Siting Board`,
+    currentStatus:
+      resolution?.stage === "approved_awaiting_construction"
+        ? `MA EFSB Docket ${search.Number}: Certificate of Environmental Impact and Public Interest granted (Final Decision issued)`
+        : resolution?.stage === "cancelled"
+          ? `MA EFSB Docket ${search.Number}: closed (withdrawn or otherwise resolved without a Final Decision)`
+          : `MA EFSB Docket ${search.Number}: pending before the Energy Facilities Siting Board`,
     currentStage,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Impact and Public Interest (or related siting approval) from the Massachusetts Energy Facilities Siting Board — Docket ${search.Number}, "${desc.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    // See RESOLUTION-DATE EXTRACTION above — undefined (not null) for an
+    // ordinary still-open docket, per the project-wide undefined-vs-null
+    // convention in common.ts.
+    ...(resolution?.date ? { resolutionDate: resolution.date, resolutionDateConfidence: "exact" as const } : {}),
     sources: [
       {
         label: `MA EFSB Docket ${search.Number}`,
@@ -456,18 +527,21 @@ export async function ingestMaEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
-  let removedResolvedFromStatusCheck = 0;
 
   for (const candidate of realApplications) {
     try {
       const detail = await fetchDocketDetail(candidate.Id);
-      if (isResolved(detail)) {
-        removedResolvedFromStatusCheck++;
-      } else {
-        const normalized = normalizeDocket(candidate, detail);
-        toUpsert.push(normalized);
-        if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
-      }
+      // A resolved docket (see module header STATUS) is no longer silently
+      // dropped — it's upserted with its own real resolved stage and, where
+      // findable, a real resolutionDate (see RESOLUTION-DATE EXTRACTION),
+      // matching this series' standing convention (kyPscDockets.ts,
+      // inIurcDockets.ts, laPscDockets.ts, flPscDockets.ts) of keeping a
+      // resolved project tracked (surfaced via the frontend's Status
+      // filter) rather than dropping it from the dataset entirely.
+      const resolution = detectResolution(detail);
+      const normalized = normalizeDocket(candidate, detail, resolution);
+      toUpsert.push(normalized);
+      if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.Number, message: String(err) });
     }
@@ -485,13 +559,12 @@ export async function ingestMaEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
     candidatesFound: allDockets.length,
     realApplicationCandidates: realApplications.length,
     upserted,
-    // Includes both docket-status-check exclusions (a resolved docket is
-    // never even built into a NormalizedProject) and any that were built
-    // but caught by upsertNormalizedProject's own RESOLVED_STAGES check —
-    // in practice the former (currentStage is always "local_review" here,
-    // so the latter should never fire, but both are counted for an honest
-    // total).
-    removedResolved: removedResolvedFromStatusCheck + removedResolved,
+    // A resolved docket this site never previously tracked while it was
+    // still pending is skipped (not created) by upsertNormalizedProject's
+    // own RESOLVED_STAGES guard in common.ts, same as every other module in
+    // this series — removedResolved here is only ever a genuine
+    // still-tracked-pending -> now-resolved transition.
+    removedResolved,
     errors,
   };
 }

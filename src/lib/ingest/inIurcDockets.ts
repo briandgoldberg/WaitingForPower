@@ -190,6 +190,25 @@
 // this series with a real structured end time (iurc_hearingenddate) for the
 // SAME hearing, not a separate window — surfaced as commentPeriodEnd.
 //
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-12, re-using the exact
+// /api/document/orders endpoint the module header's own STATUS section
+// already relied on (by hand) to calibrate trusting Case Status: POST
+// {"txtPageNumber":"1","Id":"<legalCaseId>"} to
+// https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/document/orders
+// returns a plain JSON array of every order filed on the docket. Checked
+// against 10 real Decided/Appealed dockets (46032, 45847, 46193, 46092,
+// 46109, 45463, 46028, 45836, 46198, 45511): every one has exactly one row
+// with iurc_ordertype "Final Order" and a clean M/D/YYYY iurc_orderdate —
+// e.g. Cause 46032's "8/21/2024" (the exact date this header already cited
+// above) and Cause 46193's "10/29/2025" (also already cited above). This
+// is now called for real in buildCleanupPlaceholder (every docket whose
+// Case Status maps to this site's "completed" stage — see STATUS), not
+// just as a one-off hand check, and the most recent "Final Order" row (by
+// date, not array position) is kept in the rare event a docket has more
+// than one on file. A failure or "no Final Order found" degrades to no
+// resolutionDate for that project this run (never guessed), same pattern
+// as this module's other supplementary per-candidate fetches.
+//
 // Wired to Vercel Cron weekly, 03:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-in-iurc/route.ts). A real full run (27 candidates
 // within the 6-year lookback, 3 requiring a detail fetch) completed in
@@ -208,6 +227,9 @@ const DETAIL_BASE_URL = "https://iurc.portal.in.gov/docketed-case-details/";
 // See module header HEARING SCHEDULE.
 const HEARINGS_API_URL =
   "https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/list/hearings";
+// See module header RESOLUTION-DATE EXTRACTION.
+const ORDERS_API_URL =
+  "https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/document/orders";
 
 // Confirmed live 2026-08-23 via GET /api/list/petitiontypes and
 // GET /api/list/industrytypes/all on the companion API host above — see
@@ -595,6 +617,46 @@ function extractCounty(caption: string): string | null {
   return cleaned.length > 0 ? toTitleCase(cleaned) : null;
 }
 
+interface OrderApiRow {
+  iurc_ordertype?: string;
+  iurc_orderdate?: string;
+}
+
+// See module header RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-12
+// against 8 real Decided/Appealed dockets (46032, 45847, 46193, 46092,
+// 46109, 45463, 46028, 45836, 46198, 45511 — 10 in total): each returns
+// exactly one row with iurc_ordertype "Final Order" and a clean M/D/YYYY
+// iurc_orderdate, e.g. Cause 46032's "8/21/2024" (the exact example the
+// module header's STATUS section already cited) and Cause 46193's real
+// Appealed-docket order, "10/29/2025". No case checked had more than one
+// Final Order on file, but a docket that was later reopened/remanded could
+// in principle have more than one — the MOST RECENT "Final Order" row is
+// used (not the first array entry) so a rare multi-order case still yields
+// the order that actually, currently resolves the docket rather than a
+// superseded one. Returns null (never guessed at) if the request fails or
+// no "Final Order" row is present, e.g. for a Void/Consolidated/Archived
+// docket that was never actually decided on the merits — no real example of
+// that combination was found live to confirm one way or the other, so a
+// null result here is treated the same as any other real "not found."
+async function fetchFinalOrderDate(legalCaseId: string): Promise<Date | null> {
+  const res = await fetch(ORDERS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ txtPageNumber: "1", Id: legalCaseId }),
+  });
+  if (!res.ok) return null;
+  const rows = (await res.json()) as OrderApiRow[];
+  if (!Array.isArray(rows)) return null;
+
+  let latest: Date | null = null;
+  for (const row of rows) {
+    if (row.iurc_ordertype !== "Final Order") continue;
+    const d = parseMDY(row.iurc_orderdate);
+    if (d && (!latest || d > latest)) latest = d;
+  }
+  return latest;
+}
+
 function detailUrl(legalCaseId: string): string {
   return `${DETAIL_BASE_URL}?id=${encodeURIComponent(legalCaseId)}`;
 }
@@ -606,9 +668,14 @@ function detailUrl(legalCaseId: string): string {
 // upsertNormalizedProject deletes any previously-tracked row for a
 // RESOLVED_STAGE without reading the other fields. Fields are still filled
 // with reasonable non-null values because NormalizedProject requires them.
-function buildCleanupPlaceholder(row: SearchResultRow): NormalizedProject {
+async function buildCleanupPlaceholder(row: SearchResultRow): Promise<NormalizedProject> {
   const matchKey = resolveMatchKey("in-iurc", row.docketNumber);
   const applicant = row.parties.split(",")[0]?.trim() || "Unknown Applicant";
+  // See module header RESOLUTION-DATE EXTRACTION. A failure/no-match here
+  // degrades to "no resolution date this run" for this one project — same
+  // graceful-degradation pattern as this module's hearing/caption fetches —
+  // rather than blocking the cleanup upsert itself.
+  const finalOrderDate = await fetchFinalOrderDate(row.legalCaseId).catch(() => null);
   return {
     matchKey,
     name: `${applicant} (IN IURC Cause No. ${row.docketNumber})`,
@@ -619,6 +686,7 @@ function buildCleanupPlaceholder(row: SearchResultRow): NormalizedProject {
     currentStage: "completed",
     causeSlugs: ["local_state_opposition"],
     causeDetail: `Indiana IURC Cause No. ${row.docketNumber} is no longer an open Certificate of Public Convenience and Necessity application awaiting a Commission determination.`,
+    ...(finalOrderDate ? { resolutionDate: finalOrderDate, resolutionDateConfidence: "exact" as const } : {}),
     hearingDetailsLink: null,
     hearings: [],
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
@@ -712,9 +780,14 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
   for (const row of candidates) {
     const needsDetail = ACTIVE_STATUSES.has(row.caseStatus) || LITIGATION_STATUSES.has(row.caseStatus);
     if (!needsDetail) {
-      const normalized = buildCleanupPlaceholder(row);
+      // buildCleanupPlaceholder now makes its own real request (the Final
+      // Order lookup, see module header RESOLUTION-DATE EXTRACTION) — no
+      // longer a zero-request path, hence the sleep below matching the
+      // detail-fetch branch's own politeness delay.
+      const normalized = await buildCleanupPlaceholder(row);
       toUpsert.push(normalized);
       if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
+      await sleep(REQUEST_DELAY_MS);
       continue;
     }
     try {
@@ -729,7 +802,7 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
         normalized = buildActiveProject(row, caption, hearings);
         realApplicationsTracked += 1;
       } else {
-        normalized = buildCleanupPlaceholder(row);
+        normalized = await buildCleanupPlaceholder(row);
       }
       toUpsert.push(normalized);
       if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);

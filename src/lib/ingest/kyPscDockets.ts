@@ -165,6 +165,25 @@
 // STATION" (checked first, by GENERATING_RE, so a true generating station
 // is never miscategorized as transmission).
 //
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13, re-using the same
+// filing-row date/description pairs STATUS's detectResolution() already
+// scans: the matched "Final Order Entered:"/"Order Entered:" row's own
+// timestamp span IS the real resolution date, not just contextual metadata
+// — confirmed against Case 2022-00066 (KU's Hardin County transmission
+// CPCN, cited above), whose "Final Order Entered: 1. KU is granted a
+// CPCN..." row is itself timestamped "7/28/2022 3:01:27 PM", parseable
+// directly by the JS Date constructor. Because this module's own candidate
+// search only ever queries IsClosed=false (see FETCHING/STATUS), this path
+// is only reachable for the rare case where the search index briefly still
+// lists a case as open after its own detail page already shows a Final/
+// other Order — real, correct when it fires, but (like the "granted"/
+// "denied"/"dismissed" resolution branches themselves) not yet observed to
+// fire against a currently-live IsClosed=false candidate; the module's
+// currently-tracked cases all remain genuinely pending. Both of the
+// module's own confirmed-live "closed" example cases (2022-00066 and
+// 2024-00104) demonstrate the extraction works correctly, even though
+// neither is fetched by a normal run today.
+//
 // Wired to Vercel Cron weekly, 02:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ky-psc/route.ts) — a real run's timing was
 // measured (12 candidates, 10 real, 14.4s) before scheduling this. Also
@@ -321,6 +340,9 @@ interface CaseDetail {
   applicant: string;
   nature: string;
   resolution: "granted" | "denied" | "dismissed" | "closed-unclear" | null;
+  // The real date the matched Final/Order-Entered filing was itself
+  // received/filed on the case — see RESOLUTION-DATE EXTRACTION below.
+  resolutionDate: Date | null;
 }
 
 // "M/D/YYYY" (exact) or a bare "YYYY*" (PSC's own marker for "we only know
@@ -355,19 +377,45 @@ const CLOSED_FALLBACK_RE = /\bthis case is closed\b/i;
 const FILING_ROW_RE =
   /<span>([\d/: APM]+)<\/span>\s*<\/span>\s*<p style="text-align:left" id='pFileDesc'>([\s\S]*?)<\/p>/g;
 
-function detectResolution(html: string): CaseDetail["resolution"] {
-  const descriptions: string[] = [];
-  for (const m of html.matchAll(FILING_ROW_RE)) descriptions.push(stripTags(m[2]));
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13 against real Case
+// 2022-00066 (Kentucky Utilities Hardin County transmission CPCN, cited in
+// the module header's own STATUS section): its "Final Order Entered: 1. KU
+// is granted a CPCN..." filing row's own timestamp span reads exactly
+// "7/28/2022 3:01:27 PM" — the FILING_ROW_RE date group is not just a raw
+// received-date for context, it IS the real date the case was actually
+// resolved (the PSC's Final/other Order was entered), since each filing row
+// on this page is dated by when that specific document was filed/entered.
+// Parseable directly by the JS Date constructor (confirmed live) despite
+// its embedded time-of-day and AM/PM suffix. Returned alongside the
+// resolution verdict so normalizeCase can set a real resolutionDate on
+// every branch below (granted -> approved_awaiting_construction, and
+// denied/dismissed/closed-unclear -> cancelled) — KY PSC's filing record
+// happens to date ALL of these dispositions equally well, unlike some
+// other states in this series where only a "granted" outcome has a
+// findable real date.
+interface ResolutionInfo {
+  resolution: CaseDetail["resolution"];
+  date: Date | null;
+}
+
+function parseFilingDateTime(raw: string): Date | null {
+  const d = new Date(raw.trim());
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function detectResolution(html: string): ResolutionInfo {
   // Rows are listed most-recent-first on the real page (confirmed by hand
   // against Case 2022-00066, whose "Final Order Entered" row appears before
   // its earlier procedural orders) — the first match is the most recent.
-  for (const desc of descriptions) {
-    if (GRANT_RE.test(desc)) return "granted";
-    if (DENY_RE.test(desc)) return "denied";
-    if (DISMISS_RE.test(desc)) return "dismissed";
-    if (CLOSED_FALLBACK_RE.test(desc)) return "closed-unclear";
+  for (const m of html.matchAll(FILING_ROW_RE)) {
+    const desc = stripTags(m[2]);
+    const date = parseFilingDateTime(m[1]);
+    if (GRANT_RE.test(desc)) return { resolution: "granted", date };
+    if (DENY_RE.test(desc)) return { resolution: "denied", date };
+    if (DISMISS_RE.test(desc)) return { resolution: "dismissed", date };
+    if (CLOSED_FALLBACK_RE.test(desc)) return { resolution: "closed-unclear", date };
   }
-  return null;
+  return { resolution: null, date: null };
 }
 
 function extractField(html: string, id: string): string | null {
@@ -393,9 +441,9 @@ async function fetchCaseDetail(caseNumber: string): Promise<CaseDetail> {
   const { date: filingDate, confidence: dateConfidence } = parseFilingDate(filingDateRaw);
   const category = extractField(html, "lblCategory") ?? "";
   const applicant = (extractField(html, "lblUtilities") ?? "").trim();
-  const resolution = detectResolution(html);
+  const { resolution, date: resolutionDate } = detectResolution(html);
 
-  return { caseNumber, filingDate, dateConfidence, category, applicant, nature, resolution };
+  return { caseNumber, filingDate, dateConfidence, category, applicant, nature, resolution, resolutionDate };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY.
@@ -520,6 +568,14 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity / Certificate of Construction from the Kentucky Public Service Commission — Case No. ${detail.caseNumber}, "${detail.nature}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    // See RESOLUTION-DATE EXTRACTION above — only set when this case is
+    // actually resolved (granted/denied/dismissed/closed-unclear all found
+    // via the same dated "Final Order Entered"/"Order Entered" filing row);
+    // left undefined (not null) for the ordinary still-open case, per the
+    // project-wide undefined-vs-null convention in common.ts.
+    ...(currentStage !== "local_review" && detail.resolutionDate
+      ? { resolutionDate: detail.resolutionDate, resolutionDateConfidence: "exact" as const }
+      : {}),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/ViewCaseFilings/${detail.caseNumber}` : null,
     hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
     sources: [

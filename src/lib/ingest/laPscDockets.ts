@@ -343,6 +343,19 @@
 // was confirmed live to return real hearings scheduled as far out as
 // 2027-02-23, comfortably inside that window.
 //
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13: detectResolution
+// already reads each OrderRow's Synopsis/Description text to find a
+// dispositive verdict (see STATUS above); that same OrderRow also carries
+// its own real `OrderDate` (the identical ASP.NET "/Date(ms)/" field
+// parseMsDate already handles for DocketSearch/ReadScheduledEvents
+// elsewhere in this module) — e.g. Docket U-37425's real settlement-
+// accepting order (quoted in STATUS above) carries a real 2025 OrderDate.
+// This is a genuinely different date than record.dateFiled (the
+// application's OWN filing date) or today's ingestion-run date — it's the
+// Commission's own real order-issuance date. Used for all three resolved
+// outcomes (granted/denied/dismissed), not just grants, since LPSC's Order
+// Search dates a denial or dismissal order exactly as reliably as a grant.
+//
 // Wired to Vercel Cron weekly, 08:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-la-psc/route.ts).
 
@@ -688,16 +701,32 @@ const DISMISS_RE = /\bdismisses?\s+this\s+matter\b|\bis\s+dismissed\b/i;
 const GRANT_RE =
   /\bcertifies\b|\baccepts\s+the\s+settlement\b|\baccepts\s+the\s+(?:administrative law judge(['’]s)?|alj(['’]s)?)\s+recommendation\b|\bis\s+approved\b|\bare\s+approved\b|\bapproving\b|\bgrants?\s+(?:the\s+)?(?:application|certificate|certification)\b|\bapproves\b/i;
 
+interface ResolutionInfo {
+  resolution: Resolution;
+  // RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13: the same
+  // OrderRow whose Synopsis/Description text trips DENY_RE/DISMISS_RE/
+  // GRANT_RE already carries its own real `OrderDate` (the same ASP.NET
+  // "/Date(ms)/" field parseMsDate already handles elsewhere in this
+  // module) — e.g. Docket U-37425's real dispositive order ("Order No.
+  // U-37425 accepts the settlement ... approving the generation and
+  // transmission resources ...", cited in the module header's own STATUS
+  // section) carries its own real 2025 OrderDate. This is the genuine date
+  // the Commission actually resolved the docket, distinct from this
+  // module's own ingestion run date.
+  date: Date | null;
+}
+
 // Scans a docket's orders, most-recent-first, for the first one carrying a
 // resolving verdict — see module header STATUS.
-function detectResolution(orders: OrderRow[]): Resolution {
+function detectResolution(orders: OrderRow[]): ResolutionInfo {
   for (const order of orders) {
     const text = decodeHtmlEntities(order.Synopsis ?? order.Description ?? "");
-    if (DENY_RE.test(text)) return "denied";
-    if (DISMISS_RE.test(text)) return "dismissed";
-    if (GRANT_RE.test(text)) return "granted";
+    const date = parseMsDate(order.OrderDate);
+    if (DENY_RE.test(text)) return { resolution: "denied", date };
+    if (DISMISS_RE.test(text)) return { resolution: "dismissed", date };
+    if (GRANT_RE.test(text)) return { resolution: "granted", date };
   }
-  return null;
+  return { resolution: null, date: null };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY — calibrated against a
@@ -809,9 +838,10 @@ function extractApplicant(description: string): string {
 function normalizeDocket(
   record: DocketListRecord,
   detail: DocketDetail,
-  resolution: Resolution,
+  resolutionInfo: ResolutionInfo,
   upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
+  const { resolution, date: resolutionDate } = resolutionInfo;
   const matchKey = resolveMatchKey("la-psc", record.docketNumber);
   const hearings = upcomingHearings.get(record.docketNumber) ?? [];
   const synopsis = detail.synopsis ?? "";
@@ -866,6 +896,12 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on certification from the Louisiana Public Service Commission — Docket No. ${record.docketNumber}, "${synopsis || description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    // See RESOLUTION-DATE EXTRACTION above — only set for a docket actually
+    // resolved via a real dispositive order (granted/denied/dismissed all
+    // carry the order's own real OrderDate); left undefined (not null) for
+    // an ordinary still-pending docket, per the project-wide
+    // undefined-vs-null convention in common.ts.
+    ...(currentStage !== "local_review" && resolutionDate ? { resolutionDate, resolutionDateConfidence: "exact" as const } : {}),
     hearingDetailsLink: hearings.length > 0 ? DOCKET_DETAILS_URL(record.matterId) : null,
     hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label, location: h.location })),
     sources: [
@@ -924,8 +960,8 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       realApplicationCandidates += 1;
       const orders = await fetchOrders(record.docketNumber);
       await sleep(REQUEST_DELAY_MS);
-      const resolution = detectResolution(orders);
-      const normalized = normalizeDocket(record, detail, resolution, upcomingHearings);
+      const resolutionInfo = detectResolution(orders);
+      const normalized = normalizeDocket(record, detail, resolutionInfo, upcomingHearings);
       toUpsert.push(normalized);
     } catch (err) {
       errors.push({ matchKey, message: String(err) });

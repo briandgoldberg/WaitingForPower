@@ -210,6 +210,18 @@
 // Upcoming Local Public Hearings list itself, since that list has no
 // per-case URL to deep-link to.
 //
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13: resolveDocket
+// already reads each qualifying filing's own title to find a resolving
+// verdict (see STATUS above); that same FilingRow already carries its own
+// real filed `date` (parsed by the same parseMDY this module uses for
+// applicationFiledDate elsewhere) — e.g. EA-2020-0371's real "Order
+// Approving Stipulation and Agreement and Granting Certificate of
+// Convenience and Necessity" (quoted in STATUS above) is itself dated
+// 3/24/2021, exactly the date this header already cited by hand. Used for
+// all three resolved outcomes (granted/denied/closed-unclear), not just
+// grants, since the qualifying filing is dated identically regardless of
+// which of the five real title patterns it matched.
+//
 // Wired to Vercel Cron weekly, 03:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-mo-psc/route.ts).
 
@@ -509,7 +521,22 @@ const STIPULATION_RE = /^order approving\b[\s\S]{0,40}\bstipulation and agreemen
 const REPORT_AND_ORDER_RE = /^report and order$/i;
 const CLOSING_FILE_RE = /\bclosing file\b/i;
 
-function resolveDocket(filings: FilingRow[]): Resolution {
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13: the qualifying
+// filing resolveDocket already finds (the most recent Order/Notice
+// matching one of the five real title patterns above) already carries its
+// own real filed date — e.g. the module header's own STATUS section cites
+// EA-2020-0371's "Order Approving Stipulation and Agreement and Granting
+// Certificate of Convenience and Necessity," issued 3/24/2021, which is
+// exactly this filing's own `date` field. Returned alongside the verdict
+// so normalizeCase can set a real resolutionDate for every resolved
+// branch (granted/denied/closed-unclear all get a real dated filing, not
+// just grants).
+interface ResolutionInfo {
+  resolution: Resolution;
+  date: Date | null;
+}
+
+function resolveDocket(filings: FilingRow[]): ResolutionInfo {
   const dated = filings.filter((f) => f.date != null);
   // CLOSING_FILE_RE is checked across every filing type (see header — a
   // real closing signal appears under both "Order" and "Notice"); the other
@@ -524,14 +551,14 @@ function resolveDocket(filings: FilingRow[]): Resolution {
           REPORT_AND_ORDER_RE.test(f.titleOfFiling))) ||
       CLOSING_FILE_RE.test(f.titleOfFiling),
   );
-  if (qualifying.length === 0) return null;
+  if (qualifying.length === 0) return { resolution: null, date: null };
   qualifying.sort((a, b) => (b.date as Date).getTime() - (a.date as Date).getTime());
   const latest = qualifying[0];
-  if (DENY_RE.test(latest.titleOfFiling) && !GRANT_RE.test(latest.titleOfFiling)) return "denied";
+  if (DENY_RE.test(latest.titleOfFiling) && !GRANT_RE.test(latest.titleOfFiling)) return { resolution: "denied", date: latest.date };
   if (GRANT_RE.test(latest.titleOfFiling) || STIPULATION_RE.test(latest.titleOfFiling) || REPORT_AND_ORDER_RE.test(latest.titleOfFiling)) {
-    return "granted";
+    return { resolution: "granted", date: latest.date };
   }
-  return "closed-unclear";
+  return { resolution: "closed-unclear", date: latest.date };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY.
@@ -592,9 +619,10 @@ function extractCounty(style: string): string | null {
 
 function normalizeCase(
   candidate: CaseSearchResult,
-  resolution: Resolution,
+  resolutionInfo: ResolutionInfo,
   upcomingHearings: Map<string, UpcomingLocalHearing[]>,
 ): NormalizedProject {
+  const { resolution, date: resolutionDate } = resolutionInfo;
   const matchKey = resolveMatchKey("mo-psc", candidate.caseNo);
   const hearings = upcomingHearings.get(candidate.caseNo) ?? [];
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.styleOfCase);
@@ -641,6 +669,11 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Missouri Public Service Commission — Case No. ${candidate.caseNo}, "${candidate.styleOfCase}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    // See RESOLUTION-DATE EXTRACTION above — only set for a case actually
+    // resolved via a real qualifying filing; left undefined (not null) for
+    // an ordinary still-open case, per the project-wide undefined-vs-null
+    // convention in common.ts.
+    ...(currentStage !== "local_review" && resolutionDate ? { resolutionDate, resolutionDateConfidence: "exact" as const } : {}),
     // Points at this case's own EFIS page, not psc.mo.gov's generic
     // Upcoming Local Public Hearings list (which has no per-case URL to
     // deep-link to) — the same case-specific page already used as this
@@ -694,8 +727,8 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   for (const candidate of realApplications) {
     try {
       const filings = await fetchFilings(session, candidate.caseId);
-      const resolution = resolveDocket(filings);
-      const normalized = normalizeCase(candidate, resolution, upcomingHearings);
+      const resolutionInfo = resolveDocket(filings);
+      const normalized = normalizeCase(candidate, resolutionInfo, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

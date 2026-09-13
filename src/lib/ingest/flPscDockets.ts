@@ -171,6 +171,32 @@
 // null handling this module already gives every other DEP/PSC field it
 // can't find a value for.
 //
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-12. DEP's Conditions-
+// of-Certification listing page (parsed above by parseCertifiedFacilityEntries
+// for the "already granted" cross-check) itself has NO date column — only a
+// facility name, case number, and licensee, contrary to what a glance at its
+// "chronological table of every certified facility since PA74-01 (1974)"
+// framing might suggest (it's chronological by case-number sequence, not by
+// a published date field). The real date lives one click deeper: each
+// facility's OWN DEP detail page (same href the cross-check already uses)
+// publishes a genuine structured "Date Certified" field, e.g. "08/04/1981"
+// for the Hopkins-Bainbridge transmission line, or a semicolon-separated
+// "Unit 2 - 05/18/1976; Units 1 and 2 Uprate - 09/17/2008" for a multi-unit
+// plant with later amendments (St. Lucie Nuclear Plant) — only the first,
+// original-certification date is used; see parseDateCertified. This is only
+// ever reachable via this module's secondary pass (a PSC docket that no
+// longer matches a DEP in-process entry AND does match the certified list),
+// which is itself unexercised by today's real data (both of Florida's 2 live
+// candidates are still on DEP's Applications-in-Process page, i.e. still
+// "agency_permitting", not yet a RESOLVED_STAGES stage) — so this logic is
+// real and confirmed against real certified-facility pages, but hasn't yet
+// had a chance to write a real resolutionDate into the live database; it
+// will the next time a currently-tracked FL project actually gets certified
+// or a historical one rotates into candidacy. The "cancelled" branch (PSC
+// docket matches neither DEP's in-process list nor its certified list) gets
+// no resolutionDate at all — DEP publishes grant dates, not
+// withdrawal/denial dates, so there's nothing real to extract there.
+//
 // Wired to Vercel Cron weekly, 22:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-fl-psc/route.ts) — a real run's timing was
 // measured (2 candidates, the entire current universe for this docket type)
@@ -367,24 +393,31 @@ export function parseApplicationsInProcess(html: string): DepInProcessEntry[] {
 
 // --- DEP "Conditions of Certification" page (already-granted check) ----
 
-// Flat list of certified facility/line names, used only as a fallback
-// cross-check for PSC dockets that no longer match a DEP in-process entry
-// (see module header STATUS) — not split by Power Plant vs Transmission
-// Line since a simple name-overlap check doesn't need the distinction.
-export function parseCertifiedFacilityNames(html: string): string[] {
+// Flat list of certified facility/line names (+ each one's own DEP detail
+// page href, added for RESOLUTION-DATE EXTRACTION below), used as a
+// fallback cross-check for PSC dockets that no longer match a DEP
+// in-process entry (see module header STATUS) — not split by Power Plant
+// vs Transmission Line since a simple name-overlap check doesn't need the
+// distinction.
+export interface CertifiedFacilityEntry {
+  name: string;
+  href: string;
+}
+
+export function parseCertifiedFacilityEntries(html: string): CertifiedFacilityEntry[] {
   const start = html.indexOf("<h3>Power Plant</h3>");
   if (start < 0) {
     throw new Error(
-      "DEP Conditions-of-Certification page didn't contain the expected 'Power Plant' heading — the page structure likely changed. Check parseCertifiedFacilityNames in src/lib/ingest/flPscDockets.ts against a fresh response.",
+      "DEP Conditions-of-Certification page didn't contain the expected 'Power Plant' heading — the page structure likely changed. Check parseCertifiedFacilityEntries in src/lib/ingest/flPscDockets.ts against a fresh response.",
     );
   }
   const section = html.slice(start);
-  const names: string[] = [];
-  for (const m of section.matchAll(/<a href="\/(?:air|water)\/siting-coordination-office\/content\/[^"]+"[^>]*>([\s\S]*?)<\/a>/g)) {
-    const name = decodeHtmlEntities(m[1].replace(/<[^>]+>/g, ""));
-    if (name) names.push(name);
+  const entries: CertifiedFacilityEntry[] = [];
+  for (const m of section.matchAll(/<a href="(\/(?:air|water)\/siting-coordination-office\/content\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g)) {
+    const name = decodeHtmlEntities(m[2].replace(/<[^>]+>/g, ""));
+    if (name) entries.push({ name, href: m[1] });
   }
-  return names;
+  return entries;
 }
 
 // --- DEP project detail page --------------------------------------------
@@ -428,6 +461,39 @@ export function parseDepProjectDetail(html: string): DepProjectDetail {
     counties,
     doahSearchCaseNum,
   };
+}
+
+// --- DEP certified-facility detail page: real "Date Certified" -----------
+// RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-12 against two real
+// certified-facility detail pages (a page distinct from the "Applications
+// in Process" detail page parsed above, though built from the same Drupal
+// template): each one publishes a real structured "Date Certified" field
+// in its "General Information" block, e.g. "Date Certified 08/04/1981" for
+// the Hopkins-Bainbridge transmission line, and — for a power plant with
+// multiple licensed units/amendments — a semicolon-separated list ordered
+// oldest-first, e.g. "Date Certified Unit 2 - 05/18/1976; Units 1 and 2
+// Uprate - 09/17/2008" for St. Lucie Nuclear Plant. Only the FIRST date in
+// that list is used: it's the original site-certification order (what
+// RESOLVED_STAGES' "approved_awaiting_construction" actually means here),
+// not a later amendment/uprate. This is a genuinely different page from
+// DEP's Conditions-of-Certification listing page itself (parsed above by
+// parseCertifiedFacilityEntries), which has no date column at all — only a
+// facility name, a case number, and a licensee; the real date lives one
+// click deeper, on each facility's own detail page (same href used to
+// build the Applications-in-Process -> Certified-Facilities cross-check).
+const DATE_CERTIFIED_RE = /Date Certified\s*([\s\S]{0,300}?)(?:Description|Line Length|Nominal Rating|Fuel Type|$)/i;
+const FIRST_MDY_DATE_RE = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
+
+function parseDateCertified(html: string): Date | null {
+  const bodyStart = html.indexOf('property="schema:text"');
+  const body = bodyStart >= 0 ? html.slice(bodyStart, bodyStart + 4000) : html;
+  const plainBody = stripTags(body);
+  const section = DATE_CERTIFIED_RE.exec(plainBody)?.[1];
+  if (!section) return null;
+  const m = FIRST_MDY_DATE_RE.exec(section);
+  if (!m) return null;
+  const date = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 // --- DOAH ("Division of Administrative Hearings") hearing lookup --------
@@ -505,15 +571,17 @@ function titlesLikelyMatch(pscTitle: string, depName: string): boolean {
   return false;
 }
 
-function nameLikelyOnCertifiedList(depName: string, certifiedNames: string[]): boolean {
+function findLikelyCertifiedEntry(depName: string, certifiedEntries: CertifiedFacilityEntry[]): CertifiedFacilityEntry | null {
   const depWords = significantWords(depName);
-  return certifiedNames.some((certified) => {
-    const certWords = significantWords(certified);
-    for (const w of certWords) {
-      if (depWords.has(w)) return true;
-    }
-    return false;
-  });
+  return (
+    certifiedEntries.find((certified) => {
+      const certWords = significantWords(certified.name);
+      for (const w of certWords) {
+        if (depWords.has(w)) return true;
+      }
+      return false;
+    }) ?? null
+  );
 }
 
 // --- Fuel-type inference from DEP project prose -------------------------
@@ -548,6 +616,19 @@ interface Candidate {
   currentStage: ProjectStage;
   resolutionNote: string;
   doahHearing: DoahHearing | null;
+  // Real "Date Certified" pulled from the matched certified-facility's own
+  // DEP detail page — see RESOLUTION-DATE EXTRACTION above. Only ever set
+  // when currentStage is "approved_awaiting_construction" via the
+  // certified-list cross-check below; left null for every other stage
+  // (including "cancelled", for which DEP publishes no real date at all —
+  // see the cancelled branch below, which never sets this).
+  resolutionDate: Date | null;
+  // The matched certified-facility's OWN detail-page href (distinct from
+  // depHref/depDetail above, which are the *Applications-in-Process*
+  // detail page format — a different page with different fields). Fetched
+  // and parsed for "Date Certified" in the per-candidate loop below, kept
+  // separate so that fetch/parse never runs against the wrong page shape.
+  certifiedHref: string | null;
 }
 
 function normalizeCandidate(c: Candidate): NormalizedProject | null {
@@ -634,6 +715,11 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
     causeSlugs,
     causeDetail: `Waiting on Power Plant Siting Act / Transmission Line Siting Act certification from the Florida DEP Siting Coordination Office (and, where applicable, a determination of need from the Florida PSC) — ${caseLabel}, "${c.name}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    // See RESOLUTION-DATE EXTRACTION above — undefined (not null) when this
+    // candidate isn't in a RESOLVED_STAGES stage, or is but no real "Date
+    // Certified" could be found, per the project-wide undefined-vs-null
+    // convention in common.ts's keepExistingIfUnmanaged.
+    ...(c.resolutionDate ? { resolutionDate: c.resolutionDate, resolutionDateConfidence: "exact" as const } : {}),
     hearingDetailsLink,
     hearings,
     sources,
@@ -661,7 +747,7 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   ]);
 
   const depInProcess = parseApplicationsInProcess(applicationsHtml);
-  const certifiedNames = parseCertifiedFacilityNames(certifiedHtml);
+  const certifiedEntries = parseCertifiedFacilityEntries(certifiedHtml);
 
   const matchedPscDocketIds = new Set<number>();
   const candidates: Candidate[] = [];
@@ -680,6 +766,8 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       currentStage: "agency_permitting",
       resolutionNote: "Currently listed on DEP's Applications-in-Process page (fetched at ingestion time) as an active siting application.",
       doahHearing: null, // filled in below, alongside depDetail, after a politeness-delayed fetch
+      resolutionDate: null, // not resolved yet — see RESOLUTION-DATE EXTRACTION above
+      certifiedHref: null,
     });
   }
 
@@ -692,18 +780,25 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // currently match a DEP in-process entry) but required for correctness.
   for (const docket of pscDockets) {
     if (matchedPscDocketIds.has(docket.docketId)) continue;
-    const certified = nameLikelyOnCertifiedList(docket.docketTitle, certifiedNames);
+    const certifiedEntry = findLikelyCertifiedEntry(docket.docketTitle, certifiedEntries);
     candidates.push({
       projectType: /transmission|kv line|kv lines|substation/i.test(docket.docketTitle) ? "transmission" : "generation",
       name: docket.docketTitle,
       depHref: null,
       depDetail: null,
       pscDocket: docket,
-      currentStage: certified ? "approved_awaiting_construction" : "cancelled",
-      resolutionNote: certified
+      currentStage: certifiedEntry ? "approved_awaiting_construction" : "cancelled",
+      resolutionNote: certifiedEntry
         ? "No longer listed on DEP's Applications-in-Process page and a name-matching entry was found on DEP's Certified-Facilities list — treated as certified/approved."
         : "No longer listed on DEP's Applications-in-Process page and no matching entry was found on DEP's Certified-Facilities list — treated as no longer active (withdrawn, dismissed, or otherwise resolved) rather than left as a stale 'still waiting' row.",
       doahHearing: null, // no DEP detail page is fetched for this pass (see loop below) — no DOAH case number to look up, and an already-resolved/cancelled project has no upcoming hearing to show regardless.
+      resolutionDate: null, // filled in below, from certifiedHref's own "Date Certified" field, if a certified match was found
+      // No real date is published anywhere for the "cancelled" (not
+      // certified-list-matched) branch — DEP's pages only record grants,
+      // not withdrawals/denials — so certifiedHref (and therefore
+      // resolutionDate) stays null there, per this project's honest-null
+      // convention rather than guessing at a date.
+      certifiedHref: certifiedEntry?.href ?? null,
     });
   }
 
@@ -729,6 +824,17 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
           candidate.doahHearing = await fetchDoahHearingDate(candidate.depDetail.doahSearchCaseNum).catch(() => null);
           await sleep(REQUEST_DELAY_MS);
         }
+      }
+      if (candidate.certifiedHref) {
+        // See RESOLUTION-DATE EXTRACTION above. A failure/parse-miss here
+        // shouldn't block this candidate's own DEP/PSC data — degrades to
+        // "no resolution date this run" for this one project, same
+        // graceful-degradation pattern as the DOAH hearing lookup above.
+        const certifiedDetailUrl = candidate.certifiedHref.startsWith("http") ? candidate.certifiedHref : `${DEP_BASE}${candidate.certifiedHref}`;
+        candidate.resolutionDate = await fetchText(certifiedDetailUrl)
+          .then(parseDateCertified)
+          .catch(() => null);
+        await sleep(REQUEST_DELAY_MS);
       }
       const normalized = normalizeCandidate(candidate);
       if (normalized) {

@@ -58,6 +58,36 @@
 // this series gets for free; per-case milestone enrichment remains a cheap,
 // low-priority follow-up rather than a requirement.
 //
+// NO RESOLUTION DATE AVAILABLE (checked 2026-09-13, resolving a prior
+// audit's open question): investigated for real before concluding this —
+// neither of the two endpoints this module actually touches publishes a
+// dated decision/order anywhere. (1) The case-list JSON (fetchCases above)
+// carries exactly the 9 fields in the OpsbCase interface; `openDate` is the
+// only date, and it's the case's ORIGINAL FILING date, unchanged regardless
+// of a case's current `status` — confirmed live 2026-09-13 against Case
+// 25-1065-EL-BGN (Chestnut Run Energy Project, status "Approved"), whose
+// `openDate` ("Nov 12, 2025") is its filing date, not a decision date; no
+// second date field exists anywhere in that JSON. (2) Each case's own OPSB
+// detail page (the same page fetchHearings already fetches for
+// still-waiting cases) was fetched for that same Chestnut Run case and
+// checked byte-for-byte for any other date-shaped field: none exists beyond
+// the site's own generic UI-label translations table and the hearing-date
+// prose fetchHearings already parses — there is no "Order issued"/"Decision
+// date"/"Certificate granted" field anywhere on that page. (3) That detail
+// page's own "Open Case Record" sidebar link points at PUCO's actual
+// docketing system (dis.puc.state.oh.us/CaseRecord.aspx?CaseNo=...) — the
+// one place a real dated order/entry would actually live — but a real GET
+// against that exact case-specific URL (not just the POST search the
+// module header above already found blocked) was confirmed live 2026-09-13
+// to return an F5-style CAPTCHA challenge page (an inline `<audio
+// id="captcha_audio">` + image challenge), not case content. So the WAF
+// documented above blocks this source's own direct case-record links too,
+// not just its search form — a real, confirmed dead end, not a guess.
+// resolutionDate/resolutionDateConfidence are therefore left undefined for
+// every case this module ingests, matching how gaPscDockets.ts/
+// meDepSiteLawPermits.ts/mdPscDockets.ts/wyIscDockets.ts each document their
+// own "no real date available" finding rather than forcing one.
+//
 // Wired to Vercel Cron weekly, 19:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-oh-opsb/route.ts) — a real run's timing was
 // measured (227 cases, 7.6s, the fastest source in this series) before

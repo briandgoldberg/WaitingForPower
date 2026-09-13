@@ -168,33 +168,76 @@
 // ZERO rows, even though the search form's own Case Status field accepts
 // them as valid filter values — proving the "pending" scoping is enforced
 // server-side by the canned search itself, not something this module's own
-// filter parameters control. Every candidate this module ever sees is
-// therefore, by construction, still genuinely pending — no free-text
-// grant/deny scanning is needed, and every real candidate's `currentStage`
-// is simply "local_review". The candidates' own Case Status codes (OPEN,
+// filter parameters control. The candidates' own Case Status codes (OPEN,
 // REV="Under Review", and — per the search form's own option list, not yet
 // observed live — NF/PC/PCOA/EFILED/R/DPSIP/OA/PEND/STAY/OR — see
 // CASE_STATUS_LABELS) are surfaced in `currentStatus` purely for
-// transparency, not used to compute currentStage.
+// transparency. BUT (see RESOLUTION DATE / SCOPE EXTENSION below) a case
+// can still be sitting in this "Pending Cases" list even after its
+// Certificate of Public Good has already been granted — confirmed live
+// 2026-09-13 against Case 25-2774-PET, still returned by this exact query
+// with Case Status "Under Review," whose own Recent Orders record already
+// carries a real "§ 248 Final Order" dated 2026-08-26 titled "Order
+// Granting Certificate of Public Good" — so appearing in Pending Cases is
+// NOT by itself proof a case hasn't already resolved; the real signal is
+// the resolution-order search below, not this endpoint's own inclusion.
 //
-// VANISHED-CANDIDATE FIX (superseded 2026-08-25): this module's own
-// candidate query is scoped to "Pending Cases" only (see STATUS above:
-// confirmed live that closed/withdrawn cases cannot be returned by this
-// endpoint at all, by any filter combination), so once VT PUC issues a
-// final order or the petitioner withdraws, that case will simply vanish
-// from every future run's candidate list. Originally fixed by pushing a
-// resolved stub (guessing currentStage="cancelled", used purely as a
-// generic RESOLVED_STAGES trigger — this module cannot tell from the
-// vanished-stub path alone whether a case resolved via grant, denial, or
-// withdrawal) for any previously-tracked "vt-puc:" matchKey no longer in
-// this run's pending set, so common.ts would delete it. That fix is now
-// itself superseded: common.ts no longer deletes resolved-stage projects
-// (they're kept and surfaced through the frontend's Status filter), so
-// guessing "cancelled" for a case that dropped off Pending Cases would
-// mean permanently mislabeling it — it's at least as likely to have been
-// granted — in a bucket real users can now see. A case that drops off
-// Pending Cases is therefore left untouched, not guessed into a resolved
-// stage.
+// RESOLUTION DATE / SCOPE EXTENSION (added 2026-09-13, resolving a prior
+// audit's open question — and the same real gap maEfsbDockets.ts/
+// orEfscFacilities.ts/waEfsecFacilities.ts each had to fix in this same
+// round of work): this module's candidate query being scoped to "Pending
+// Cases" only used to mean two things went wrong once a case actually
+// resolved — (1) a case that drops off Pending Cases entirely was
+// previously left completely untouched forever (see the retired
+// VANISHED-CANDIDATE FIX note this section replaces), and (2) even a case
+// STILL showing in Pending Cases (per the real 25-2774-PET example above)
+// was never checked for an already-issued CPG order at all. Both are fixed
+// the same way: epuc.vermont.gov's OTHER canned search, "Recent Orders"
+// (node/84, eCourtFormCode S-Document-RecentOrders-Portal — a sitewide
+// per-DOCUMENT search, not scoped to pending cases at all), exposes the
+// exact same "Petition Filing Type" field (id 163884, confirmed live to
+// carry the identical 248/248J/248DM/248REG/246/etc. option list as the
+// Pending Cases search's own field 238943) as a real filter, plus a
+// "Case Number," a "Date Issued," and — critically — each matching
+// document's own Order Type (e.g. "§ 248 Final Order," "§ 248 Certificate
+// of Public Good," vs. "§ 248a ..." for telecom, "§ 248 Certificate of
+// Public Good - Amended" for a later amendment) and Title (e.g. "Order
+// Granting Certificate of Public Good"). fetchRecentSection248Orders below
+// queries this with Petition Filing Type IN [248, 248J] and Subcase Type
+// PET, paginating (the same `/?q=node/84/{page}` GETs the site's own pager
+// uses, reusing the POST's session cookie — confirmed live 2026-09-13 that
+// this correctly continues the same result set rather than re-rendering the
+// blank form) up to ORDER_SEARCH_MAX_PAGES over the last
+// ORDER_SEARCH_LOOKBACK_YEARS. `resolveFromOrders` then classifies each
+// case's own matching orders by Order Type (must read as real energy §248/
+// §248J, not §248a/246/etc. — see IN_SCOPE_SECTION_RE) and Title text
+// (granting/denying/revoking), taking the EARLIEST such order's real date
+// when more than one exists for the same disposition (an amendment
+// shouldn't override the original grant date) — same oldest-wins
+// convention maEfsbDockets.ts uses for its own multi-"Final Decision" case.
+// Confirmed live 2026-09-13 against a real, definitively-resolved energy
+// case found this way that ISN'T in the current Pending Cases list at all:
+// Case 23-0170-PET (DG Outback Acres Solar, LLC — "a 3.5 MW solar electric
+// generation facility in Pittsford, Vermont," filed 2023-01-19) carries a
+// real "§ 248 Final Order" titled "Order Granting Certificate of Public
+// Good," Order Date 2023-12-19 — the real date VT PUC granted this
+// project's CPG. A case found this way that isn't already a Pending Cases
+// candidate is normalized via `fetchCaseByCaseNumber` (the site's third
+// canned search, "Search by Case Number," node/89 — a plain exact-match
+// case lookup that, unlike Pending Cases, is NOT scoped to pending cases;
+// confirmed live against 23-0170-PET, whose own row there carries a real
+// Case Status of "Closed") to recover its caption/town/filed-date, run
+// through the exact same CONTENT_RE/EXCLUDE_RE/inferProjectType/
+// inferFuelType/extractCapacityMw logic as a still-pending candidate, then
+// upserted with its real resolved stage and resolutionDate — never
+// retroactively creating a case this site never tracked while it was
+// pending, per common.ts's own RESOLVED_STAGES guard (shared by every
+// module in this series). Only the GRANT/DENY paths are confirmed against
+// a real current-population example; a REVOKE_TITLE_RE match ("Order
+// Revoking Certificate of Public Good," confirmed live only on out-of-scope
+// §248a telecom cases so far) is kept for the next real §248 revocation,
+// same "kept but unconfirmed" caveat this file already uses for its thin
+// fuel-type population.
 //
 // FUEL/PROJECT TYPE & CAPACITY: parsed from each candidate's own Case Name
 // (the full petition caption, already fetched inline — see FETCHING). Real,
@@ -489,6 +532,299 @@ function parsePendingCasesHtml(html: string): CaseRecord[] {
   return records;
 }
 
+// ===== RESOLUTION DATE / SCOPE EXTENSION — see module header. =====
+//
+// epuc.vermont.gov's "Recent Orders" canned search (node/84, eCourtFormCode
+// S-Document-RecentOrders-Portal) — a sitewide per-DOCUMENT search, not
+// scoped to pending cases at all, confirmed live 2026-09-13. Same
+// "Petition Filing Type" vocabulary (field id 163884) as the Pending Cases
+// search's own field 238943 — see module header.
+const ORDER_SEARCH_URL = `${BASE_URL}/?q=node/84`;
+
+// Bounds the resolution-order scan to a sane, bounded cron-time budget —
+// not a hard requirement of the source itself (Recent Orders has no
+// inherent limit). This module's own oldest confirmed-live pending
+// candidate (23-0249-PET) was filed in 2023 — 2 years comfortably covers
+// any currently-pending candidate resolving, plus a buffer for a case that
+// already dropped off Pending Cases up to 2 years ago.
+const ORDER_SEARCH_LOOKBACK_YEARS = 2;
+const ORDER_SEARCH_ROWS_PER_PAGE = 20;
+const ORDER_SEARCH_MAX_PAGES = 20;
+
+function formatOrderSearchDate(d: Date): string {
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+// Every hidden field the real "Recent Orders" form (eCourtFormCode
+// S-Document-RecentOrders-Portal, ecpFormId 58, formId 1330) emits — same
+// "reproduce every field even if blank" discipline as buildSearchParams
+// above. Confirmed live 2026-09-13 against a real fetch of this form.
+function buildOrderSearchParams(formBuildId: string, fromDate: string, toDate: string): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("formId", "1330");
+  params.set("data(181459_op)", "EQUALS");
+  params.set("data(181459_incnull)", "false");
+  params.set("data(181459)", fromDate);
+  params.set("data(181459_right)", toDate);
+  params.set("data(163875_op)", "EQUALS");
+  params.set("data(163875_incnull)", "false");
+  params.set("data(163875)", "");
+  params.set("data(163876_op)", "IN");
+  params.set("data(163876_incnull)", "false");
+  params.set("data(163878_op)", "IN");
+  params.set("data(163878_incnull)", "false");
+  params.set("data(163879_op)", "CONTAINS");
+  params.set("data(163879_incnull)", "false");
+  params.set("data(163879)", "");
+  params.set("data(163883_op)", "IN");
+  params.set("data(163883_incnull)", "false");
+  params.append("data(163883)[]", "PET");
+  params.set("data(163884_op)", "IN");
+  params.set("data(163884_incnull)", "false");
+  // See module header PETITION FILING TYPE / RESOLUTION DATE.
+  params.append("data(163884)[]", "248");
+  params.append("data(163884)[]", "248J");
+  params.set("data(163885_op)", "IN");
+  params.set("data(163885_incnull)", "false");
+  params.set("data(163886_op)", "IN");
+  params.set("data(163886_incnull)", "false");
+  params.set("data(163887_op)", "IN");
+  params.set("data(163887_incnull)", "false");
+  params.set("data(163889_op)", "IN");
+  params.set("data(163889_incnull)", "false");
+  params.append("data(163889)[]", "FINORD");
+  params.set("eCourtFormCode", "S-Document-RecentOrders-Portal");
+  params.set("ecpFormId", "58");
+  params.set("form_build_id", formBuildId);
+  params.set("form_id", "ecp_searchform_form");
+  params.set("op", "Search");
+  return params;
+}
+
+interface CpgOrderRecord {
+  caseId: string;
+  caseNumber: string;
+  orderDate: Date;
+  /** e.g. "§ 248 Final Order", "§ 248a Certificate of Public Good - Amended" — the source's own Order Type taxonomy term. */
+  orderType: string;
+  /** e.g. "Order Granting Certificate of Public Good". */
+  title: string;
+}
+
+// Each result row duplicates its own cell values into same-named hidden
+// inputs — the "Date Issued" column's own hidden field (181460) carries a
+// full ISO timestamp, more precise than the visible "9/10/26"-style cell
+// text. Confirmed live 2026-09-13 against a real fetch of this search's
+// results.
+const ORDER_RESULT_ROW_RE = /<tr style="height:17px" id="form_search_row[^"]*">([\s\S]*?)<\/tr>/g;
+
+function parseOrderResultRows(html: string): CpgOrderRecord[] {
+  const out: CpgOrderRecord[] = [];
+  for (const m of html.matchAll(ORDER_RESULT_ROW_RE)) {
+    const row = m[1];
+    const dateM = /name="data\(181460\)"[^>]*value="([^"]*)"/.exec(row);
+    const caseM = /<a href="\?q=node\/64\/(\d+)">([^<]+)<\/a>/.exec(row);
+    const orderTypeM = /name="data\(163870\)"[^>]*value="([^"]*)"/.exec(row);
+    const titleM = /name="data\(163871\)"[^>]*value="([^"]*)"/.exec(row);
+    if (!dateM || !caseM || !orderTypeM || !titleM) continue;
+    const orderDate = new Date(dateM[1]);
+    if (Number.isNaN(orderDate.getTime())) continue;
+    out.push({
+      caseId: caseM[1],
+      caseNumber: decodeHtmlEntities(caseM[2]),
+      orderDate,
+      orderType: decodeHtmlEntities(orderTypeM[1]),
+      title: decodeHtmlEntities(titleM[1]),
+    });
+  }
+  return out;
+}
+
+// Paginates via the same `/?q=node/84/{page}` GETs the site's own pager
+// uses, reusing the POST's session cookie — confirmed live 2026-09-13 that
+// this correctly continues the same result set (not a re-render of the
+// blank form). A failure anywhere here is caught by the caller, which
+// degrades to "no resolution data this run" rather than failing the whole
+// ingestion run over this supplementary feature.
+async function fetchRecentSection248Orders(): Promise<CpgOrderRecord[]> {
+  const getRes = await fetch(ORDER_SEARCH_URL, { headers: { Accept: "text/html" } });
+  if (!getRes.ok) throw new Error(`VT PUC ePUC Recent Orders page request failed (${getRes.status})`);
+  const cookie = getRes.headers.get("set-cookie")?.split(";")[0];
+  const getHtml = await getRes.text();
+  const buildIdMatch = /form_build_id"\s+value="([^"]+)"/.exec(getHtml);
+  if (!cookie || !buildIdMatch) {
+    throw new Error(
+      "VT PUC ePUC Recent Orders page didn't return the expected session cookie and/or form_build_id — the page structure likely changed. Check fetchRecentSection248Orders in src/lib/ingest/vtPucDockets.ts against a fresh response.",
+    );
+  }
+
+  const to = new Date();
+  const from = new Date();
+  from.setFullYear(from.getFullYear() - ORDER_SEARCH_LOOKBACK_YEARS);
+
+  await sleep(REQUEST_DELAY_MS);
+  const postRes = await fetch(ORDER_SEARCH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html", Cookie: cookie },
+    body: buildOrderSearchParams(buildIdMatch[1], formatOrderSearchDate(from), formatOrderSearchDate(to)).toString(),
+  });
+  if (!postRes.ok) throw new Error(`VT PUC ePUC Recent Orders search POST failed (${postRes.status})`);
+  const firstPageHtml = await postRes.text();
+
+  const all = parseOrderResultRows(firstPageHtml);
+  const totalMatch = /Results \d+ - \d+ of (\d+)/.exec(firstPageHtml);
+  const total = totalMatch ? Number(totalMatch[1]) : all.length;
+  const totalPages = Math.min(Math.ceil(total / ORDER_SEARCH_ROWS_PER_PAGE), ORDER_SEARCH_MAX_PAGES);
+
+  for (let page = 2; page <= totalPages; page++) {
+    await sleep(REQUEST_DELAY_MS);
+    const pageRes = await fetch(`${BASE_URL}/?q=node/84/${page}`, { headers: { Cookie: cookie } });
+    if (!pageRes.ok) break;
+    all.push(...parseOrderResultRows(await pageRes.text()));
+  }
+
+  return all;
+}
+
+// Distinguishes a real energy §248/§248(j) order from the identically-
+// shaped §248a (telecommunications, out of scope — see module header
+// SCOPING) taxonomy sharing the same "248" prefix. Confirmed live
+// 2026-09-13: every real §248/§248(j) Order Type observed reads "§ 248 ..."
+// or "§ 248(j) ..." (a space or "(" right after "248"), while every §248a
+// one reads "§ 248a ..." (a letter immediately after "248", no space) — the
+// same real naming-trap shape PETITION FILING TYPE (module header) already
+// documents for the Pending Cases search's own field.
+const IN_SCOPE_SECTION_RE = /§\s*248\s|§\s*248\(j\)/i;
+const GRANT_TITLE_RE = /granting certificate of public good/i;
+const DENY_TITLE_RE = /\bdenying\b/i;
+// Confirmed live only against out-of-scope §248a telecom cases so far (see
+// module header) — kept for the next real §248 revocation, same
+// "kept but unconfirmed" caveat this file already uses for its thin
+// fuel-type population.
+const REVOKE_TITLE_RE = /revoking certificate of public good/i;
+
+interface CaseResolution {
+  stage: "approved_awaiting_construction" | "cancelled";
+  date: Date;
+}
+
+// See module header RESOLUTION DATE / SCOPE EXTENSION — when more than one
+// order matches the same disposition (an amendment can follow years after
+// the original grant), the EARLIEST is the real original disposition, same
+// oldest-wins convention maEfsbDockets.ts uses for its own multi-"Final
+// Decision" case.
+function earliestOrderDate(orders: CpgOrderRecord[]): Date {
+  return orders.reduce((earliest, o) => (o.orderDate.getTime() < earliest.getTime() ? o.orderDate : earliest), orders[0].orderDate);
+}
+
+function resolveFromOrders(orders: CpgOrderRecord[]): CaseResolution | null {
+  const inScope = orders.filter((o) => IN_SCOPE_SECTION_RE.test(o.orderType));
+  const granted = inScope.filter((o) => GRANT_TITLE_RE.test(o.title));
+  if (granted.length > 0) return { stage: "approved_awaiting_construction", date: earliestOrderDate(granted) };
+  const denied = inScope.filter((o) => DENY_TITLE_RE.test(o.title));
+  if (denied.length > 0) return { stage: "cancelled", date: earliestOrderDate(denied) };
+  const revoked = inScope.filter((o) => REVOKE_TITLE_RE.test(o.title));
+  if (revoked.length > 0) return { stage: "cancelled", date: earliestOrderDate(revoked) };
+  return null;
+}
+
+function groupOrdersByCase(orders: CpgOrderRecord[]): Map<string, CpgOrderRecord[]> {
+  const map = new Map<string, CpgOrderRecord[]>();
+  for (const o of orders) {
+    const arr = map.get(o.caseNumber) ?? [];
+    arr.push(o);
+    map.set(o.caseNumber, arr);
+  }
+  return map;
+}
+
+// "Search by Case Number" (node/89, eCourtFormCode S-CaseByCaseNumber-
+// Portal) — a plain exact-match case lookup that, unlike Pending Cases, is
+// NOT scoped to pending cases at all. Used only for a case found via
+// fetchRecentSection248Orders that has ALREADY dropped off the Pending
+// Cases list (see module header RESOLUTION DATE / SCOPE EXTENSION) — the
+// only way this module can recover that case's own caption/town/filed-date
+// once it's no longer in the Pending Cases response.
+const CASE_NUMBER_SEARCH_URL = `${BASE_URL}/?q=node/89`;
+
+interface ResolvedCaseLookup {
+  caseId: string;
+  caseNumber: string;
+  description: string;
+  filedDate: Date | null;
+  town: string | null;
+}
+
+// VT's own petition captions consistently end "... in <Town>, Vermont" —
+// confirmed live 2026-09-13 against Case 23-0170-PET's own caption ("...a
+// 3.5 MW solar electric generation facility in Pittsford, Vermont"). Same
+// honest-approximation caveat as every other free-text extraction in this
+// file: not independently verified, and a multi-town caption (see module
+// header LOCATION) only captures the last-named town this way.
+const TOWN_FROM_DESCRIPTION_RE = /\bin\s+([A-Z][A-Za-z.'\s-]*?),\s*Vermont\b/;
+
+function extractTownFromDescription(description: string): string | null {
+  const m = TOWN_FROM_DESCRIPTION_RE.exec(description);
+  return m ? m[1].trim() : null;
+}
+
+// Same "Petition of X for a certificate..." caption shape this file already
+// relies on elsewhere — a fallback used only for a case discovered via
+// fetchRecentSection248Orders that never came from the Pending Cases
+// response (which publishes petitioner as its own structured field).
+const PETITIONER_FROM_DESCRIPTION_RE = /^Petition\s+of\s+(?:the\s+)?(.+?),?\s+(?:for\s+a\s+certificate|pursuant\s+to)/i;
+
+function extractPetitionerFromDescription(description: string): string {
+  const m = PETITIONER_FROM_DESCRIPTION_RE.exec(description);
+  return m ? m[1].trim() : description.slice(0, 80);
+}
+
+async function fetchCaseByCaseNumber(caseNumber: string): Promise<ResolvedCaseLookup | null> {
+  const getRes = await fetch(CASE_NUMBER_SEARCH_URL, { headers: { Accept: "text/html" } });
+  if (!getRes.ok) return null;
+  const cookie = getRes.headers.get("set-cookie")?.split(";")[0];
+  const getHtml = await getRes.text();
+  const buildIdMatch = /form_build_id"\s+value="([^"]+)"/.exec(getHtml);
+  if (!cookie || !buildIdMatch) return null;
+
+  const params = new URLSearchParams();
+  params.set("formId", "41553");
+  params.set("data(235700)", caseNumber);
+  params.set("eCourtFormCode", "S-CaseByCaseNumber-Portal");
+  params.set("ecpFormId", "63");
+  params.set("form_build_id", buildIdMatch[1]);
+  params.set("form_id", "ecp_searchform_form");
+  params.set("op", "Search");
+
+  await sleep(REQUEST_DELAY_MS);
+  const postRes = await fetch(CASE_NUMBER_SEARCH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html", Cookie: cookie },
+    body: params.toString(),
+  });
+  if (!postRes.ok) return null;
+  const html = await postRes.text();
+
+  const rowM = /<tr style="height:17px" id="form_search_row[^"]*">([\s\S]*?)<\/tr>/.exec(html);
+  if (!rowM) return null;
+  const row = rowM[1];
+  const caseIdM = /<a href="\?q=node\/64\/(\d+)">([^<]+)<\/a>/.exec(row);
+  const filedM = /name="data\(235692\)"[^>]*value="([^"]*)"/.exec(row);
+  const descM = /name="data\(235694\)"[^>]*value="([^"]*)"/.exec(row);
+  if (!caseIdM || !descM) return null;
+  const filedDateRaw = filedM ? new Date(filedM[1]) : null;
+  const description = decodeHtmlEntities(descM[1]);
+
+  return {
+    caseId: caseIdM[1],
+    caseNumber: decodeHtmlEntities(caseIdM[2]),
+    description,
+    filedDate: filedDateRaw && !Number.isNaN(filedDateRaw.getTime()) ? filedDateRaw : null,
+    town: extractTownFromDescription(description),
+  };
+}
+// ===== END RESOLUTION DATE / SCOPE EXTENSION =====
+
 // See module header FETCHING — the search form's own live-confirmed option
 // list for this field (id 238940).
 const CASE_STATUS_LABELS: Record<string, string> = {
@@ -560,7 +896,11 @@ function extractCapacityMw(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, UpcomingHearing[]>): NormalizedProject {
+function normalizeCandidate(
+  record: CaseRecord,
+  upcomingHearings: Map<string, UpcomingHearing[]>,
+  resolution: CaseResolution | null,
+): NormalizedProject {
   const matchKey = resolveMatchKey("vt-puc", record.caseNumber);
 
   const projectType = inferProjectType(record.description);
@@ -569,7 +909,7 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
   const townList = record.towns.length > 0 ? record.towns.join(", ") : null;
 
   const statusLabel = CASE_STATUS_LABELS[record.statusCode] ?? record.statusCode;
-  const currentStage: ProjectStage = "local_review";
+  const currentStage: ProjectStage = resolution?.stage ?? "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
   const hearings = upcomingHearings.get(record.caseNumber) ?? [];
 
@@ -589,6 +929,11 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
   } else {
     dataQualityNoteParts.push("No structured location field is published; this project will not appear on the map until geocoded another way.");
   }
+  if (resolution) {
+    dataQualityNoteParts.push(
+      "This case's Certificate of Public Good has already been decided per VT PUC's own \"Recent Orders\" record — see the ingestion module header RESOLUTION DATE / SCOPE EXTENSION section. Note this can be true even for a case that still shows up in the \"Pending Cases\" search this module also queries (confirmed live: a case can remain listed there after its final order issues).",
+    );
+  }
 
   return {
     matchKey,
@@ -603,8 +948,14 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
     capacityUnit: capacityMw != null ? "MW" : null,
     applicationFiledDate: record.filedDate,
     dateConfidence: "exact",
-    currentStatus: `VT PUC Case ${record.caseNumber}: ${statusLabel}`,
+    currentStatus: resolution
+      ? `VT PUC Case ${record.caseNumber}: ${resolution.stage === "approved_awaiting_construction" ? "Certificate of Public Good granted" : "resolved (denied or revoked)"} per VT PUC's Recent Orders record`
+      : `VT PUC Case ${record.caseNumber}: ${statusLabel}`,
     currentStage,
+    // See module header RESOLUTION DATE / SCOPE EXTENSION — undefined (not
+    // null) for a still-pending case, per the project-wide undefined-vs-null
+    // convention in common.ts.
+    ...(resolution ? { resolutionDate: resolution.date, resolutionDateConfidence: "exact" as const } : {}),
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Good from the Vermont Public Utility Commission, pursuant to 30 V.S.A. §248 — Case No. ${record.caseNumber}, "${record.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -623,6 +974,8 @@ function normalizeCandidate(record: CaseRecord, upcomingHearings: Map<string, Up
 export interface IngestSummary {
   candidatesFound: number;
   realApplicationCandidates: number;
+  /** See module header RESOLUTION DATE / SCOPE EXTENSION — cases tracked for the first time because a resolution order was found even though they'd already dropped off "Pending Cases." */
+  newlyResolvedCandidates: number;
   upserted: number;
   removedResolved: number;
   errors: { matchKey: string; message: string }[];
@@ -640,6 +993,7 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   const errors: { matchKey: string; message: string }[] = [];
   const toUpsert: NormalizedProject[] = [];
   let realApplicationCandidates = 0;
+  let newlyResolvedCandidates = 0;
 
   const rotatedRecords = selectWithRotation(allRecords, maxCandidates, ROTATING_RECENT_SLOTS);
   const rotatingTier = new Set(rotatedRecords.slice(ROTATING_RECENT_SLOTS));
@@ -647,6 +1001,14 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
   const upcomingHearings = await fetchUpcomingHearingsByCaseNumber().catch(() => new Map<string, UpcomingHearing[]>());
+
+  // See module header RESOLUTION DATE / SCOPE EXTENSION. A failure here
+  // shouldn't block the whole run over a feature this supplementary —
+  // degrades to "no resolution data this run" (every candidate stays
+  // local_review, same behavior as before this fix).
+  const recentOrders = await fetchRecentSection248Orders().catch(() => [] as CpgOrderRecord[]);
+  const ordersByCase = groupOrdersByCase(recentOrders);
+  const pendingCaseNumbers = new Set(allRecords.map((r) => r.caseNumber));
 
   for (const record of rotatedRecords) {
     try {
@@ -656,7 +1018,8 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
         continue;
       }
       realApplicationCandidates += 1;
-      const normalized = normalizeCandidate(record, upcomingHearings);
+      const resolution = resolveFromOrders(ordersByCase.get(record.caseNumber) ?? []);
+      const normalized = normalizeCandidate(record, upcomingHearings, resolution);
       toUpsert.push(normalized);
       if (rotatingTier.has(record)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
@@ -664,10 +1027,38 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
     }
   }
 
-  // See module header VANISHED-CANDIDATE FIX (superseded): a case whose
-  // status has already resolved and dropped off VT PUC's own "Pending
-  // Cases" search is deliberately left untouched now, not guessed into a
-  // resolved stage — see the header for why.
+  // See module header RESOLUTION DATE / SCOPE EXTENSION (replacing the old
+  // VANISHED-CANDIDATE FIX, which left a case that dropped off "Pending
+  // Cases" untouched forever): a case with a real resolution order in this
+  // run's lookback that ISN'T in the current Pending Cases response at all
+  // is looked up directly (fetchCaseByCaseNumber) and tracked with its real
+  // resolved stage/date — not silently dropped.
+  for (const [caseNumber, orders] of ordersByCase) {
+    if (pendingCaseNumbers.has(caseNumber)) continue; // already handled above
+    const resolution = resolveFromOrders(orders);
+    if (!resolution) continue;
+    try {
+      const lookup = await fetchCaseByCaseNumber(caseNumber);
+      if (!lookup) continue;
+      if (!CONTENT_RE.test(lookup.description) || EXCLUDE_RE.test(lookup.description)) continue;
+      const record: CaseRecord = {
+        caseId: lookup.caseId,
+        caseNumber: lookup.caseNumber,
+        subcaseType: "",
+        petitioner: extractPetitionerFromDescription(lookup.description),
+        description: lookup.description,
+        towns: lookup.town ? [lookup.town] : [],
+        filedDate: lookup.filedDate,
+        statusCode: "",
+      };
+      const normalized = normalizeCandidate(record, upcomingHearings, resolution);
+      toUpsert.push(normalized);
+      newlyResolvedCandidates += 1;
+    } catch (err) {
+      errors.push({ matchKey: caseNumber, message: String(err) });
+    }
+    await sleep(REQUEST_DELAY_MS);
+  }
 
   // See markVanished's wasCapped doc in common.ts: once this cap actually
   // truncates the candidate list, it's no longer the source's full active
@@ -679,6 +1070,7 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
   return {
     candidatesFound: allRecords.length,
     realApplicationCandidates,
+    newlyResolvedCandidates,
     upserted,
     removedResolved,
     errors,
@@ -692,8 +1084,9 @@ if (require.main === module) {
       const elapsedMs = Date.now() - started;
       console.log(
         `Vermont PUC docket ingestion complete: ${summary.candidatesFound} pending §248/§248(j) candidates found, ` +
-          `${summary.realApplicationCandidates} real siting applications, upserted ${summary.upserted}, ` +
-          `removed ${summary.removedResolved} resolved, ${summary.errors.length} errors. (${elapsedMs}ms)`,
+          `${summary.realApplicationCandidates} real siting applications, ${summary.newlyResolvedCandidates} newly-tracked ` +
+          `resolved cases, upserted ${summary.upserted}, removed ${summary.removedResolved} resolved, ` +
+          `${summary.errors.length} errors. (${elapsedMs}ms)`,
       );
       if (summary.errors.length > 0) console.error(summary.errors);
     })

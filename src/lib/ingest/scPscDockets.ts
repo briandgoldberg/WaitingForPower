@@ -58,6 +58,37 @@
 // matches), 2026-192-E (freshly filed, no orders yet, correctly finds no
 // signal and is left active).
 //
+// RESOLUTION DATE (added 2026-09-13, resolving a prior audit's open
+// question): the same Orders tab a prior audit found only cited via
+// order-summary `<span>` text does, in fact, carry a real per-order date —
+// confirmed live 2026-09-13 that every row in that table is a full
+// <Order#, Order Type, Summary, Order Date, Directive Date, Attachments>
+// structure, not just a summary span; `parseOrders` below now captures each
+// order's own "Order Date" alongside its summary, instead of the prior
+// span-only scrape. Confirmed against the same two real dockets the header
+// above already cites: Docket 2026-30-E's "Order Granting Certificates of
+// Public Convenience and Necessity..." carries Order Date 7/23/2026 (its
+// only grant order — used directly). Docket 2022-93-E is more interesting:
+// it has TWO orders matching GRANT_RE — the original "Order Granting
+// Certificates of Environmental Compatibility and Public Convenienc[e]...",
+// Order Date 10/20/2022, AND a later "Amended Order Granting Certificates
+// of Environmental Compatibility and Public Co[nvenience]...", Order Date
+// 2/4/2026 (an amendment to the original certificate, not a new
+// application) — `resolutionDate` takes the EARLIEST matching order's date
+// (10/20/2022, the real original grant), not the amendment, same
+// oldest-wins convention maEfsbDockets.ts uses for its own multi-"Final
+// Decision" case. The denied/dismissed branches reuse the identical
+// row-level date field (confirmed against two older, out-of-lookback real
+// examples while calibrating this: 2001-411-E's "Order Denying Application
+// For A Certificate Of Enviromental Compatibility..." carries a real Order
+// Date of 4/1/2002; a genuinely unrelated "Order Denying Petition For
+// Rehearing Or Reconsideration" on the same docket correctly does NOT match
+// DENY_RE, since that regex requires "certificate(s)" nearby) — not yet
+// confirmed against a currently-in-lookback denied/dismissed docket, since
+// none exists in the live candidate population as of this writing, but the
+// same real table structure and extraction path is used for every
+// resolution kind, not a special case.
+//
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields — SC's captions are
 // unusually descriptive and consistent, though ("Application of X for a
 // [certificate] for the Construction and Operation of a 100 MW Solar
@@ -103,6 +134,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -219,6 +251,7 @@ export function parseSearchResults(html: string): DocketSearchResult[] {
 interface DocketDetail {
   openedDate: Date | null;
   resolution: "granted" | "denied" | "dismissed" | null;
+  resolutionDate: Date | null;
 }
 
 const OPENED_RE =
@@ -233,6 +266,49 @@ const GRANT_RE = /\bgranting\b[\s\S]{0,30}\bcertificates?\b/i;
 const DENY_RE = /\bdenying\b[\s\S]{0,60}\bcertificates?\b/i;
 const DISMISS_RE = /\bdismissing\b[\s\S]{0,60}\b(application|docket|petition)\b/i;
 
+interface DocketOrder {
+  summary: string;
+  orderDate: Date | null;
+}
+
+// Each Orders-tab row is Order# / Order Type / Summary / Order Date /
+// Directive Date / Attachments (confirmed live 2026-09-13 — see module
+// header RESOLUTION DATE) — only the Summary and Order Date columns are
+// captured here; the Order# link text and Directive Date aren't needed.
+const ORDER_ROW_RE =
+  /<tr>\s*<td class="nowrap">\s*(?:<a href="javascript:showOrderDetail\('[^']*',\s*'\d+'\)">[^<]*<\/a>)?\s*<\/td>\s*<td>\s*<span>[^<]*<\/span>\s*<\/td>\s*<td>\s*<span>([\s\S]*?)<\/span>\s*<\/td>\s*<td class="nowrap">\s*<span>([^<]*)<\/span>\s*<\/td>/g;
+
+function parseOrders(ordersSection: string): DocketOrder[] {
+  const orders: DocketOrder[] = [];
+  for (const m of ordersSection.matchAll(ORDER_ROW_RE)) {
+    const summary = decodeHtmlEntities(m[1]);
+    const orderDate = parseSlashDate(m[2]);
+    orders.push({ summary, orderDate });
+  }
+  return orders;
+}
+
+// "7/23/2026" — the Orders tab's own Order Date format, distinct from the
+// "Monday, January 26, 2026" format the docket-level Opened field uses (see
+// parseLongDate below).
+function parseSlashDate(raw: string): Date | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const d = new Date(trimmed);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// See module header RESOLUTION DATE: when more than one order matches a
+// given resolution kind (a docket can be granted, then later amended — see
+// 2022-93-E), the EARLIEST matching order's date is the real original
+// disposition, not a later amendment — same oldest-wins convention
+// maEfsbDockets.ts uses for its own multi-"Final Decision" case.
+function earliestOrderDate(orders: DocketOrder[], re: RegExp): Date | null {
+  const matches = orders.filter((o) => o.orderDate != null && re.test(o.summary));
+  if (matches.length === 0) return null;
+  return matches.reduce((earliest, o) => (o.orderDate!.getTime() < earliest.getTime() ? o.orderDate! : earliest), matches[0].orderDate!);
+}
+
 export function parseDetail(html: string): DocketDetail {
   const openedM = OPENED_RE.exec(html);
   const openedDate = openedM ? parseLongDate(decodeHtmlEntities(openedM[1])) : null;
@@ -245,25 +321,30 @@ export function parseDetail(html: string): DocketDetail {
     );
   }
   const ordersSection = html.slice(tabStart, tabEnd);
-  const orderSummaries = [...ordersSection.matchAll(/<span>([^<]+)<\/span>/g)].map((m) => decodeHtmlEntities(m[1]));
+  const orders = parseOrders(ordersSection);
 
   let resolution: DocketDetail["resolution"] = null;
-  for (const summary of orderSummaries) {
-    if (GRANT_RE.test(summary)) {
+  for (const order of orders) {
+    if (GRANT_RE.test(order.summary)) {
       resolution = "granted";
       break;
     }
-    if (DENY_RE.test(summary)) {
+    if (DENY_RE.test(order.summary)) {
       resolution = "denied";
       break;
     }
-    if (DISMISS_RE.test(summary)) {
+    if (DISMISS_RE.test(order.summary)) {
       resolution = "dismissed";
       break;
     }
   }
 
-  return { openedDate, resolution };
+  let resolutionDate: Date | null = null;
+  if (resolution === "granted") resolutionDate = earliestOrderDate(orders, GRANT_RE);
+  else if (resolution === "denied") resolutionDate = earliestOrderDate(orders, DENY_RE);
+  else if (resolution === "dismissed") resolutionDate = earliestOrderDate(orders, DISMISS_RE);
+
+  return { openedDate, resolution, resolutionDate };
 }
 
 // "Monday, January 26, 2026" — day name is redundant and JS's native Date
@@ -382,6 +463,11 @@ function normalizeDocket(
     "Sourced from the South Carolina Public Service Commission's public Docket Management System.",
     'The docket\'s own "Status" field is not reliable (observed to read "Open" even on long-granted dockets); "still waiting" here is inferred from scanning the docket\'s Orders tab for a granting/denying/dismissing order — see the ingestion module header for how this was calibrated.',
   ];
+  if (RESOLVED_STAGES.includes(currentStage) && !detail.resolutionDate) {
+    dataQualityNoteParts.push(
+      "This docket's status is resolved, but no dated order matching that resolution could be found in its own Orders tab — see the ingestion module header RESOLUTION DATE section.",
+    );
+  }
   if (capacityMw != null) {
     dataQualityNoteParts.push("Capacity figure is parsed from the docket caption text, not a structured field — not independently verified.");
   }
@@ -410,6 +496,10 @@ function normalizeDocket(
     applicant,
     currentStatus: `South Carolina PSC docket ${search.docketNumber}: ${detail.resolution ?? "active"}`,
     currentStage,
+    // See module header RESOLUTION DATE — undefined (not null) for an
+    // ordinary still-active docket, per the project-wide undefined-vs-null
+    // convention in common.ts.
+    ...(detail.resolutionDate ? { resolutionDate: detail.resolutionDate, resolutionDateConfidence: "exact" as const } : {}),
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the South Carolina Public Service Commission — Docket No. ${search.docketNumber}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

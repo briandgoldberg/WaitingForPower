@@ -95,9 +95,27 @@
 // Wired to Vercel Cron weekly, 19:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-co-puc/route.ts) — a real run's timing was
 // measured (22 candidates, ~41s) before scheduling this.
+//
+// RESOLUTION DATE (added 2026-09-12): Show_Docket's own page has a real,
+// SEPARATE "Decisions" table from the Documents/filings grid above — its
+// rows link to `EFI_Search_UI.Show_Decision?p_dec=<id>`, not
+// `EFI.Show_Filing`, and were previously invisible to this module entirely
+// (DOCUMENT_ROW_RE never matches them). Confirmed live against 3 real
+// closed dockets — see extractResolutionDate's own comment for the full
+// finding, including Colorado's real "C"-prefix (Commission Decision) vs.
+// "R"-prefix (ALJ Recommended Decision, which becomes final on its own
+// absent exceptions) vs. "-I" suffix (Interim, non-dispositive) decision-
+// numbering convention. This module still trusts the search result's own
+// reliable status field (see STATUS MAPPING) for WHETHER a docket
+// resolved; the Decisions table only supplies WHEN. Fetching Show_Docket
+// is no longer skipped for a resolved-status candidate (see the main loop
+// below) — that optimization predated common.ts's current
+// keep-resolved-projects behavior and would otherwise leave every
+// resolved CO project with no resolutionDate ever.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
 
@@ -291,6 +309,51 @@ export function parseDocuments(html: string): DocketDocument[] {
   return docs;
 }
 
+// RESOLUTION DATE (added 2026-09-12): the docket detail page (Show_Docket)
+// carries a SEPARATE table from the Documents grid above — a real
+// "Decisions" table whose own rows link to
+// `EFI_Search_UI.Show_Decision?p_dec=<id>`, not `EFI.Show_Filing` (confirmed
+// live: DOCUMENT_ROW_RE above never matches these rows at all — they were
+// previously invisible to this module). Confirmed live against 3 real
+// closed dockets: 23A-0607E's own decision "C24-0100 Commission Decision
+// Deeming Application Complete And Granting Transfer Of Transmission Assets
+// And Certificate Of Public Convenience And Necessity", dated 2/16/2024;
+// 25A-0069E's own "R25-0597 Recommended Decision Approving Settlement
+// Agreement, Granting Application, As Modified by Settlement Agreement, and
+// Closing Proceeding", dated 8/19/2025. Colorado's own decision-numbering
+// convention (confirmed live across all 3 real dockets checked): a "C"
+// prefix is a Commission Decision, an "R" prefix is an ALJ Recommended
+// Decision (which becomes final on its own if no exceptions are filed — CO
+// PUC procedure, not a guess: several real non-interim Recommended
+// Decisions above ARE the docket's actual final disposition, with no later
+// Commission decision superseding them), and either can carry a "-I" suffix
+// for an "Interim Decision" — a real, confirmed-live procedural ruling
+// (e.g. "R25-0407-I Interim Decision Scheduling Hearing...", "C25-0239-I
+// Interim Commission Decision Deeming Application Complete And Referring
+// Matter To An Administrative Law Judge") that does NOT dispose of the
+// case. `extractResolutionDate` below takes the MOST RECENT decision row
+// whose title doesn't contain "Interim" as the real resolution date — this
+// module still trusts the search result's own reliable status field (see
+// STATUS MAPPING) to decide WHETHER a docket is resolved; this only finds
+// WHEN, from the same page already being fetched for milestones.
+const DECISION_ROW_RE =
+  /<a href=" ?EFI_Search_UI\.Show_Decision\?[^"]*"[^>]*class="clsTableText">([\s\S]*?)<\/a><\/td>\s*<td[^>]*>\s*(\w{3} \d{1,2}\/\d{1,2}\/\d{4})/g;
+const INTERIM_DECISION_RE = /\binterim\b/i;
+
+function extractResolutionDate(html: string): Date | null {
+  let latest: Date | null = null;
+  for (const m of html.matchAll(DECISION_ROW_RE)) {
+    const title = decodeHtmlEntities(m[1]);
+    if (INTERIM_DECISION_RE.test(title)) continue;
+    // Strip the weekday prefix ("Tue 09/16/2025" -> "09/16/2025") the same
+    // way parseDocuments' own submitted-date parsing already does — see
+    // buildMilestones's `d.submitted = m[2].replace(/^\w{3} /, "")` below.
+    const date = parseUsDate(m[2].replace(/^\w{3} /, ""));
+    if (date && (latest === null || date > latest)) latest = date;
+  }
+  return latest;
+}
+
 function parseUsDate(raw: string): Date | null {
   const m = /^(\w{3})\s+(\d{1,2}),\s+(\d{4})$/.exec(raw.trim()) ?? /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim());
   if (!m) return null;
@@ -361,7 +424,12 @@ function buildMilestones(docs: DocketDocument[]): NormalizedMilestone[] {
   return milestones;
 }
 
-function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upcomingHearings: Map<string, UpcomingHearing[]>): NormalizedProject {
+function normalizeDocket(
+  search: DocketSearchResult,
+  docs: DocketDocument[],
+  upcomingHearings: Map<string, UpcomingHearing[]>,
+  resolutionDateFound: Date | null,
+): NormalizedProject {
   const matchKey = resolveMatchKey("co-puc", search.docketId);
   const hearings = upcomingHearings.get(search.docketId) ?? [];
   const currentStage = stageForStatus(search.status);
@@ -370,6 +438,14 @@ function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upc
   const projectType = inferProjectType(search.title);
   const fuelType = inferFuelType(search.title, projectType);
   const milestones = buildMilestones(docs);
+  // See RESOLUTION DATE above extractResolutionDate — only set once this
+  // docket's own reliable status field (see STATUS MAPPING) says it's
+  // actually resolved AND a real non-interim decision date was found; left
+  // undefined (never guessed) otherwise, per common.ts's
+  // keepExistingIfUnmanaged convention.
+  const resolutionDate: Date | null | undefined =
+    RESOLVED_STAGES.includes(currentStage) && resolutionDateFound ? resolutionDateFound : undefined;
+  const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
   // The Documents grid returns newest-first (confirmed 2026-08-23) —
   // don't assume array order for "most recent" below; the project page's
   // own timeline re-sorts independently (see serializeProject.ts) so this
@@ -404,6 +480,8 @@ function normalizeDocket(search: DocketSearchResult, docs: DocketDocument[], upc
       mostRecentMilestone ? ` (${milestones.length} filings, most recent: ${mostRecentMilestone.description.slice(0, 60)})` : ""
     }`,
     currentStage,
+    resolutionDate,
+    resolutionDateConfidence,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Colorado Public Utilities Commission — Docket No. ${search.docketId}, "${search.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -442,12 +520,20 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   for (const candidate of candidates) {
     try {
-      // Only fetch detail (for milestones) on still-active dockets — a
-      // resolved one is about to be deleted via RESOLVED_STAGES regardless,
-      // so its filing history is never displayed; skipping the fetch saves
-      // a request per resolved candidate.
-      const docs = stageForStatus(candidate.status) === "local_review" ? parseDocuments(await fetchDetail(candidate.docketId)) : [];
-      const normalized = normalizeDocket(candidate, docs, upcomingHearings);
+      // Detail is now fetched for EVERY candidate, not just still-active
+      // ones (changed 2026-09-12) — a resolved docket's own real
+      // resolution date lives in this same page's separate Decisions table
+      // (see RESOLUTION DATE above extractResolutionDate), and common.ts no
+      // longer deletes resolved-stage projects, so skipping the fetch would
+      // silently leave a real, kept, resolved project with no
+      // resolutionDate ever. Milestones (from the Documents grid) are still
+      // only built for still-active dockets, unchanged from before — that
+      // remains a separate, narrower question this task didn't ask to
+      // revisit.
+      const html = await fetchDetail(candidate.docketId);
+      const docs = stageForStatus(candidate.status) === "local_review" ? parseDocuments(html) : [];
+      const resolutionDateFound = extractResolutionDate(html);
+      const normalized = normalizeDocket(candidate, docs, upcomingHearings, resolutionDateFound);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

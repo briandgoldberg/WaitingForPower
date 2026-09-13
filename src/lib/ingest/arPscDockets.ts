@@ -380,10 +380,22 @@
 // A failure fetching this supplementary calendar never blocks the main
 // docket ingestion run (see ingestArPscDockets's own `.catch()` below) —
 // degrades to "no hearing data this run," same as every other state.
+//
+// RESOLUTION DATE (added 2026-09-12): no separate fetch was needed — the
+// action-log entry for whichever order actually resolves the docket (see
+// STATUS above) already carries its own real date (LOG_ENTRY_RE parses one
+// per numbered entry, e.g. "7/7/2025" for Docket 24-072-U's real Order No.
+// 9 granting a CECPN), independent of whether that order's disposition was
+// read from its cheap log-summary text or required a PDF-text fallback.
+// `detectResolution` now returns that order's own date alongside the
+// verdict; `resolutionDate`/`resolutionDateConfidence` are set on it only
+// when the docket actually resolved this run, left undefined otherwise —
+// see common.ts's keepExistingIfUnmanaged.
 
 import zlib from "node:zlib";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -663,6 +675,21 @@ async function fetchOrderPdfText(docket: string, docNumVal: string): Promise<str
 
 type Resolution = "granted" | "denied" | "dismissed" | null;
 
+// RESOLUTION DATE (added 2026-09-12): each OrderEntry already carries its
+// own real `date` — parsed straight from the action log's own date span
+// next to that order's numbered entry (see LOG_ENTRY_RE/fetchDocketDetail
+// above; e.g. Docket 24-072-U's real Order No. 9, "7/7/2025" per its own
+// log row) — the log's own docket-entry date for the specific order that
+// resolves the case, not the date this module happened to run. Whichever
+// order `detectResolution` finds a disposition on (from its log summary OR
+// its own PDF text — see STATUS above) has that order's own `date`
+// returned alongside the verdict, so a genuinely-dated resolution never
+// requires a separate fetch.
+interface ResolutionResult {
+  resolution: Resolution;
+  date: Date | null;
+}
+
 // See module header STATUS for how each pattern was calibrated against
 // real, live-confirmed AR PSC orders — including a real confirmed grant
 // (Docket 24-072-U's Order No. 9, matched directly from its log summary)
@@ -707,12 +734,12 @@ function detectResolutionFromText(text: string): Resolution {
 // Scans a docket's own ORDER entries, most-recent first — see module
 // header STATUS for why both the cheap summary-text check AND the PDF
 // fallback are real, load-bearing steps, not redundant.
-async function detectResolution(docket: string, orders: OrderEntry[]): Promise<Resolution> {
+async function detectResolution(docket: string, orders: OrderEntry[]): Promise<ResolutionResult> {
   const mostRecentFirst = [...orders].reverse();
   let pdfFetches = 0;
   for (const order of mostRecentFirst) {
     const fromSummary = detectResolutionFromText(order.summary);
-    if (fromSummary) return fromSummary;
+    if (fromSummary) return { resolution: fromSummary, date: order.date };
 
     if (pdfFetches >= MAX_ORDER_PDF_FETCHES_PER_DOCKET) {
       console.error(
@@ -725,10 +752,10 @@ async function detectResolution(docket: string, orders: OrderEntry[]): Promise<R
     const pdfText = await fetchOrderPdfText(docket, order.docNumVal);
     if (pdfText) {
       const fromPdf = detectResolutionFromText(pdfText);
-      if (fromPdf) return fromPdf;
+      if (fromPdf) return { resolution: fromPdf, date: order.date };
     }
   }
-  return null;
+  return { resolution: null, date: null };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY — calibrated against a
@@ -882,7 +909,7 @@ function extractApplicant(detail: DocketDetail): string {
   return detail.style.slice(0, 80);
 }
 
-function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearings: UpcomingHearing[]): NormalizedProject {
+function normalizeDocket(detail: DocketDetail, resolution: ResolutionResult, hearings: UpcomingHearing[]): NormalizedProject {
   const matchKey = resolveMatchKey("ar-psc", detail.docket);
   const { projectType, fuelType } = inferProjectTypeAndFuel(detail.style);
   const capacityMw = extractCapacityMw(detail.style);
@@ -890,9 +917,18 @@ function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearings:
   const applicant = extractApplicant(detail);
 
   let currentStage: ProjectStage;
-  if (resolution === "granted") currentStage = "approved_awaiting_construction";
-  else if (resolution === "denied" || resolution === "dismissed") currentStage = "cancelled";
+  if (resolution.resolution === "granted") currentStage = "approved_awaiting_construction";
+  else if (resolution.resolution === "denied" || resolution.resolution === "dismissed") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  // See RESOLUTION DATE above detectResolution — only set once this
+  // project actually resolved this run AND the deciding order's own
+  // action-log date parsed cleanly; left undefined (never a guessed/
+  // today's-date fallback) otherwise, per this project's undefined-vs-null
+  // convention (see common.ts's keepExistingIfUnmanaged).
+  const resolutionDate: Date | null | undefined =
+    RESOLVED_STAGES.includes(currentStage) && resolution.date ? resolution.date : undefined;
+  const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -929,8 +965,10 @@ function normalizeDocket(detail: DocketDetail, resolution: Resolution, hearings:
     applicationFiledDate: detail.firstFiledDate,
     dateConfidence: "exact",
     applicant,
-    currentStatus: `Arkansas PSC Docket ${detail.docket}: ${resolution ?? "pending"}`,
+    currentStatus: `Arkansas PSC Docket ${detail.docket}: ${resolution.resolution ?? "pending"}`,
     currentStage,
+    resolutionDate,
+    resolutionDateConfidence,
     causeSlugs,
     causeDetail: `Waiting on a construction certificate/authority from the Arkansas Public Service Commission — Docket No. ${detail.docket}, "${detail.style}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -182,9 +182,28 @@
 // budget. Also politeness-delayed between per-candidate detail-page
 // requests (only fetched for candidates not already resolved by the
 // decisions-list cross-check).
+//
+// RESOLUTION DATE (added 2026-09-12): the same decisions-list pages this
+// module already fetches for the presence-only STATUS check (above) also
+// carry a real disposition word + MM/DD/YY date in each entry's own
+// trailing `<strong>` tag — confirmed live via Petition 1056's real entry:
+// "...(Decision)<strong>&nbsp;Approved 05/16/13&nbsp;&nbsp;</strong></p>",
+// matching this header's own long-standing "Approved 05/16/13" citation.
+// `parseDecidedDates` pairs each docket/petition number with whichever
+// disposition `<strong>` appears next in the raw HTML before the next
+// number (an index-based pairing, not tag-boundary-dependent, since this
+// CMS is confirmed to mix `<p>` and `<li>` wrapping across pages/sections —
+// see extractSectionEntries's own comment). This module still never
+// determines *which* disposition a candidate got (see STATUS above for
+// why) — this only additionally recovers WHEN, for whichever candidate
+// resolves via the decisions-list cross-check specifically; one honest,
+// unavoidable gap: a candidate resolved only via the detail-page fallback
+// (DETAIL_DECIDED_RE, not yet exercised by any live candidate) has no
+// decisions-list entry to pull a date from and gets none.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -475,11 +494,61 @@ function parseDecidedNumbers(html: string): Set<string> {
   return set;
 }
 
+// RESOLUTION DATE (added 2026-09-12): each decisions-list entry's own
+// trailing `<strong>` tag carries a real disposition word plus a real
+// MM/DD/YY date — confirmed live via Petition 1056 (see module header
+// STATUS): "...(Decision)<strong>&nbsp;Approved 05/16/13&nbsp;&nbsp;</strong>
+// </p>" — exactly the "Approved 05/16/13" the header already documents,
+// just never parsed into a Date before now. This module still only checks
+// PRESENCE on the decisions list to decide whether a candidate is resolved
+// (see STATUS's own rationale for never trusting *which* disposition it
+// is) — this only additionally extracts WHEN, from the same already-parsed
+// disposition `<strong>`, for real, for whichever candidate is actually
+// still pending in the DB when it resolves.
+const DECIDED_DISPOSITION_RE =
+  /<strong>\s*(?:&nbsp;)*\s*(Approved|Denied|Withdrawn|Voted [Oo]n|Declined(?:\s+[Ww]ithout\s+[Pp]rejudice)?\s+to\s+Issue\s+a\s+Declaratory\s+Ruling|Rejected\s+as\s+Incomplete)\s+(\d{2})\/(\d{2})\/(\d{2})\s*(?:&nbsp;)*<\/strong>/gi;
+
+// Two-digit years on this page span CSC's full history (docket/petition
+// ranges reach back decades) — but this module only ever looks up a date
+// for a candidate that was JUST seen on the live Pending Matters page, so
+// any real match is necessarily recent; `2000 + yy` matches this module's
+// own existing parseReceivedDate convention for the exact same MM/DD/YY
+// shape, kept consistent rather than reinvented here.
+function parseTwoDigitYearDate(mm: string, dd: string, yy: string): Date | null {
+  const d = new Date(2000 + Number(yy), Number(mm) - 1, Number(dd));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Pairs each "DOCKET/PETITION NO. n" occurrence with whichever disposition
+// `<strong>` (see DECIDED_DISPOSITION_RE) appears next in document order,
+// as long as it comes before the NEXT number occurrence — an index-based
+// pairing rather than assuming a specific enclosing tag (`<p>` vs. `<li>`,
+// confirmed to vary across this same CMS's pages — see extractSectionEntries's
+// own comment), which correctly leaves a number with no real disposition
+// text of its own (should one ever exist on a decisions-list page) with no
+// date, rather than misattributing a neighboring entry's own date to it.
+function parseDecidedDates(html: string): Map<string, Date> {
+  const numberMatches = [...html.matchAll(DECIDED_NUMBER_RE)].map((m) => ({ index: m.index ?? 0, number: m[1].toUpperCase() }));
+  const dispositionMatches = [...html.matchAll(DECIDED_DISPOSITION_RE)].map((m) => ({
+    index: m.index ?? 0,
+    date: parseTwoDigitYearDate(m[2], m[3], m[4]),
+  }));
+
+  const dates = new Map<string, Date>();
+  for (let i = 0; i < numberMatches.length; i++) {
+    const { index, number } = numberMatches[i];
+    const nextIndex = i + 1 < numberMatches.length ? numberMatches[i + 1].index : Infinity;
+    const disposition = dispositionMatches.find((d) => d.index > index && d.index < nextIndex);
+    if (disposition?.date && !dates.has(number)) dates.set(number, disposition.date);
+  }
+  return dates;
+}
+
 // Fetches (and caches within one ingestion run) every decisions-list page
 // actually needed for the candidates at hand, rather than every known range
 // — CSC's decisions lists are large (hundreds of entries each) and most
 // ranges are irrelevant to any given run's tiny candidate set.
-async function buildDecidedNumberSet(candidates: PendingCandidate[]): Promise<Set<string>> {
+async function buildDecidedNumberSet(candidates: PendingCandidate[]): Promise<{ decided: Set<string>; resolutionDates: Map<string, Date> }> {
   const neededPaths = new Set<string>();
   for (const c of candidates) {
     const ranges = c.kind === "docket" ? DOCKET_DECISION_RANGES : PETITION_DECISION_RANGES;
@@ -487,12 +556,14 @@ async function buildDecidedNumberSet(candidates: PendingCandidate[]): Promise<Se
   }
 
   const decided = new Set<string>();
+  const resolutionDates = new Map<string, Date>();
   for (const path of neededPaths) {
     const html = await fetchText(`${BASE_URL}${path}`);
     for (const n of parseDecidedNumbers(html)) decided.add(n);
+    for (const [n, d] of parseDecidedDates(html)) resolutionDates.set(n, d);
     await sleep(REQUEST_DELAY_MS);
   }
-  return decided;
+  return { decided, resolutionDates };
 }
 
 // See module header STATUS second-signal note.
@@ -621,6 +692,7 @@ function normalizeCandidate(
   candidate: PendingCandidate,
   detail: CandidateDetail | null,
   upcomingHearings: Map<string, UpcomingHearing[]>,
+  resolutionDateFound: Date | null,
 ): NormalizedProject {
   const sourceId = `${candidate.kind}-${candidate.number}`;
   const hearings = upcomingHearings.get(sourceId) ?? [];
@@ -664,6 +736,18 @@ function normalizeCandidate(
   // used generically rather than "approved_awaiting_construction" since this
   // module never determines *which* disposition a decided entry carries.
   const currentStage: ProjectStage = resolved ? "cancelled" : "local_review";
+  // See RESOLUTION DATE above parseDecidedDates — only set once this
+  // candidate is actually resolved this run AND a real disposition date was
+  // found on the decisions-list page; left undefined (never guessed)
+  // otherwise, per common.ts's keepExistingIfUnmanaged convention. Real,
+  // honest gap: a candidate resolved only via the detail-page fallback
+  // check (DETAIL_DECIDED_RE — not yet exercised by any live candidate, see
+  // module header STATUS) has no decisions-list entry to pull a date from
+  // at all, so it gets no resolutionDate even though currentStage is
+  // "cancelled" — not guessed at.
+  const resolutionDate: Date | null | undefined =
+    RESOLVED_STAGES.includes(currentStage) && resolutionDateFound ? resolutionDateFound : undefined;
+  const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   return {
@@ -684,6 +768,8 @@ function normalizeCandidate(
       ? `CT CSC ${label} No. ${candidate.number}: resolved (no longer pending before the Connecticut Siting Council)`
       : `CT CSC ${label} No. ${candidate.number}: pending before the Connecticut Siting Council`,
     currentStage,
+    resolutionDate,
+    resolutionDateConfidence,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need (or related declaratory ruling) from the Connecticut Siting Council — ${label} No. ${candidate.number}, "${desc.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -717,7 +803,7 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
     ROTATING_RECENT_SLOTS,
   );
 
-  const decidedNumbers = await buildDecidedNumberSet(realCandidates);
+  const { decided: decidedNumbers, resolutionDates } = await buildDecidedNumberSet(realCandidates);
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
   const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing[]>());
@@ -735,13 +821,17 @@ export async function ingestCtCscDockets(maxCandidates = MAX_CANDIDATES): Promis
         // module header STATUS — so its own detail page is never fetched
         // (saves a request); still pushed through normalizeCandidate(...,
         // null) so upsertNormalizedProjects deletes any existing row.
-        const normalized = normalizeCandidate(candidate, null, upcomingHearings);
+        const normalized = normalizeCandidate(candidate, null, upcomingHearings, resolutionDates.get(candidate.number) ?? null);
         toUpsert.push(normalized);
         if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
         continue;
       }
       const detail = await fetchCandidateDetail(candidate.url);
-      const normalized = normalizeCandidate(candidate, detail, upcomingHearings);
+      // A candidate resolved only via the detail-page fallback (not the
+      // decisions-list cross-check above) has no decisions-list date to
+      // pull — see normalizeCandidate's own comment on this real, honest
+      // gap.
+      const normalized = normalizeCandidate(candidate, detail, upcomingHearings, null);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
       await sleep(REQUEST_DELAY_MS);

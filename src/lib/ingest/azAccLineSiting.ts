@@ -97,9 +97,24 @@
 // measured (185 total dockets, 64 within the lookback, ~70s) before
 // scheduling this. Also politeness-delayed between per-candidate detail
 // requests.
+//
+// RESOLUTION DATE (added 2026-09-12): each entry in `decisions` (the same
+// array STATUS above already reads to decide granted/denied) carries its
+// own real `decisionDate` field — re-confirmed live against docket 26574:
+// its "Decision - Certificate of Environmental Compatibility" is dated
+// "2023-03-23T07:00:00", exactly the "dated March 2023" this module's
+// STATUS section already documented. `pickResolutionDate` takes the
+// earliest decisionDate among whichever decisions actually establish the
+// resolution (the denying one(s) if denied; every decision if granted,
+// since a real docket can carry more than one same-week decision entry —
+// docket 26574 itself has a second, nearly-identical entry one day later)
+// — this avoids misreporting a later amendment/dissenting-opinion entry's
+// date as the real resolution date. Left undefined for any docket that
+// hasn't resolved, per common.ts's keepExistingIfUnmanaged convention.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -171,6 +186,11 @@ interface AttendableEvent {
 
 interface DocketDetail {
   resolution: "granted" | "denied" | null;
+  // See RESOLUTION DATE below fetchDetail — the earliest real decisionDate
+  // among the decisions that actually establish `resolution`, or null if
+  // this docket hasn't resolved (or its decision(s) carried no parseable
+  // date, never observed live).
+  resolutionDate: Date | null;
   // Every upcoming attendable event on this docket (Public Comment and
   // genuine hearing events — see isAttendableEvent), not just the
   // earliest — see module header EVENTS/BROADENED.
@@ -185,6 +205,17 @@ interface DocketEvent {
   eventType: string;
   public: boolean;
   location?: string | null;
+}
+
+interface DocketDecision {
+  description: string;
+  // Confirmed live 2026-09-12 against real docket 26574 (see module header
+  // STATUS): a genuine ISO datetime, e.g. "2023-03-23T07:00:00" for its
+  // real "Decision - Certificate of Environmental Compatibility" — matches
+  // this project's prior finding of a real decision "dated March 2023"
+  // exactly. Not always present in principle (typed optional defensively),
+  // though every real decision entry sampled carried one.
+  decisionDate?: string | null;
 }
 
 // See module header BROADENED. A "Conference" (e.g. "Pre-hearing
@@ -209,12 +240,33 @@ function cleanEventLocation(raw: string | null | undefined): string | null {
   return trimmed;
 }
 
+// RESOLUTION DATE (added 2026-09-12): each decision in the `decisions`
+// array carries its own real `decisionDate` (see DocketDecision above) —
+// the earliest one AMONG WHICHEVER DECISIONS ACTUALLY ESTABLISH the
+// resolution (the denying decision(s) if denied; every decision if
+// granted, since a real sample showed a grant can carry more than one same
+// week entry — e.g. docket 26574's real "Certificate of Environmental
+// Compatibility" decision plus a same-week follow-up, both dated within a
+// day of each other) is used as the real resolution date, rather than a
+// later amendment/dissenting-opinion entry that might also appear in the
+// same array (see module header STATUS's own description-value sample).
+function pickResolutionDate(decisions: DocketDecision[], resolution: "granted" | "denied" | null): Date | null {
+  if (resolution === null || decisions.length === 0) return null;
+  const relevant = resolution === "denied" ? decisions.filter((d) => DENY_RE.test(d.description)) : decisions;
+  const dates = relevant
+    .map((d) => (d.decisionDate ? parseIsoDate(d.decisionDate) : null))
+    .filter((d): d is Date => d !== null);
+  if (dates.length === 0) return null;
+  return new Date(Math.min(...dates.map((d) => d.getTime())));
+}
+
 async function fetchDetail(docketID: number): Promise<DocketDetail> {
   const res = await fetch(`${BASE_URL}/api/edocket/docket/${docketID}`);
   if (!res.ok) throw new Error(`AZ ACC detail request failed (${res.status}) for docket ${docketID}`);
-  const data = (await res.json()) as { decisions?: { description: string }[]; events?: DocketEvent[] };
+  const data = (await res.json()) as { decisions?: DocketDecision[]; events?: DocketEvent[] };
   const decisions = data.decisions ?? [];
   const resolution = decisions.length === 0 ? null : decisions.some((d) => DENY_RE.test(d.description)) ? "denied" : "granted";
+  const resolutionDate = pickResolutionDate(decisions, resolution);
 
   // EVENTS: each docket's own `events` array carries real scheduled
   // proceedings — confirmed live 2026-09-05 against several active
@@ -240,7 +292,7 @@ async function fetchDetail(docketID: number): Promise<DocketDetail> {
     });
   }
 
-  return { resolution, attendableEvents };
+  return { resolution, resolutionDate, attendableEvents };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -303,6 +355,14 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
   else if (detail.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
 
+  // See RESOLUTION DATE above fetchDetail/pickResolutionDate — only set
+  // once this docket actually resolved this run AND a real decisionDate
+  // parsed; left undefined (never guessed) otherwise, per this project's
+  // undefined-vs-null convention (see common.ts's keepExistingIfUnmanaged).
+  const resolutionDate: Date | null | undefined =
+    RESOLVED_STAGES.includes(currentStage) && detail.resolutionDate ? detail.resolutionDate : undefined;
+  const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -336,6 +396,8 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     dateConfidence: "exact",
     currentStatus: `Arizona ACC Line Siting docket ${search.docketNumber}: ${detail.resolution ?? "active"}`,
     currentStage,
+    resolutionDate,
+    resolutionDateConfidence,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility from the Arizona Corporation Commission's Line Siting Committee — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -217,9 +217,24 @@
 // 2026-08-24 against the live shared DB: a full run against the real
 // population (10 candidates) completed in ~20s, comfortably inside the
 // 300s cron budget.
+//
+// RESOLUTION DATE (added 2026-09-12): efiling.energy.ca.gov's own
+// `#MainContent_grdFilings` GridView (already parsed by fetchDocketFilings/
+// FILING_ROW_RE for the belt-and-suspenders resolution re-check above) has
+// its own real "Docketed Date" column per filing — confirmed live against
+// Fountain Wind Project's real docket (23-OPT-01): its "Project Permit
+// Denial" filing (TN 248296-3) carries Docketed Date 1/3/2023, its own
+// genuine denial date, not the day this module happened to run.
+// `checkDocketResolution` now also tracks the earliest Docketed Date among
+// whichever filing(s) actually trip RESOLUTION_TITLE_RE/DENIAL_TITLE_RE
+// (distinct from `earliestDate`, the docket's overall earliest filing, used
+// for applicationFiledDate) so `resolutionDate`/`resolutionDateConfidence`
+// can be set without a second fetch. Left undefined for any project that
+// hasn't resolved, per common.ts's keepExistingIfUnmanaged convention.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -593,20 +608,34 @@ interface ResolutionCheck {
   resolved: boolean;
   denied: boolean;
   earliestDate: Date | null;
+  // RESOLUTION DATE (added 2026-09-12): the "Docketed Date" (see FILING_ROW_RE
+  // — #MainContent_grdFilings' own GridView column, confirmed live) of
+  // whichever filing actually trips RESOLUTION_TITLE_RE/DENIAL_TITLE_RE
+  // below — the real date CEC docketed the dispositive Final Decision/
+  // Commission Decision/Project Permit Denial itself, not the docket's
+  // earliest filing (that's `earliestDate`, used for applicationFiledDate).
+  // Confirmed live against Fountain Wind Project's real docket (23-OPT-01):
+  // its "Project Permit Denial" filing (TN 248296-3) carries its own real
+  // Docketed Date of 1/3/2023. Null if no resolving filing was found, or if
+  // one was found but its own Docketed Date cell didn't parse (never
+  // observed live in this module's real candidate population).
+  resolutionDate: Date | null;
 }
 
 function checkDocketResolution(filings: DocketFiling[]): ResolutionCheck {
   let earliestDate: Date | null = null;
   let resolved = false;
   let denied = false;
+  let resolutionDate: Date | null = null;
   for (const f of filings) {
     if (f.date && (earliestDate === null || f.date < earliestDate)) earliestDate = f.date;
     if (RESOLUTION_TITLE_RE.test(f.title) || DENIAL_TITLE_RE.test(f.title)) {
       resolved = true;
       if (DENIAL_TITLE_RE.test(f.title) || /denial/i.test(f.title)) denied = true;
+      if (f.date && (resolutionDate === null || f.date < resolutionDate)) resolutionDate = f.date;
     }
   }
-  return { resolved, denied, earliestDate };
+  return { resolved, denied, earliestDate, resolutionDate };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY: takes the first MW
@@ -695,6 +724,15 @@ function normalizeCandidate(
       : "approved_awaiting_construction"
     : "local_review";
 
+  // See RESOLUTION DATE on ResolutionCheck above — only set once this
+  // project actually resolved this run AND the resolving filing's own
+  // Docketed Date parsed cleanly; left undefined (never guessed) otherwise,
+  // per this project's undefined-vs-null convention (see common.ts's
+  // keepExistingIfUnmanaged).
+  const projectResolutionDate: Date | null | undefined =
+    RESOLVED_STAGES.includes(currentStage) && resolution.resolutionDate ? resolution.resolutionDate : undefined;
+  const resolutionDateConfidence = projectResolutionDate ? "exact" : undefined;
+
   const matchKey = resolveMatchKey("ca-cec", detail.docketNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.title, detail.technology);
   const capacityValue = extractCapacityMw(detail.capacityText);
@@ -736,6 +774,8 @@ function normalizeCandidate(
     dateConfidence: "exact",
     currentStatus: `CEC Docket ${detail.docketNumber}: ${detail.projectStatusText ?? "active"}`,
     currentStage,
+    resolutionDate: projectResolutionDate,
+    resolutionDateConfidence,
     causeSlugs,
     causeDetail: `Waiting on California Energy Commission certification — Docket ${detail.docketNumber}${detail.projectTypeText ? ` (${detail.projectTypeText})` : ""}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

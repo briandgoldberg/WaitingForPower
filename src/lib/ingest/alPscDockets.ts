@@ -158,6 +158,23 @@
 //   kept as a documented, plausible, unconfirmed pattern rather than
 //   omitted outright).
 //
+// RESOLUTION DATE: the per-docket Documents grid (see FETCHING) has its own
+// real "Date Filed" column (confirmed live via the column header's
+// `abbr="Date Filed"` / `Sort$DateFiled` postback target) — not just a doc
+// title and type as this module used to parse. Confirmed live against
+// Docket 33513's real grant: the "ORDER GRANTING ALABAMA POWER COMPANY'S
+// PETITION FOR CERTIFICATE OF PUBLIC CONVIENCE AND NECESSITY FOR LINDSAY
+// HILL GENERATING STATION" document's own Date Filed is "8/13/2025" —
+// exactly the date the companion NOTICE OF ERRATA document's own title
+// independently references ("...ORDER DATED AUGUST 13, 2025..."), two
+// independent confirmations agreeing on the same real date. `parseDocRows`
+// now captures this per-row, and `detectResolution` returns it alongside
+// the resolution verdict so `resolutionDate`/`resolutionDateConfidence` can
+// be set on the matching Order (or self-filed withdrawal Filing) document,
+// never a guessed date. Left undefined (not null) for any docket that
+// hasn't resolved this run, per this project's undefined-vs-null
+// convention (see common.ts's keepExistingIfUnmanaged).
+//
 // FUEL/PROJECT TYPE & CAPACITY: Alabama Power Company is, by design of the
 // state's 1984 Territorial Act, effectively the sole investor-owned
 // electric utility that ever files a real generation/transmission CPCN —
@@ -227,6 +244,7 @@
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -599,6 +617,7 @@ async function fetchDocketDetail(docketId: string): Promise<DocketDetail> {
 interface DocRow {
   docType: string;
   description: string;
+  dateFiled: Date | null;
 }
 
 // Confirmed live 2026-08-24 against real docket-docs GridView rows (see
@@ -606,13 +625,20 @@ interface DocRow {
 // Details: ..." title (present on a single line, unlike the docDescLabel
 // span which can have an arbitrarily large file-list block between it and
 // the row's closing tag), then the immediately-following Document Type
-// cell.
-const DOC_ROW_RE = /title="View Document Details:\s*([^"]*)"[\s\S]*?<\/td><td>(Order|Filing|Other)<\/td>/g;
+// cell, then the row's own "Date Filed" cell (the grid's third data
+// column, `class="DocSrchDateCol"` — confirmed live via the column
+// header's own `abbr="Date Filed"` and its `Sort$DateFiled` postback
+// target). The non-greedy `[\s\S]*?` between the Document Type cell and
+// this date cell safely spans the Description cell's own arbitrarily-large
+// file-list block (confirmed live against a real 15-row, multi-page
+// response — see RESOLUTION DATE below — each row's own Date Filed was
+// captured correctly with no bleed into the next row).
+const DOC_ROW_RE = /title="View Document Details:\s*([^"]*)"[\s\S]*?<\/td><td>(Order|Filing|Other)<\/td>[\s\S]*?DocSrchDateCol">([^<]*)</g;
 
 function parseDocRows(html: string): DocRow[] {
   const rows: DocRow[] = [];
   for (const m of html.matchAll(DOC_ROW_RE)) {
-    rows.push({ docType: m[2], description: stripTags(m[1]) });
+    rows.push({ docType: m[2], description: stripTags(m[1]), dateFiled: parseMDY(decodeHtmlEntities(m[3])) });
   }
   return rows;
 }
@@ -645,6 +671,24 @@ async function fetchDocketDocuments(cookie: string, docketId: string): Promise<D
 
 type Resolution = "granted" | "denied" | "withdrawn" | null;
 
+// RESOLUTION DATE (added 2026-09-12): the specific Order (or, for a
+// self-filed withdrawal, Filing) document that decides `resolution` above
+// carries its own "Date Filed" grid column (see DOC_ROW_RE) — confirmed
+// live against Docket 33513's real grant: the ORDER GRANTING... document's
+// own Date Filed is "8/13/2025", exactly matching the date the companion
+// NOTICE OF ERRATA document's title independently references ("...ORDER
+// DATED AUGUST 13, 2025..."), so this is a genuine, source-published
+// resolution date, not the day our own cron happened to notice the docket.
+// `detectResolution` therefore returns that document's own dateFiled
+// alongside the resolution verdict; DENY_RE/WITHDRAW_RE are unconfirmed
+// live (see module header STATUS) but use the same real "Date Filed"
+// field on whichever document trips them, so a real denial/withdrawal
+// found in a future run gets a real date with no further code changes.
+interface ResolutionResult {
+  resolution: Resolution;
+  date: Date | null;
+}
+
 // See module header STATUS for how each pattern was calibrated against
 // real Alabama dockets — including the real "CONVIENCE"/"CONVEYANCE" typos
 // (matched as known aliases, not silently corrected) and the confirmed
@@ -653,20 +697,20 @@ const GRANT_RE = /\b(?:is|are)\s+granted\b|\bORDER GRANTING\b|\bGRANTING\b[\s\S]
 const DENY_RE = /\bORDER DENYING\b[\s\S]{0,80}?\bCERTIFICATE\b|\bCERTIFICATE\b[\s\S]{0,80}?\bis\s+denied\b/i;
 const WITHDRAW_RE = /\bwithdraw\w*\s+(?:of\s+)?(?:the\s+|its\s+)?(?:pending\s+)?(?:petition|application)\b/i;
 
-function detectResolution(docs: DocRow[]): Resolution {
+function detectResolution(docs: DocRow[]): ResolutionResult {
   const orderDocs = docs.filter((d) => d.docType === "Order");
   for (const d of orderDocs) {
-    if (WITHDRAW_RE.test(d.description)) return "withdrawn";
-    if (DENY_RE.test(d.description)) return "denied";
-    if (GRANT_RE.test(d.description)) return "granted";
+    if (WITHDRAW_RE.test(d.description)) return { resolution: "withdrawn", date: d.dateFiled };
+    if (DENY_RE.test(d.description)) return { resolution: "denied", date: d.dateFiled };
+    if (GRANT_RE.test(d.description)) return { resolution: "granted", date: d.dateFiled };
   }
   // Real applicants also sometimes file their own notice of withdrawal
   // directly (a Filing-class document), same as mdPscDockets.ts's
   // WITHDRAW_APPLICATION_RE convention.
   for (const d of docs) {
-    if (d.docType === "Filing" && WITHDRAW_RE.test(d.description)) return "withdrawn";
+    if (d.docType === "Filing" && WITHDRAW_RE.test(d.description)) return { resolution: "withdrawn", date: d.dateFiled };
   }
-  return null;
+  return { resolution: null, date: null };
 }
 
 // REQUEST_RE: a real, live-confirmed false-positive class caught only by
@@ -797,7 +841,7 @@ function extractApplicant(description: string): string {
   return description.slice(0, 80);
 }
 
-function normalizeCandidate(detail: DocketDetail, resolution: Resolution): NormalizedProject {
+function normalizeCandidate(detail: DocketDetail, resolution: ResolutionResult): NormalizedProject {
   const matchKey = resolveMatchKey("al-psc", detail.docketNumber);
   const combinedText = `${detail.description} ${detail.synopsis}`;
   const { projectType, fuelType } = inferProjectTypeAndFuel(combinedText);
@@ -807,9 +851,18 @@ function normalizeCandidate(detail: DocketDetail, resolution: Resolution): Norma
   const applicant = extractApplicant(detail.description);
 
   let currentStage: ProjectStage;
-  if (resolution === "granted") currentStage = "approved_awaiting_construction";
-  else if (resolution === "denied" || resolution === "withdrawn") currentStage = "cancelled";
+  if (resolution.resolution === "granted") currentStage = "approved_awaiting_construction";
+  else if (resolution.resolution === "denied" || resolution.resolution === "withdrawn") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  // See RESOLUTION DATE above detectResolution — only set for a project
+  // that actually reached a resolved stage this run AND whose deciding
+  // document carried a real, parseable Date Filed value; leave undefined
+  // (never a guessed/today's-date fallback) otherwise, per this project's
+  // undefined-vs-null convention (see common.ts's keepExistingIfUnmanaged).
+  const resolutionDate: Date | null | undefined =
+    RESOLVED_STAGES.includes(currentStage) && resolution.date ? resolution.date : undefined;
+  const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -844,8 +897,10 @@ function normalizeCandidate(detail: DocketDetail, resolution: Resolution): Norma
     applicationFiledDate: detail.dateOpened,
     dateConfidence: "exact",
     applicant,
-    currentStatus: `Alabama PSC Docket ${detail.docketNumber}: ${resolution ?? "pending"}`,
+    currentStatus: `Alabama PSC Docket ${detail.docketNumber}: ${resolution.resolution ?? "pending"}`,
     currentStage,
+    resolutionDate,
+    resolutionDateConfidence,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Alabama Public Service Commission — Docket No. ${detail.docketNumber}, "${detail.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -86,6 +86,21 @@
 // curated rather than exhaustive, same spirit as Virginia's already-curated
 // activity log.
 //
+// RESOLUTION DATE: Project.resolutionDate wants the real calendar date a
+// docket actually closed, not the date this cron run happened to notice it
+// closed. isResolved() above already scans every filing's description for a
+// closing-signal phrase — findResolutionDate() reuses that exact same
+// predicate (factored out as isClosingFiling) and returns the file-stamp
+// date of whichever matching filing is latest, since a docket can have more
+// than one closing-signal filing (a FINAL ORDER later followed by an ORDER
+// ON REHEARING that's the one that actually disposes of the case — Control
+// 55255 again). Confirmed live 2026-09-12: Control 55255's ORDER ON
+// REHEARING carries file-stamp 11/21/2024, matching the prior audit's
+// finding exactly. Left undefined (never null) whenever the docket isn't
+// resolved, or is resolved but its closing filing's file-stamp didn't parse
+// — undefined means "not set this run," per common.ts's convention, so a
+// bad parse never overwrites a real date a prior run found.
+//
 // Wired to Vercel Cron weekly, 18:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-tx-puct/route.ts) — a real run's timing was
 // measured (141 candidates, ~58s) before scheduling this. Also
@@ -260,8 +275,31 @@ const CLOSING_SIGNAL_RE =
   /\bFINAL ORDER\b|\bORDER ON REHEARING\b|\bORDER GRANTING\b[^]*\bCERTIFICATE\b|\bORDER APPROVING\b[^]*\bCERTIFICATE\b|\bORDER DENYING\b|\bORDER DISMISSING\b|\bNOTICE OF WITHDRAWAL\b/i;
 const BARE_ORDER_RE = /^ORDER$/i;
 
+function isClosingFiling(f: DocketFiling): boolean {
+  return CLOSING_SIGNAL_RE.test(f.description) || BARE_ORDER_RE.test(f.description.trim());
+}
+
 function isResolved(filings: DocketFiling[]): boolean {
-  return filings.some((f) => CLOSING_SIGNAL_RE.test(f.description) || BARE_ORDER_RE.test(f.description.trim()));
+  return filings.some(isClosingFiling);
+}
+
+// RESOLUTION DATE: the file-stamp date of the closing filing itself (the
+// same filing isResolved() matched on) — a genuine calendar date PUCT
+// published for the real closing event, not the date this cron run happened
+// to notice it. A docket can have more than one closing-signal filing (a
+// FINAL ORDER later followed by an ORDER ON REHEARING that actually
+// disposes of the case) — Control 55255 (see module header) is exactly
+// this shape, so the *latest* matching filing's date is used, not the
+// first, since that's the one that actually closed the docket for good.
+// Confirmed live 2026-09-12: Control 55255's ORDER ON REHEARING row is
+// file-stamped 11/21/2024, matching the prior audit's November 2024 finding.
+function findResolutionDate(filings: DocketFiling[]): Date | null {
+  const dated = filings
+    .filter(isClosingFiling)
+    .map((f) => parseUsDate(f.fileStamp))
+    .filter((d): d is Date => d !== null);
+  if (dated.length === 0) return null;
+  return dated.reduce((latest, d) => (d.getTime() > latest.getTime() ? d : latest));
 }
 
 const APPLICATION_RE = /^(JOINT )?APPLICATION OF/i;
@@ -367,6 +405,11 @@ function normalizeDocket(search: DocketSearchResult, filings: DocketFiling[]): N
   const fuelType = inferFuelType(search.description, projectType);
   const milestones = buildMilestones(filings);
   const latestFiling = [...filings].sort((a, b) => b.itemNumber - a.itemNumber)[0];
+  // Undefined (not null) when unresolved or when no closing filing carried a
+  // parseable file-stamp date — see the undefined-vs-null convention in
+  // common.ts's NormalizedProject doc: undefined means "not managed/found
+  // this run," never overwriting a value another run may have set.
+  const resolutionDate = resolved ? findResolutionDate(filings) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -396,6 +439,8 @@ function normalizeDocket(search: DocketSearchResult, filings: DocketFiling[]): N
       latestFiling ? ` (most recent filing: ${latestFiling.description.slice(0, 80)}, ${latestFiling.fileStamp})` : ""
     }`,
     currentStage,
+    resolutionDate: resolutionDate ?? undefined,
+    resolutionDateConfidence: resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Texas Public Utility Commission — Docket No. ${search.controlNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

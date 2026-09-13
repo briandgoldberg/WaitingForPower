@@ -47,14 +47,22 @@
 //      User-Agent — WI's CMS has no such sniffing).
 //   2. Per-docket resolution check: GET
 //      https://apps.psc.wi.gov/ERF/ERFsearch/content/searchResult.aspx?UTIL={utilityId}&CASE=CE&SEQ={seqNum}&START=none&END=none&TYPE=ORD&SERVICE=none&KEY=none&NON=N
-//      — a plain unauthenticated querystring GET (no viewstate/session
-//      needed, confirmed working standalone) that returns every filed
-//      Order-type document for that docket, each with a title and filed
-//      date. Reverse-engineered from the docket detail page's own
-//      "Documents" tab, whose per-document-type links point at
-//      /pages/ERFresult.htm?...&TYPE=ORD&... — that URL itself just does a
-//      client-side redirect (`window.location = '/ERF/ERFsearch/content/searchResult.aspx' + location.search`)
-//      to the real endpoint used here directly.
+//      — a querystring GET (no viewstate/session needed) that returns every
+//      filed Order-type document for that docket, each with a title and a
+//      structured "Received Date" (see RESOLUTION DATE below). Reverse-
+//      engineered from the docket detail page's own "Documents" tab, whose
+//      per-document-type links point at /pages/ERFresult.htm?...&TYPE=ORD&...
+//      — that URL itself just does a client-side redirect
+//      (`window.location = '/ERF/ERFsearch/content/searchResult.aspx' + location.search`)
+//      to the real endpoint used here directly. REGRESSION confirmed live
+//      2026-09-12: this endpoint no longer works "standalone" as originally
+//      found — PSC's site now sits behind Cloudflare (new CF-RAY/__cf_bm
+//      set-cookie headers on every response that weren't there 2026-08-23),
+//      and a request with no browser User-Agent gets served a generic "Page
+//      Not Found" page instead of real results; reproduced directly,
+//      identical request with vs. without a User-Agent header. Fixed by
+//      sending CMS_USER_AGENT (already used for the docket-search requests)
+//      on this request too.
 //
 // STATUS — same lesson as every prior state in this series, independently
 // reconfirmed here: the CMS's own docket "Status" field (dropdown values
@@ -107,6 +115,22 @@
 // resolved, so granted/denied only affects which specific resolved stage is
 // recorded before deletion, not whether the project disappears from the
 // site.
+//
+// RESOLUTION DATE: the same Order-document search used for STATUS also
+// carries a structured "Received Date" column per document (e.g.
+// "09/26/2019 03:15:00 PM") alongside each document's own title — a
+// genuinely better-typed source than parsing the "MM-DD-YY" date the title
+// itself states (which module header STATUS already flags as typo-prone —
+// "Signed ad Served," not "and"). ORDER_DOC_RE captures both, tied by their
+// shared row index, and the "Final Decision" document's own Received Date
+// becomes Project.resolutionDate whenever this run classifies the docket
+// resolved. Confirmed live 2026-09-12 against both of module header
+// STATUS's own real examples: 5-CE-146's "Final Decision Signed and Served
+// 09-26-19" row carries Received Date 09/26/2019 (matching the prior
+// audit's "granted its Final Decision 09/26/2019" finding exactly), and
+// 9697-CE-100's typo'd "Final Decision Signed ad Served 04-18-19" is still
+// real and present. Left undefined (not null) whenever unresolved, or
+// resolved but the Received Date column didn't parse.
 //
 // IN-SCOPE FILTER (generation/storage/transmission vs. everything else "CE"
 // covers): case type "CE" is NOT exclusively CPCN/CA siting for new
@@ -410,6 +434,8 @@ function extractCounty(title: string): string | null {
 
 interface DocketResolution {
   resolution: "granted" | "denied" | null;
+  /** The resolving "Final Decision" document's own Received Date — see module header RESOLUTION DATE. Null unless resolution is non-null. */
+  date: Date | null;
 }
 
 // See module header STATUS: presence of an Order-type document titled
@@ -419,25 +445,58 @@ interface DocketResolution {
 const FINAL_DECISION_RE = /\bfinal\s+decision\b/i;
 const DENY_RE = /\bden(?:y|ial|ying)\b/i;
 
+// Matches one Order-type document row's own title/description AND its
+// structured "Received Date" field together, tied by the shared numeric
+// row index (`\1` backreference) rather than by two separate regex passes
+// zipped by array position — safer if a row is ever missing one field.
+// Confirmed live 2026-09-12 against Case 5-CE-146 (Cardinal-Hickory Creek):
+// row 0 is "Final Decision Signed and Served 09-26-19" / Received Date
+// "09/26/2019 03:15:00 PM" — matching the prior audit's "09/26/2019"
+// finding exactly and confirming this endpoint's own structured date field
+// (not just the free-text title) is the real, better-typed source of truth.
+const ORDER_DOC_RE =
+  /lv_data_lbl_doc_desc_txt_(\d+)"\s+class="tbTextRight">([\s\S]*?)<\/span>[\s\S]*?lv_data_lbl_doc_recv_dt_\1"\s+class="tbText">([^<]*)<\/span>/g;
+
+function parseReceivedDate(raw: string): Date | null {
+  // "09/26/2019 03:15:00 PM" — date-only precision is all Project.resolutionDate
+  // needs, so only the leading M/D/YYYY token is parsed; the time-of-day is
+  // discarded.
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(raw.trim());
+  if (!m) return null;
+  const d = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 async function fetchDocketResolution(utilityId: string, seqNum: string): Promise<DocketResolution> {
   const url = `${ERF_SEARCH_URL}?UTIL=${utilityId}&CASE=CE&SEQ=${seqNum}&START=none&END=none&TYPE=ORD&SERVICE=none&KEY=none&NON=N`;
-  const res = await fetch(url);
+  // CONFIRMED LIVE 2026-09-12 — a real regression from this module's own
+  // original finding: this endpoint used to work identically with or
+  // without a browser User-Agent (see module header FETCHING), but PSC's
+  // site has since been placed behind Cloudflare (new set-cookie/CF-RAY
+  // headers observed that weren't there before) and a bare request with no
+  // User-Agent now gets served a generic "Page Not Found" page instead of
+  // real results — reproduced directly: identical request with vs. without
+  // this header returns the real document table vs. "Page Not Found." The
+  // CMS_USER_AGENT header (already used for the docket-search requests
+  // above) is now required here too.
+  const res = await fetch(url, { headers: { "User-Agent": CMS_USER_AGENT } });
   if (!res.ok) throw new Error(`WI PSC ERF Order-document search failed (${res.status}) for docket ${utilityId}-CE-${seqNum}`);
   const html = await res.text();
 
   if (!/Total Return:\s*\d+/.test(html)) {
     throw new Error(
-      `WI PSC ERF Order-document search response for docket ${utilityId}-CE-${seqNum} didn't contain the expected "Total Return" marker — the page structure likely changed. Check fetchDocketResolution in src/lib/ingest/wiPscDockets.ts against a fresh response.`,
+      `WI PSC ERF Order-document search response for docket ${utilityId}-CE-${seqNum} didn't contain the expected "Total Return" marker — the page structure likely changed (or the response was an unauthenticated-request error page — see the User-Agent requirement noted above). Check fetchDocketResolution in src/lib/ingest/wiPscDockets.ts against a fresh response.`,
     );
   }
 
-  const titles = [...html.matchAll(/lv_data_lbl_doc_desc_txt_\d+"\s+class="tbTextRight">([\s\S]*?)<\/span>/g)].map((m) =>
-    decodeHtmlEntities(m[1].replace(/<[^>]+>/g, "")),
-  );
+  const docs = [...html.matchAll(ORDER_DOC_RE)].map((m) => ({
+    title: decodeHtmlEntities(m[2].replace(/<[^>]+>/g, "")),
+    date: parseReceivedDate(m[3]),
+  }));
 
-  const finalDecision = titles.find((t) => FINAL_DECISION_RE.test(t));
-  if (!finalDecision) return { resolution: null };
-  return { resolution: DENY_RE.test(finalDecision) ? "denied" : "granted" };
+  const finalDecision = docs.find((d) => FINAL_DECISION_RE.test(d.title));
+  if (!finalDecision) return { resolution: null, date: null };
+  return { resolution: DENY_RE.test(finalDecision.title) ? "denied" : "granted", date: finalDecision.date };
 }
 
 function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolution): NormalizedProject {
@@ -452,6 +511,10 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
   if (resolution.resolution === "granted") currentStage = "approved_awaiting_construction";
   else if (resolution.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  // RESOLUTION DATE — see module header. Undefined (not null) whenever
+  // unresolved or the resolving document's own Received Date didn't parse.
+  const resolutionDate = resolution.resolution !== null ? resolution.date : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -487,6 +550,8 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
     applicant,
     currentStatus: `Wisconsin PSC docket ${candidate.docket}: ${resolution.resolution ?? "active"}`,
     currentStage,
+    resolutionDate: resolutionDate ?? undefined,
+    resolutionDateConfidence: resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity / Certificate of Authority determination from the Public Service Commission of Wisconsin — Docket No. ${candidate.docket}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

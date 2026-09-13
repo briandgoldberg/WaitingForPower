@@ -195,6 +195,22 @@
 // hearing scheduled; a genuinely new Utah CPCN filing would pick up a real
 // technical-conference/hearing date here the moment PSC schedules one.
 //
+// RESOLUTION DATE — fetchDocketResolution() already parses each candidate
+// final-order document's own date off its docket's filed-document table
+// (the same `date` used to sort candidates newest-first and pick which one
+// actually carries the grant/deny language) but, until now, only used it to
+// choose which document to check, never stored it anywhere. Now threaded
+// through as `orderDate` and written to Project.resolutionDate/
+// resolutionDateConfidence (always "exact" — this site's document dates are
+// full "Month D, YYYY" strings, never a bare year or month) whenever this
+// run actually classifies the docket "granted" or "denied", i.e. exactly
+// when currentStage lands on a RESOLVED_STAGES value. Confirmed live
+// 2026-09-12 against docket 03-035-29 (Currant Creek): its filed-document
+// table lists "Report and Order" as March 5, 2004 (with an "Order Granting
+// Intervention" 3 days later on March 8 — see module header's STATUS
+// section on why rows aren't trusted by position), matching the prior
+// audit's finding exactly.
+//
 // LOCATION + CANCELLATION — confirmed live 2026-09-05 against the same real
 // .ics: 1,236 of 1,622 events carry a plain `LOCATION:` property (e.g.
 // "Heber Wells Rm. 401") — the PSC's own room/venue for that event — which
@@ -630,6 +646,22 @@ function normalizeDocket(
   else if (resolution.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
 
+  // RESOLUTION DATE: fetchDocketResolution already parses the real
+  // final-order document's own date (candidate.date, from the docket's
+  // filed-document table — see parseLongDate) to pick which order actually
+  // carries the grant/deny language; orderDate is exactly that date, just
+  // not previously threaded any further. Only set when this run actually
+  // classified the docket as resolved (granted/denied) — an inconclusive
+  // order (resolution.resolution === null, orderDate still possibly set to
+  // the newest final-order-labeled document's date) must not populate this,
+  // since currentStage stays "local_review" (not a RESOLVED_STAGES value)
+  // in that case and a date with no matching resolved stage would be
+  // misleading. Confidence is always "exact" — every real order date here
+  // comes from a full "Month D, YYYY" string on the docket's own document
+  // table, never a year/month-only approximation.
+  const isResolvedStage = resolution.resolution === "granted" || resolution.resolution === "denied";
+  const resolutionDate = isResolvedStage ? resolution.orderDate : null;
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -660,6 +692,8 @@ function normalizeDocket(
     applicant,
     currentStatus: `Utah PSC Docket No. ${listing.docketNo}: ${resolution.resolution ?? "active"}`,
     currentStage,
+    resolutionDate: resolutionDate ?? undefined,
+    resolutionDateConfidence: resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity determination from the Utah Public Service Commission — Docket No. ${listing.docketNo}, "${listing.matter}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

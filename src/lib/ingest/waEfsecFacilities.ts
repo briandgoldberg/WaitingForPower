@@ -81,14 +81,51 @@
 // the 6 real values observed, and normalizeFacility throws on anything else
 // (caught per-candidate) rather than silently guessing a 7th.
 //
-// CANDIDATES: of the 19 facilities, only those with `f-status` ==
-// "Application review" are still waiting on a decision — "Awaiting
-// construction" and "Under construction" already have an executed SCA
-// (RESOLVED_STAGES catches these via currentStage regardless, but they're
-// also excluded from FETCHING detail requests for politeness, same as
-// every candidate that maps to a resolved stage). As of 2026-08-23 that's
-// 5 facilities: Carriger Solar, Cascade Renewable Transmission, Goldeneye
-// Battery Storage, Hop Hill Solar, Wallula Gap Solar.
+// CANDIDATES (revised 2026-09-12): every one of the 19 facilities is now a
+// candidate and gets its own detail-page fetch, not just the ones with
+// `f-status` == "Application review" — this module originally only
+// detail-fetched (and therefore only ever created/updated) facilities still
+// waiting on a decision, on the theory that resolved ones "already have an
+// executed SCA" and RESOLVED_STAGES would catch them "regardless." That
+// claim didn't actually hold: a facility this module HAD been tracking
+// while it was still under review would, the moment EFSEC's own status
+// moved it to "Awaiting construction"/"Withdrawn"/etc., simply stop being a
+// candidate at all on every future run — never re-normalized, so
+// currentStage silently froze at "local_review" forever and the
+// RESOLVED_STAGES branch was never actually reached for it. Confirmed live 2026-09-12:
+// all 19 facilities cost one extra fetch each (well within this module's
+// existing timing budget — see header's own "13.7 seconds" note on a
+// similarly-sized per-candidate fetch pattern in utPscDockets.ts), so
+// there's no real politeness reason left to special-case resolved
+// candidates out of FETCHING; doing so was actively breaking status
+// tracking for no benefit. As of 2026-08-23, 5 of the 19 were
+// "Application review": Carriger Solar, Cascade Renewable Transmission,
+// Goldeneye Battery Storage, Hop Hill Solar, Wallula Gap Solar — still
+// true as of 2026-09-12 (none of the 4 of these this site actually tracks
+// — Cascade Renewable Transmission is a manualOverrides.csv merge onto a
+// different source's matchKey — has resolved in the real world yet).
+//
+// RESOLUTION DATE: the same per-facility "recent documents" list STATUS
+// above already reads (fetched on the same detail-page request, no extra
+// fetch) also carries a real `Document date` and a document-type taxonomy
+// term (e.g. "Resolution", "Site Certification Agreement (SCA)",
+// "Amendment") per row — see parseRecentDocuments/findResolutionDate. For a
+// facility whose currentStage lands on a RESOLVED_STAGES value, this looks
+// for the specific document that actually closed it: a "Resolution" whose
+// title reads as a termination (cancelled/Withdrawn — confirmed live
+// 2026-09-12 against Desert Claim's real "Resolution 356 Desert Claim SCA
+// termination," dated 2025-06-25, the same real document and date the prior
+// audit flagged), or a "Resolution"/"Site Certification Agreement (SCA)"
+// whose title reads as a grant/approval/execution (the other resolved
+// stages — a reasonable extension of the same real pattern, not yet
+// confirmed against a live example — see findResolutionDate's own comment).
+// Real, honest limitation: this list is only the 5 most-recently-published
+// documents for that facility, so a facility that resolved years ago and
+// has since accumulated newer routine filings (confirmed live against Horse
+// Heaven Wind Project, "Awaiting construction" since well before 2026, whose
+// 5 most recent documents are all 2026 comment-period/memo filings) simply
+// won't have its real closing document in view — resolutionDate is left
+// undefined in that case rather than guessed at from an unrelated document.
 //
 // FUEL/PROJECT TYPE: structured, not regex-guessed from prose — the
 // `f-type` taxonomy terms observed across all 19 facilities are Solar,
@@ -106,11 +143,14 @@
 //
 // Wired to Vercel Cron weekly, 21:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-wa-efsec/route.ts) — a real run's timing was
-// measured (19 total facilities, 5 candidates) before scheduling this. Also
+// measured before scheduling this (originally 19 total facilities, 5
+// detail-fetched; now all 19 are detail-fetched every run — see CANDIDATES
+// above — still comfortably fast for a population this small). Also
 // politeness-delayed between per-candidate detail requests.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
@@ -294,11 +334,19 @@ export function parseFacilityList(html: string): FacilitySummary[] {
   return results;
 }
 
+interface FacilityDocument {
+  date: Date;
+  /** e.g. "Resolution", "Site Certification Agreement (SCA)", "Amendment", "Comment" — EFSEC's own document-type taxonomy term. */
+  type: string;
+  title: string;
+}
+
 interface FacilityDetail {
   applicant: string | null;
   filedRaw: string | null;
   description: string | null;
   capacityMw: number | null;
+  documents: FacilityDocument[];
 }
 
 function extractLabeledField(html: string, label: string): string | null {
@@ -345,9 +393,48 @@ function extractCapacityMw(text: string | null): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+// Each facility detail page embeds its own "Recent documents" widget (the
+// same block STATUS's Desert Claim finding — see module header RESOLUTION
+// DATE — already reads for real, dated closing documents), a fixed 5-row
+// preview of that facility's own document-search results, newest first, no
+// extra request needed since it's part of the same page fetch as
+// description/applicant/capacity above. Row shape confirmed by hand
+// 2026-09-12 against Desert Claim's real page: each row is a `views-row` div
+// with, in order, a facility-name+status label, a `Document date` `<time
+// datetime="...">`, a title (the linked PDF's own visible text), and a
+// document-type taxonomy term (e.g. "Resolution", "Site Certification
+// Agreement (SCA)", "Amendment", "Comment"). Bounded to the section between
+// the "Recent documents" heading and the next `views-element-container`
+// block (the page's separate "About" narrative widget) so this can't
+// accidentally match unrelated rows elsewhere on the page.
+const DOC_SECTION_RE =
+  /<h4>Recent documents<\/h4>[\s\S]*?<div class="view-content row">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>\s*<\/div>\s*<div class="views-element-container/;
+const DOC_ROW_RE =
+  /<div class="views-row">\s*<div class="views-field views-field-field-parent">[\s\S]*?<\/div><\/div><div class="views-field views-field-nothing"><span class="field-content">\s*Document date\s*<strong><time datetime="([^"]+)"[^>]*>[^<]*<\/time>\s*<\/strong>\s*<\/span><\/div><div class="views-field views-field-title"><span class="field-content"><div>\s*<a href="[^"]*">([^<]+)<\/a>\s*<\/div><\/span><\/div><div class="views-field views-field-field-document-type"><div class="field-content">([^<]+)<\/div><\/div>\s*<\/div>/g;
+
+// Small, hand-confirmed set — same scoped approach as every other state
+// module in this series (see e.g. txPuctDockets.ts), not a full HTML-entity
+// library.
+function decodeDocTitleEntities(s: string): string {
+  return s.replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim();
+}
+
+export function parseRecentDocuments(html: string): FacilityDocument[] {
+  const section = DOC_SECTION_RE.exec(html)?.[1];
+  if (!section) return [];
+  const docs: FacilityDocument[] = [];
+  for (const m of section.matchAll(DOC_ROW_RE)) {
+    const date = new Date(m[1]);
+    if (Number.isNaN(date.getTime())) continue;
+    docs.push({ date, title: decodeDocTitleEntities(m[2]), type: m[3].trim() });
+  }
+  return docs;
+}
+
 async function fetchFacilityDetail(slug: string): Promise<FacilityDetail> {
   const html = await fetchText(`${BASE_URL}${slug}`);
   const description = extractDescription(html);
+  const documents = parseRecentDocuments(html);
   // "Max generating capacity" is only present for generation facilities
   // (never transmission) and is frequently published as a literal "--"
   // placeholder rather than left off the page entirely — confirmed on
@@ -365,6 +452,7 @@ async function fetchFacilityDetail(slug: string): Promise<FacilityDetail> {
     filedRaw: extractTimelineDate(html, "Application received") ?? extractTimelineDate(html, "Application completed"),
     description,
     capacityMw,
+    documents,
   };
 }
 
@@ -375,6 +463,37 @@ function parseMonthYear(raw: string | null): Date | null {
   if (!raw) return null;
   const d = new Date(`1 ${raw}`);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// RESOLUTION DATE — see module header RESOLUTION DATE section. Only the
+// "cancelled" branch is confirmed against a real live document (Desert
+// Claim's "Resolution 356 Desert Claim SCA termination," type "Resolution",
+// dated 2025-06-25 — excludes the "Draft Resolution..." row sharing the same
+// date, so the real filed resolution wins over its own draft when both
+// appear). The other resolved stages (approved_awaiting_construction /
+// under_construction / completed) fall back to the same "Resolution" or
+// "Site Certification Agreement (SCA)" document-type match, looking for
+// grant/approval/execution language rather than termination — a reasonable
+// extension of the same real pattern, but NOT yet confirmed against a live
+// example, since none of EFSEC's current "Application review" candidates
+// (the only facilities this module has ever tracked) has actually reached
+// one of those stages yet. In practice this will very often find nothing
+// for a facility resolved long ago: the "Recent documents" preview this
+// pulls from (see parseRecentDocuments) is only the 5 newest documents for
+// that facility, and an old grant order is routinely pushed off that
+// preview by years of subsequent routine filings (confirmed live against
+// Horse Heaven Wind Project, "Awaiting construction": its 5 most recent
+// documents are all 2026 comment-period/memo filings, nothing from its real
+// site-certification approval) — this returns undefined rather than
+// guessing in that case, same as every other "couldn't confidently find a
+// real date" case in this file.
+export function findResolutionDate(currentStage: ProjectStage, documents: FacilityDocument[]): Date | null {
+  const matches =
+    currentStage === "cancelled"
+      ? documents.filter((d) => d.type === "Resolution" && /terminat/i.test(d.title) && !/^draft\b/i.test(d.title))
+      : documents.filter((d) => (d.type === "Resolution" || d.type === "Site Certification Agreement (SCA)") && /\b(grant|approv|execut|certificat)/i.test(d.title) && !/amendment/i.test(d.title));
+  if (matches.length === 0) return null;
+  return matches.reduce((earliest, d) => (d.date.getTime() < earliest.getTime() ? d.date : earliest), matches[0].date);
 }
 
 // Exhaustive over the 6 f-status values observed in a real fetch of all 19
@@ -450,6 +569,7 @@ function normalizeFacility(
   const county = cleanCounty(summary.county);
   const filedDate = parseMonthYear(detail.filedRaw);
   const events = eventsByFacilityName.get(summary.name) ?? [];
+  const resolutionDate = RESOLVED_STAGES.includes(currentStage) ? findResolutionDate(currentStage, detail.documents) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -481,6 +601,11 @@ function normalizeFacility(
   } else {
     dataQualityNoteParts.push("No structured location field is published; this project will not appear on the map until geocoded another way.");
   }
+  if (RESOLVED_STAGES.includes(currentStage) && !resolutionDate) {
+    dataQualityNoteParts.push(
+      "This facility's status is resolved, but no dated closing document (resolution, termination order, or executed site certification agreement) was found in its 5 most-recently-published documents — an older resolution is often pushed off that short list by newer routine filings, see the ingestion module header.",
+    );
+  }
 
   return {
     matchKey,
@@ -498,6 +623,8 @@ function normalizeFacility(
     applicant: detail.applicant,
     currentStatus: `WA EFSEC facility status: ${summary.status}${detail.applicant ? ` — applicant ${detail.applicant}` : ""}`,
     currentStage,
+    resolutionDate: resolutionDate ?? undefined,
+    resolutionDateConfidence: resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a site certification decision from the Washington Energy Facility Site Evaluation Council — ${summary.name}${detail.description ? `, "${detail.description}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -519,7 +646,7 @@ function normalizeFacility(
 
 export interface IngestSummary {
   candidatesFound: number;
-  applicationReviewCandidates: number;
+  candidatesProcessed: number;
   upserted: number;
   removedResolved: number;
   errors: { matchKey: string; message: string }[];
@@ -535,11 +662,11 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   // candidate.
   const eventsByFacilityName = await fetchActiveEventsByFacilityName().catch(() => new Map<string, FacilityEvent[]>());
 
-  const candidates = selectWithRotation(
-    allFacilities.filter((f) => f.status === "Application review"),
-    maxCandidates,
-    ROTATING_RECENT_SLOTS,
-  );
+  // See module header CANDIDATES (revised): every facility is now a
+  // candidate, not just "Application review" ones — see that section for
+  // why the original review-only filter silently broke both currentStage
+  // transitions and resolutionDate extraction for anything that resolves.
+  const candidates = selectWithRotation(allFacilities, maxCandidates, ROTATING_RECENT_SLOTS);
   const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
@@ -567,7 +694,7 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
 
   return {
     candidatesFound: allFacilities.length,
-    applicationReviewCandidates: candidates.length,
+    candidatesProcessed: candidates.length,
     upserted,
     removedResolved,
     errors,
@@ -579,8 +706,8 @@ if (require.main === module) {
     .then((summary) => {
       console.log(
         `Washington EFSEC facility ingestion complete: ${summary.candidatesFound} total facilities, ` +
-          `${summary.applicationReviewCandidates} in "Application review" status, upserted ${summary.upserted}, ` +
-          `removed ${summary.removedResolved} resolved, ${summary.errors.length} errors.`,
+          `${summary.candidatesProcessed} processed, upserted ${summary.upserted}, ` +
+          `${summary.removedResolved} with a resolved stage, ${summary.errors.length} errors.`,
       );
       if (summary.errors.length > 0) console.error(summary.errors);
     })

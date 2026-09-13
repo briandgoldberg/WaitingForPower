@@ -84,6 +84,30 @@
 // storage-only filings) on the rest. Text-inferred, not authoritative —
 // dataQualityNote says so on every project this applies to.
 //
+// RESOLUTION DATE: CaseDetails/GetDetail returns three date fields that
+// could plausibly answer "when did this case actually resolve" —
+// Disposition_Date, Final_Order_Date, Closed_Date — confirmed live
+// 2026-09-12 they are NOT interchangeable. Sampled ~15 real closed VA SCC
+// cases (both Energy and Communication section, since the API doesn't
+// discriminate the three fields' behavior by section): in almost every one
+// Final_Order_Date and Closed_Date agree exactly (or Closed_Date is one
+// calendar day later — administrative closing lag, e.g. PUR-2025-00166:
+// Final_Order_Date 03/17/2026, Closed_Date 03/18/2026), and Disposition_Date
+// matches both. The one real divergence found, PUR-2025-00018: Status is
+// still "Pending" (not Closed) yet it already carries Final_Order_Date and
+// Closed_Date of 07/25/2025 — while Disposition_Date reads 12/24/2025, five
+// months later. That means Disposition_Date can move independently of the
+// case's real closing event (most likely a later administrative disposition
+// update on an otherwise-still-open matter), making it the least trustworthy
+// of the three for "the real date this resolved." Final_Order_Date is used
+// as primary (the literal date of the actual final order document); Closed_Date
+// is the fallback for real closed cases that have no document literally
+// labeled a "final order" — confirmed live against PUR-2025-00225
+// (Disposition "Canceled") and PUR-2024-00033 (Disposition "Informally
+// Resolved/Ended"), both Final_Order_Date=null but Closed_Date populated.
+// Disposition_Date itself is never used. See the `resolutionDate` constant
+// in normalizeCase below for the exact fallback order.
+//
 // LICENSE/REDISTRIBUTION: open question, same as README open question #7's
 // pattern for the other sources — this is a state government's own public
 // case-record search tool (state records are generally public under
@@ -154,6 +178,7 @@ interface CaseDetail {
   Section: string | null;
   Disposition: string | null;
   Disposition_Date: string | null;
+  Final_Order_Date: string | null;
   Closed_Date: string | null;
 }
 
@@ -282,6 +307,22 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
 
   const currentStage: ProjectStage = isActive ? "local_review" : (STATUS_TO_RESOLVED_STAGE[statusLower] ?? "completed");
 
+  // RESOLUTION DATE — see module header RESOLUTION DATE section for the
+  // real comparison across three CaseDetail date fields that led here.
+  // Final_Order_Date is preferred (the literal date of the actual final
+  // order document) with Closed_Date as fallback for real closed cases that
+  // never got a document literally labeled a "final order" (a withdrawal or
+  // an "informally resolved" disposition, confirmed live against
+  // PUR-2025-00225 and PUR-2024-00033, both Final_Order_Date=null,
+  // Closed_Date populated). Disposition_Date is deliberately NOT used here:
+  // confirmed live against PUR-2025-00018, a real case where Disposition_Date
+  // (12/24/2025) sits five months AFTER Final_Order_Date/Closed_Date
+  // (both 07/25/2025) while Status itself is still "Pending" — Disposition_Date
+  // can apparently be revised independently of the case's real closing
+  // event, making it a less trustworthy "this is when it resolved" signal
+  // than the other two, which agreed in every other case sampled.
+  const resolutionDate = !isActive ? (parseUsDate(detail.Final_Order_Date) ?? parseUsDate(detail.Closed_Date)) : null;
+
   const capacityMw = extractCapacityMw(caption);
   const countyHit = extractCountyCentroid();
   const fuelType = inferFuelType(caption);
@@ -326,6 +367,8 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
       milestones.length > 0 ? ` (most recent activity: ${activities[0].Activity}, ${activities[0].Activity_Date})` : ""
     }`,
     currentStage,
+    resolutionDate: resolutionDate ?? undefined,
+    resolutionDateConfidence: resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Virginia State Corporation Commission — case ${search.Case_Number}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

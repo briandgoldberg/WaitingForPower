@@ -166,6 +166,30 @@
 //     grant/deny verb specifically because of this real, live false-positive
 //     — confirmed it does NOT trigger on this text.
 //
+// RESOLUTION DATE: fetchOrderActivities (formerly fetchOrderTexts) already
+// parses each Order-type activity's own Activity Date column — previously
+// discarded once detectResolution had used the row's summary text to
+// classify grant/deny/dismiss/closed-unclear, since that classification was
+// all this module needed the row for. The SAME row that carries the
+// resolving verdict text is also the real, PSC-published date this docket
+// actually resolved, so it's now threaded through (detectResolution returns
+// {resolution, date} instead of a bare Resolution) and written to
+// Project.resolutionDate whenever resolution is non-null. Confirmed live
+// 2026-09-12 against Case 24-0038-E-CN (the plain-GRANTED example above):
+// its "Commission Final Order that...is approved...granted" row's own
+// Activity Date is 09/13/2024, parsed with the same parseMDY (M/D/YYYY)
+// format already used for Filed dates. Real, honest limitation carried over
+// from VANISHED-CANDIDATE FIX below: this module only ever sees a case's
+// Order-activity log while that case still appears in the "Active" search —
+// a case whose Active flag has already flipped to Closed (the normal state
+// for something resolved more than a few weeks, in practice) simply never
+// reaches detectResolution at all on any future run, so resolutionDate can
+// only be captured for a case caught in the narrow window where PSC's own
+// Order log already shows a final disposition but the Active flag hasn't
+// flipped yet — real and useful when it happens, but not something this
+// module can retroactively backfill for a case that resolved and closed
+// before this code existed.
+//
 // VANISHED-CANDIDATE FIX (superseded 2026-08-25): a real structural bug
 // found and fixed before shipping (this project's own standard
 // verification step). Every search this module runs is scoped
@@ -551,7 +575,23 @@ async function fetchUpcomingHearingsByCase(caseNumbers: string[]): Promise<Map<s
   return map;
 }
 
-async function fetchOrderTexts(caseNumber: string): Promise<string[]> {
+interface OrderActivity {
+  date: Date | null;
+  text: string;
+}
+
+// The activity date (m[1]) used to be discarded here — only the order's own
+// summary text (m[2]) was kept, since that was all detectResolution needed
+// to classify grant/deny/dismiss/closed-unclear. Now also parsed and
+// threaded through as each activity's own `date`, since the SAME row that
+// carries the resolving verdict text is also the genuine, PSC-published date
+// this docket actually resolved — see RESOLUTION DATE in the module header.
+// Confirmed live 2026-09-12 against Case 24-0038-E-CN (the module header's
+// own plain-GRANTED example): its "Commission Final Order that...is
+// approved...granted" row carries Activity Date 09/13/2024, parsed here
+// with the same parseMDY (M/D/YYYY) format the case-search list already
+// uses for Filed dates.
+async function fetchOrderActivities(caseNumber: string): Promise<OrderActivity[]> {
   const params = new URLSearchParams({
     txtCaseNumberOperator: "EQUAL",
     txtCaseNumberCriteria: caseNumber,
@@ -565,22 +605,32 @@ async function fetchOrderTexts(caseNumber: string): Promise<string[]> {
   const res = await fetch(`${ACTIVITY_URL}?${params.toString()}`);
   if (!res.ok) throw new Error(`WV PSC WebDocket activity search failed (${res.status}) for case ${caseNumber}`);
   const html = await res.text();
-  const texts: string[] = [];
-  for (const m of html.matchAll(ORDER_ROW_RE)) texts.push(stripTags(m[2]));
-  return texts;
+  const activities: OrderActivity[] = [];
+  for (const m of html.matchAll(ORDER_ROW_RE)) activities.push({ date: parseMDY(m[1]), text: stripTags(m[2]) });
+  return activities;
+}
+
+interface ResolutionResult {
+  resolution: Resolution;
+  /** The specific Order-activity's own date that carried the resolving verdict — undefined/null if unresolved. */
+  date: Date | null;
 }
 
 // Scans a case's Order-type activities, most-recent-first, for the first
-// one carrying a resolving verdict — see module header STATUS.
-function detectResolution(orderTexts: string[]): Resolution {
-  for (const text of orderTexts) {
-    if (NO_CN_REQUIRED_RE.test(text)) return "closed-unclear";
-    if (DENY_RE.test(text)) return "denied";
-    if (GRANT_RE.test(text)) return "granted";
-    if (DISMISS_RE.test(text)) return "dismissed";
-    if (CLOSED_FALLBACK_RE.test(text)) return "closed-unclear";
+// one carrying a resolving verdict — see module header STATUS. Now also
+// returns that SAME activity's own date (see fetchOrderActivities above)
+// rather than just the boolean-ish resolution classification, since that's
+// exactly the real "this docket resolved on this date" signal
+// Project.resolutionDate wants.
+function detectResolution(orderActivities: OrderActivity[]): ResolutionResult {
+  for (const activity of orderActivities) {
+    if (NO_CN_REQUIRED_RE.test(activity.text)) return { resolution: "closed-unclear", date: activity.date };
+    if (DENY_RE.test(activity.text)) return { resolution: "denied", date: activity.date };
+    if (GRANT_RE.test(activity.text)) return { resolution: "granted", date: activity.date };
+    if (DISMISS_RE.test(activity.text)) return { resolution: "dismissed", date: activity.date };
+    if (CLOSED_FALLBACK_RE.test(activity.text)) return { resolution: "closed-unclear", date: activity.date };
   }
-  return null;
+  return { resolution: null, date: null };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY.
@@ -689,9 +739,10 @@ const EXCLUDE_RE = /\bcooling tower\b|\bgeneral investigation\b/i;
 function normalizeCase(
   record: CaseListRecord,
   docketLabel: string,
-  resolution: Resolution,
+  resolutionResult: ResolutionResult,
   upcomingHearings: Map<string, UpcomingHearing[]>,
 ): NormalizedProject {
+  const { resolution, date: resolutionOrderDate } = resolutionResult;
   const matchKey = resolveMatchKey("wv-psc", record.caseNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(record.description, record.applicant);
   const capacityMw = extractCapacityMw(record.description);
@@ -704,6 +755,12 @@ function normalizeCase(
   else if (resolution === "denied" || resolution === "dismissed" || resolution === "closed-unclear") {
     currentStage = "cancelled";
   } else currentStage = "local_review";
+
+  // RESOLUTION DATE — see module header. Only set when this run actually
+  // classified a resolving verdict (never for "local_review"); left
+  // undefined (not null) when resolved but the deciding activity's own date
+  // didn't parse, rather than guessed at.
+  const resolutionDate = resolution !== null ? resolutionOrderDate : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -739,6 +796,8 @@ function normalizeCase(
     applicant: record.applicant,
     currentStatus: `West Virginia PSC Case ${record.caseNumber}: ${resolution ?? "active"}`,
     currentStage,
+    resolutionDate: resolutionDate ?? undefined,
+    resolutionDateConfidence: resolutionDate ? "exact" : undefined,
     causeSlugs,
     causeDetail: `Waiting on a ${docketLabel} from the West Virginia Public Service Commission — Case No. ${record.caseNumber}, "${record.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -800,9 +859,9 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
         continue;
       }
       realApplicationCandidates += 1;
-      const orderTexts = await fetchOrderTexts(record.caseNumber);
-      const resolution = detectResolution(orderTexts);
-      const normalized = normalizeCase(record, docketLabel, resolution, upcomingHearings);
+      const orderActivities = await fetchOrderActivities(record.caseNumber);
+      const resolutionResult = detectResolution(orderActivities);
+      const normalized = normalizeCase(record, docketLabel, resolutionResult, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(entry)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

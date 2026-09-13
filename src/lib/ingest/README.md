@@ -180,17 +180,18 @@ sets a real `Date` only once a project's `currentStage` is genuinely a
 resolution — never guessed, never backfilled from an unrelated date on the
 same page.
 
-As of 2026-09-13, 30 of the 41 state modules extract a real resolution
+As of 2026-09-13, 33 of the 41 state modules extract a real resolution
 date, each from its own already-fetched order/decision document (no new
 fetch added purely for this): `alPscDockets.ts`, `arPscDockets.ts`,
 `azAccLineSiting.ts`, `caCecDockets.ts`, `coPucDockets.ts`,
-`ctCscDockets.ts`, `flPscDockets.ts`, `inIurcDockets.ts`, `kyPscDockets.ts`,
-`laPscDockets.ts`, `maEfsbDockets.ts`, `moPscDockets.ts`, `nePrbDockets.ts`,
-`nvPucnDockets.ts`, `nhSecDockets.ts`, `njBpuDockets.ts`, `nmPrcDockets.ts`,
-`nyDpsDockets.ts`, `ndPscDockets.ts`, `okOccDockets.ts`,
-`orEfscFacilities.ts`, `riEfsbDockets.ts`, `sdPucDockets.ts`,
-`tnTpucDockets.ts`, `txPuctDockets.ts`, `utPscDockets.ts`, `vaSccDockets.ts`,
-`waEfsecFacilities.ts`, `wvPscDockets.ts`, `wiPscDockets.ts`. Several of
+`ctCscDockets.ts`, `flPscDockets.ts`, `idPucDockets.ts`, `inIurcDockets.ts`,
+`kyPscDockets.ts`, `laPscDockets.ts`, `maEfsbDockets.ts`, `moPscDockets.ts`,
+`nePrbDockets.ts`, `nvPucnDockets.ts`, `nhSecDockets.ts`, `njBpuDockets.ts`,
+`nmPrcDockets.ts`, `nyDpsDockets.ts`, `ndPscDockets.ts`, `okOccDockets.ts`,
+`orEfscFacilities.ts`, `riEfsbDockets.ts`, `scPscDockets.ts`,
+`sdPucDockets.ts`, `tnTpucDockets.ts`, `txPuctDockets.ts`, `utPscDockets.ts`,
+`vaSccDockets.ts`, `vtPucDockets.ts`, `waEfsecFacilities.ts`,
+`wvPscDockets.ts`, `wiPscDockets.ts`. Several of
 these currently show zero real rows with a populated `resolutionDate` even
 though the extraction logic is confirmed correct — that's real-world
 timing (nothing has actually resolved yet in that state's live data since
@@ -214,20 +215,37 @@ in production since the state's site was placed behind Cloudflare at some
 point after the module was first written; and Rhode Island and South
 Dakota were each vulnerable to the same false positive, a third-party
 intervenor's own "Notice of Withdrawal" being misread as the applicant
-withdrawing the whole application.
+withdrawing the whole application. Vermont, Massachusetts, and Oregon each
+needed the same kind of scope extension — a module originally built to
+track only still-pending cases has to actively go looking for a case that
+already resolved (a second, non-pending-scoped search, or simply no longer
+skipping the detail fetch), or it never gets the chance to see a real date
+at all, let alone track the project's real outcome.
 
-**4 states have no real date available from their source at all, and
+**6 states have no real date available from their source at all, and
 never will without a fundamentally different source**: `gaPscDockets.ts`
 (Georgia), `meDepSiteLawPermits.ts` (Maine), `mdPscDockets.ts` (Maryland),
-`wyIscDockets.ts` (Wyoming) — none of these publish any dated order/decision
-document to extract from, confirmed by hand, not assumed.
+`wyIscDockets.ts` (Wyoming), `ohOpsbCases.ts` (Ohio), `dePscDockets.ts`
+(Delaware) — none of these publish any dated order/decision document to
+extract from, confirmed by hand against real closed cases, not assumed.
+Delaware has a second, more fundamental gap on top: this module never
+determines granted/denied/withdrawn at all — every candidate is hardcoded
+to `"local_review"` — so there's no resolved stage for a date to attach to
+even if one existed; a real, separate limitation, not fixed here.
 
-**7 states are still unresolved** — genuinely live/current sources (not
-batch-updated), but whether a real date can be extracted from what they
-publish hasn't been checked yet: `dePscDockets.ts` (Delaware),
-`idPucDockets.ts` (Idaho), `ilIccDockets.ts` (Illinois), `ncNcucDockets.ts`
-(North Carolina), `ohOpsbCases.ts` (Ohio), `scPscDockets.ts` (South
-Carolina), `vtPucDockets.ts` (Vermont).
+**2 states remain genuinely blocked, not resolved either way**:
+`ilIccDockets.ts` (Illinois) and `ncNcucDockets.ts` (North Carolina) — both
+sit behind bot-defense (a Google reCAPTCHA on every Illinois per-docket
+page, confirmed added after this module was first built; the same
+Cloudflare wall on North Carolina's Orders portal this module's own header
+already documented) that this project's rules don't attempt to solve or
+bypass. **Illinois is worse than just unresolved**: the same reCAPTCHA gate
+blocks this module's own pre-existing granted/denied status check, so
+Illinois ingestion is confirmed broken in production right now (0
+upserted, every real candidate erroring) — a real regression unrelated to
+this task, flagged separately rather than fixed here, since the actual fix
+(a non-CAPTCHA path to the same status data, if one exists at all) is a
+different problem than resolution-date extraction.
 
 ## Open questions (flagged, not guessed at)
 

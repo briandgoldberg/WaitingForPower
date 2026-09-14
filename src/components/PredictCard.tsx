@@ -152,7 +152,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
     <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4">
       {!open ? (
         <div className="flex flex-col items-center text-center gap-2 py-2">
-          <p className="text-sm font-semibold">Think you know when this project is approved?</p>
+          <p className="text-sm font-semibold">Think you know when this project will be approved?</p>
           <button
             type="button"
             onClick={() => setExpanded(true)}

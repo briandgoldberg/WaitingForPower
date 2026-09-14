@@ -154,7 +154,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} accentColor={fuel?.color} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
-        <Stat label="Verification" value={VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")} />
         {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
         {p.balancingAuthority && <Stat label="Grid region" value={p.balancingAuthority} />}
         {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
@@ -294,7 +293,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </section>
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Sources</h2>
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <h2 className="text-base font-semibold text-[var(--accent)]">Sources</h2>
+          <span
+            className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 ${
+              p.verificationStatus === "user_submitted_pending"
+                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+            }`}
+          >
+            {p.verificationStatus === "user_submitted_pending" ? "⏳" : "✓"}{" "}
+            {VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")}
+          </span>
+        </div>
         <ul className="flex flex-col gap-1.5 text-sm">
           {p.sources.map((s) => (
             <li key={s.url}>

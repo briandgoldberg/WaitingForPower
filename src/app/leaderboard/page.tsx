@@ -39,22 +39,24 @@ export default async function LeaderboardPage() {
             {topGuesses.map((g, i) => (
               <li
                 key={`${g.predictorId}-${g.projectSlug}-${i}`}
-                className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm"
+                className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm"
               >
-                <PredictorIcon isAgent={g.isAgent} />
-                <Link href={`/leaderboard/${g.predictorId}`} className="shrink-0 underline text-[var(--accent)] max-w-[120px] truncate">
-                  {g.label}
-                </Link>
-                <Link href={`/project/${g.projectSlug}`} className="flex-1 truncate text-[var(--muted)]">
-                  {g.projectName}
-                </Link>
-                <span className="tabular-nums shrink-0">{formatDate(g.predictedDate)}</span>
+                <div className="flex items-center gap-2">
+                  <PredictorIcon isAgent={g.isAgent} />
+                  <Link href={`/leaderboard/${g.predictorId}`} className="shrink-0 underline text-[var(--accent)] max-w-[120px] truncate">
+                    {g.label}
+                  </Link>
+                  <Link href={`/project/${g.projectSlug}`} className="flex-1 truncate text-[var(--muted)]">
+                    {g.projectName}
+                  </Link>
+                  <span className="tabular-nums shrink-0">{formatDate(g.predictedDate)}</span>
+                </div>
                 {g.moreCount > 0 && (
                   <Link
                     href={`/leaderboard/${g.predictorId}`}
-                    className="shrink-0 text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5 underline"
+                    className="block mt-1 text-xs text-[var(--muted)] underline"
                   >
-                    +{g.moreCount} more
+                    {g.moreCount.toLocaleString()} more prediction{g.moreCount === 1 ? "" : "s"} from {g.label}
                   </Link>
                 )}
               </li>

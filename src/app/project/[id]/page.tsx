@@ -150,7 +150,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <PredictCard projectId={p.id} />
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="flex flex-wrap gap-3">
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} accentColor={fuel?.color} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
@@ -317,7 +317,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 function Stat({ label, value, accentColor }: { label: string; value: string; accentColor?: string }) {
   return (
     <div
-      className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 border-l-[3px]"
+      className="flex-1 min-w-[130px] rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 border-l-[3px]"
       style={{ borderLeftColor: accentColor ?? "var(--accent)" }}
     >
       <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>

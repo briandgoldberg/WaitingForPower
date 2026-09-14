@@ -173,14 +173,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
 
           {myPrediction ? (
             <p className="text-sm mt-2">
-              Your guess: <strong>{formatDate(myPrediction)}</strong>{" "}
-              <button
-                type="button"
-                className="text-xs underline text-[var(--accent)] ml-1"
-                onClick={() => setMyPrediction(null)}
-              >
-                change
-              </button>
+              Your guess: <strong>{formatDate(myPrediction)}</strong> — locked in, no changes.
             </p>
           ) : (
             <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 flex-wrap">

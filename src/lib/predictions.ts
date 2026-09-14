@@ -52,10 +52,18 @@ export async function submitPrediction(params: SubmitPredictionParams) {
         update: {},
       });
 
-  const prediction = await prisma.prediction.upsert({
+  // A guess is a one-time commitment, not an editable draft — once it's in,
+  // it's in, for both humans and agents. Enforced here (not just hidden in
+  // the UI) since the MCP tool talks to submitPrediction directly.
+  const existing = await prisma.prediction.findUnique({
     where: { projectId_predictorId: { projectId: project.id, predictorId: predictor.id } },
-    create: { projectId: project.id, predictorId: predictor.id, predictedDate: params.predictedDate },
-    update: { predictedDate: params.predictedDate },
+  });
+  if (existing) {
+    throw new PredictionError("already_predicted", "You've already predicted on this project — guesses can't be changed once submitted.");
+  }
+
+  const prediction = await prisma.prediction.create({
+    data: { projectId: project.id, predictorId: predictor.id, predictedDate: params.predictedDate },
   });
 
   return { prediction, predictor };

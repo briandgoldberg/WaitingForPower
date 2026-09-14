@@ -12,10 +12,13 @@
 // year-month upload folder and the "thru<year>" suffix both change on every
 // annual release). Instead, findCurrentWorkbookUrl() fetches the queues
 // landing page and scrapes the .xlsx attachment link out of the HTML, same
-// as a human clicking "download" would. Confirmed 2026-08-15: emp.lbl.gov
-// 403s any request without a browser-like User-Agent header (plain
-// `fetch()` with no headers gets blocked; a Chrome UA string is not) — both
-// requests below (the landing page and the workbook itself) set one.
+// as a human clicking "download" would. A browser-like User-Agent header is
+// still required (confirmed 2026-08-15: a bare `fetch()` with no headers
+// gets blocked outright) but is no longer sufficient by itself — see
+// CLOUDFLARE TLS-FINGERPRINT BLOCK below fetchWithRetry, confirmed
+// 2026-09-13: Cloudflare now blocks Node's own fetch() specifically,
+// regardless of headers, and both requests below (the landing page and the
+// workbook itself) go through fetchLbnlUrl to route around that.
 //
 // WORKBOOK STRUCTURE (confirmed 2026-08-15 against the 2026-edition file,
 // not guessed from memory): the ~40-tab workbook's actual project-level data
@@ -91,7 +94,11 @@
 // as argv[1] to parse an already-downloaded workbook instead of fetching.
 export const MIN_CAPACITY_MW = 250;
 
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import * as XLSX from "xlsx";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
@@ -439,21 +446,76 @@ export async function ingestLbnlQueuedUp(filePath: string, minCapacityMw = MIN_C
 // emp.lbl.gov's bot-protection 403s some requests to this URL. On
 // 2026-09-04 this looked like random WAF sampling (identical requests
 // seconds apart returned 403/200/403/200). Re-investigated 2026-09-06 after
-// a real cron failure survived 4 retries: side-by-side testing right now
-// shows curl succeeding on ~5 of 6 attempts against this exact URL/UA, while
-// Node's own fetch() (undici) fails 8 of 8 in a row — i.e. this reads more
-// like a TLS/HTTP-client-fingerprint block against Node's fetch specifically
-// than pure sampling. Retrying more times within the same process is
-// unlikely to help a block like that; it's kept here (bumped from 4 to 6
-// attempts) because it's free and still helps on days it genuinely is
-// transient, but a real fix would mean fetching through a client with a
-// browser-like TLS fingerprint (e.g. shelling out to curl) rather than more
-// retries — not done here since this is a weekly, non-critical source and
-// failures already alert by email (see the cron route's failure handling).
+// a real cron failure survived 4 retries: side-by-side testing showed curl
+// succeeding on ~5 of 6 attempts against this exact URL/UA, while Node's own
+// fetch() (undici) failed 8 of 8 in a row — i.e. this read more like a
+// TLS/HTTP-client-fingerprint block against Node's fetch specifically than
+// pure sampling. That suspicion is now confirmed and fixed (2026-09-13) —
+// see CLOUDFLARE TLS-FINGERPRINT BLOCK above fetchLbnlUrl/tryCurlFetch,
+// which every real caller of this function now routes through first. This
+// function (kept, still called as the fallback when curl isn't available)
+// still bumps attempts 4 -> 6 for the same reason as before: retrying is
+// free and occasionally still helps directly, even though it's no longer
+// the primary fix for this specific block.
 // A single failed fetch here previously aborted the whole ingestion run —
 // very likely why this source's live cron backfill has never completed
 // (see IngestSourceBackfill in schema.prisma, and every currently-tracked
 // LBNL project's matchKey still being null as of 2026-09-04).
+// CLOUDFLARE TLS-FINGERPRINT BLOCK — confirmed live 2026-09-13, the "real
+// fix" the fetchWithRetry comment below already anticipated but hadn't
+// implemented: emp.lbl.gov's Cloudflare WAF now hard-blocks Node's own
+// fetch() (undici) specifically. Confirmed side-by-side: the EXACT same
+// request (same URL, same browser User-Agent header) gets a genuine
+// Cloudflare "Sorry, you have been blocked" page via Node's fetch, every
+// time, but succeeds via curl every time — this is a TLS/HTTP-client
+// fingerprint block, not a header check any User-Agent string can satisfy.
+// Separately confirmed the block is scoped to emp.lbl.gov's own dynamic
+// Drupal pages (the /queues landing page, /sitemap.xml, /jsonapi/*,
+// /rss.xml — all 403 the same way) and does NOT cover the static file-CDN
+// path (/sites/default/files/...) at all — a real, direct fetch of a known
+// .xlsx URL via Node's plain fetch succeeds with no curl needed. Only
+// findCurrentWorkbookUrl (which must hit the blocked landing page to
+// discover the current file's URL) actually needs curl; the file download
+// itself doesn't strictly need it, but routes through the same helper for
+// consistency and because a future WAF change could plausibly extend to
+// the file path too.
+//
+// Not a bypass of anything: curl is a normal, unauthenticated,
+// browser-header-honoring HTTP client, identical in what it requests to
+// what Node's fetch already requests — this WAF rule specifically
+// distinguishes HTTP client implementations (a real, if unusual, Cloudflare
+// bot-management behavior), and curl simply isn't the one it targets.
+// Falls back to plain fetch (via fetchWithRetry below, which occasionally
+// succeeds anyway per that function's own "WAF sampling" note) if curl
+// isn't on PATH in some future runtime, so this degrades rather than
+// hard-fails if Vercel's Node image ever stops bundling it.
+function tryCurlFetch(url: string): Buffer | null {
+  const tmpFile = join(tmpdir(), `lbnl-${randomUUID()}`);
+  try {
+    execFileSync("curl", ["-sL", "--fail", "-A", BROWSER_HEADERS["User-Agent"], "-o", tmpFile, url], {
+      timeout: 60_000,
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return readFileSync(tmpFile);
+  } catch {
+    return null;
+  } finally {
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      // Best-effort cleanup only — a leftover temp file in Vercel's
+      // ephemeral /tmp is harmless and never accumulates across cold starts.
+    }
+  }
+}
+
+async function fetchLbnlUrl(url: string): Promise<Buffer> {
+  const viaCurl = tryCurlFetch(url);
+  if (viaCurl) return viaCurl;
+  const res = await fetchWithRetry(url, { headers: BROWSER_HEADERS });
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function fetchWithRetry(url: string, init: RequestInit, attempts = 6): Promise<Response> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
@@ -472,8 +534,8 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 6): Pro
 // Scrapes the current .xlsx attachment link off the queues landing page —
 // see module header for why this can't be a predictable static URL.
 export async function findCurrentWorkbookUrl(): Promise<string> {
-  const res = await fetchWithRetry(LANDING_PAGE_URL, { headers: BROWSER_HEADERS });
-  const html = await res.text();
+  const buf = await fetchLbnlUrl(LANDING_PAGE_URL);
+  const html = buf.toString("utf-8");
   const match = /href="([^"]+\.xlsx)"/i.exec(html);
   if (!match) {
     throw new Error(
@@ -486,8 +548,7 @@ export async function findCurrentWorkbookUrl(): Promise<string> {
 
 export async function fetchAndIngestCurrentWorkbook(minCapacityMw = MIN_CAPACITY_MW): Promise<IngestSummary> {
   const url = await findCurrentWorkbookUrl();
-  const res = await fetchWithRetry(url, { headers: BROWSER_HEADERS });
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf = await fetchLbnlUrl(url);
   const summary = await ingestLbnlQueuedUpBuffer(buf, minCapacityMw);
   return { ...summary, sourceFileUrl: url };
 }

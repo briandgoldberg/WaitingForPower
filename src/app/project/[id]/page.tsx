@@ -89,7 +89,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   ]);
 
   return (
-    <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
+    <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-4 flex flex-col gap-4">
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
@@ -170,8 +170,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <p className="text-xs text-[var(--muted)] -mt-2">* Approximate / developer-estimated date, not a firm commitment.</p>
       )}
 
-      <div className={`grid grid-cols-1 gap-4 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+      <div className={`grid grid-cols-1 gap-3 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
           <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated investment waiting</h2>
           {p.investmentWaiting.applicable ? (
             <>
@@ -193,7 +193,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
 
         {p.networkUpgradeCostUsd != null && (
-          <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+          <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
             <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated interconnection cost</h2>
             <div className="text-3xl font-bold tabular-nums">
               {formatUsd((p.poiCostUsd ?? 0) + p.networkUpgradeCostUsd)}
@@ -213,7 +213,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
 
       {(p.lat != null && p.lon != null) && (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
           <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Location</h2>
           <p className="text-sm text-[var(--text-secondary)]">
             {p.lat.toFixed(4)}, {p.lon.toFixed(4)} — see the{" "}
@@ -226,7 +226,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       {p.milestones.length > 0 && (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
           <h2 className="text-base font-semibold text-[var(--accent)] mb-3">Timeline</h2>
           <ul className="flex flex-col gap-3">
             {p.milestones.map((m, i) => (
@@ -248,7 +248,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
       )}
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
         <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public Hearings</h2>
         {p.hearings.length > 0 ? (
           <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
@@ -292,7 +292,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </p>
       </section>
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <h2 className="text-base font-semibold text-[var(--accent)]">Sources</h2>
           <span
@@ -316,7 +316,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           ))}
         </ul>
         {p.dataQualityNote && (
-          <div className="mt-4 pt-4 border-t border-[var(--border)] text-xs text-[var(--muted)]">
+          <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs text-[var(--muted)]">
             <strong>Data quality note:</strong> {p.dataQualityNote}
           </div>
         )}

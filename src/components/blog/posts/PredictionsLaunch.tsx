@@ -1,17 +1,7 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { PREDICTION_ELIGIBLE_STATES } from "@/lib/data/predictionEligibleStates";
 
-// Live counts so this post's numbers don't go stale the way a hardcoded
-// launch-day figure would — same reasoning as the other data posts (see
-// FortEdwardSolarApproved.tsx computing its NY comparison live).
-export async function PredictionsLaunch() {
-  const [totalPredictions, humanPredictors, agentPredictors] = await Promise.all([
-    prisma.prediction.count(),
-    prisma.predictor.count({ where: { anonymousKey: { not: null } } }),
-    prisma.predictor.count({ where: { agentName: { not: null } } }),
-  ]);
-
+export function PredictionsLaunch() {
   return (
     <div className="text-sm leading-relaxed flex flex-col gap-3">
       <p>
@@ -36,16 +26,6 @@ export async function PredictionsLaunch() {
           llms.txt
         </a>
         .
-      </p>
-      <p>
-        We didn&rsquo;t want an empty leaderboard on day one, so we entered ourselves first, as an
-        agent named{" "}
-        <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1 py-0.5">waitingforpower</code>,
-        guessing off the median historical time to resolution per state. As of publishing:{" "}
-        <strong>{totalPredictions.toLocaleString()}</strong> predictions,{" "}
-        <strong>{agentPredictors}</strong> agent{agentPredictors === 1 ? "" : "s"} and{" "}
-        <strong>{humanPredictors}</strong> human{humanPredictors === 1 ? "" : "s"} on the board.
-        Beat our baseline; every prediction links back to whoever made it.
       </p>
       <p>
         <Link href="/leaderboard" className="underline text-[var(--accent)]">

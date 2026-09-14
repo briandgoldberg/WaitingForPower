@@ -104,6 +104,7 @@ export async function getLeaderboard(limit = 50) {
     .map((r) => {
       const p = byId.get(r.predictorId);
       return {
+        id: r.predictorId,
         label: p ? predictorLabel(p) : "anonymous",
         isAgent: p?.agentName != null,
         scoredCount: r._count._all,
@@ -112,6 +113,82 @@ export async function getLeaderboard(limit = 50) {
     })
     .sort((a, b) => a.avgDaysOff - b.avgDaysOff)
     .slice(0, limit);
+}
+
+// Live feed of current (unscored) guesses for the leaderboard page — "what
+// is everyone predicting right now." Leaderboard-ranked predictors' guesses
+// surface first (rank ascending); with real resolution volume this low
+// (~4/month, see MIN_SCORED_FOR_LEADERBOARD above), the leaderboard itself
+// stays empty for long stretches, so this falls back to plain recency
+// rather than going blank whenever nobody has qualified yet.
+export async function getTopGuesses(limit = 12) {
+  const leaderboard = await getLeaderboard(50);
+  const rankById = new Map(leaderboard.map((l, i) => [l.id, i]));
+
+  const outstanding = await prisma.prediction.findMany({
+    where: { scoredAt: null },
+    include: {
+      predictor: { select: { id: true, displayName: true, agentName: true } },
+      project: { select: { slug: true, name: true } },
+    },
+    orderBy: { submittedAt: "desc" },
+    take: 200,
+  });
+
+  return outstanding
+    .map((p) => ({
+      predictorId: p.predictor.id,
+      label: predictorLabel(p.predictor),
+      isAgent: p.predictor.agentName != null,
+      rank: rankById.get(p.predictor.id),
+      projectSlug: p.project.slug,
+      projectName: p.project.name,
+      predictedDate: p.predictedDate.toISOString(),
+      submittedAt: p.submittedAt.toISOString(),
+    }))
+    .sort((a, b) => {
+      const ar = a.rank ?? Infinity;
+      const br = b.rank ?? Infinity;
+      if (ar !== br) return ar - br;
+      return b.submittedAt.localeCompare(a.submittedAt);
+    })
+    .slice(0, limit);
+}
+
+// One predictor's full track record — every prediction they've made,
+// scored or still outstanding, with the project it was on. Backs the
+// leaderboard drill-in page (src/app/leaderboard/[id]/page.tsx).
+export async function getPredictorDetail(predictorId: string) {
+  const predictor = await prisma.predictor.findUnique({
+    where: { id: predictorId },
+    select: { id: true, displayName: true, agentName: true, createdAt: true },
+  });
+  if (!predictor) return null;
+
+  const predictions = await prisma.prediction.findMany({
+    where: { predictorId },
+    include: { project: { select: { slug: true, name: true, resolutionDate: true } } },
+    orderBy: { submittedAt: "desc" },
+  });
+
+  const scored = predictions.filter((p) => p.scoredAt != null);
+  const avgDaysOff = scored.length > 0 ? Math.round(scored.reduce((sum, p) => sum + (p.daysOff ?? 0), 0) / scored.length) : null;
+
+  return {
+    label: predictorLabel(predictor),
+    isAgent: predictor.agentName != null,
+    memberSince: predictor.createdAt.toISOString(),
+    scoredCount: scored.length,
+    avgDaysOff,
+    predictions: predictions.map((p) => ({
+      projectSlug: p.project.slug,
+      projectName: p.project.name,
+      predictedDate: p.predictedDate.toISOString(),
+      resolutionDate: p.project.resolutionDate?.toISOString() ?? null,
+      daysOff: p.daysOff,
+      scored: p.scoredAt != null,
+    })),
+  };
 }
 
 // Called once, right after upsertNormalizedProject (common.ts) sets a

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 // Zero-friction identity, same pattern as this site's other no-login
 // features (the old GreenlightVote's voterKey): a random id the browser
@@ -75,8 +76,13 @@ export function PredictCard({ projectId }: { projectId: string }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!predictedDate || !predictorKey) {
-      setError("Pick a date first.");
+    if (!predictorKey) return;
+    if (!nickname.trim()) {
+      setError("Enter a name — it's how you'll show up on the leaderboard.");
+      return;
+    }
+    if (!predictedDate) {
+      setError("Pick a date.");
       return;
     }
     setLoading(true);
@@ -89,7 +95,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
           projectId,
           predictedDate,
           anonymousKey: predictorKey,
-          displayName: nickname || undefined,
+          displayName: nickname.trim(),
         }),
       });
       const data = await res.json();
@@ -98,14 +104,15 @@ export function PredictCard({ projectId }: { projectId: string }) {
         return;
       }
       localStorage.setItem(predictionKey(projectId), data.predictedDate);
-      if (nickname) localStorage.setItem("wfp_predictor_nickname", nickname);
+      localStorage.setItem("wfp_predictor_nickname", nickname.trim());
       setMyPrediction(data.predictedDate);
       // Only nag once, ever, per browser — not on every project someone
       // predicts on.
       if (!data.hasSavedProfile && !localStorage.getItem("wfp_predictor_email_sent")) {
         setShowSavePrompt(true);
       }
-      setGuesses((prev) => [...prev.filter((g) => g.label !== (nickname || "anonymous")), { label: nickname || "anonymous", isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) => a.predictedDate.localeCompare(b.predictedDate)));
+      const label = nickname.trim();
+      setGuesses((prev) => [...prev.filter((g) => g.label !== label), { label, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) => a.predictedDate.localeCompare(b.predictedDate)));
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {
@@ -135,12 +142,10 @@ export function PredictCard({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-sm font-semibold">Predict when this resolves</h2>
-        <span className="text-xs bg-black/5 dark:bg-white/10 rounded-full px-2.5 py-0.5">
-          No sign-in needed
-        </span>
+        <span className="text-[10px] text-[var(--muted)]">No sign-in needed</span>
       </div>
 
       {myPrediction ? (
@@ -155,52 +160,48 @@ export function PredictCard({ projectId }: { projectId: string }) {
           </button>
         </p>
       ) : (
-        <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-2.5">
-          <div className="flex items-end gap-2 flex-wrap">
-            <div className="flex-1 min-w-[160px]">
-              <label className="text-xs text-[var(--muted)] block mb-1">Your guess: when does this resolve?</label>
-              <input
-                type="date"
-                value={predictedDate}
-                onChange={(e) => setPredictedDate(e.target.value)}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60"
-            >
-              {loading ? "Submitting…" : "Submit guess"}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
+        <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 flex-wrap">
+          <div className="w-28">
+            <label className="text-[10px] text-[var(--muted)] block mb-0.5">Name</label>
             <input
               type="text"
-              placeholder="anonymous"
+              placeholder="e.g. Alex"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               maxLength={40}
-              className="max-w-[220px] rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
             />
-            <span className="text-xs text-[var(--muted)]">optional nickname · remembered on this device</span>
           </div>
-          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-[10px] text-[var(--muted)] block mb-0.5">Resolution date</label>
+            <input
+              type="date"
+              value={predictedDate}
+              onChange={(e) => setPredictedDate(e.target.value)}
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60"
+          >
+            {loading ? "…" : "Submit"}
+          </button>
+          {error && <p className="text-xs text-red-600 dark:text-red-400 w-full">{error}</p>}
         </form>
       )}
 
       {showSavePrompt && saveStatus !== "sent" && (
-        <form onSubmit={handleSaveProfile} className="mt-3 pt-3 border-t border-[var(--border)] flex items-end gap-2 flex-wrap">
+        <form onSubmit={handleSaveProfile} className="mt-2 pt-2 border-t border-[var(--border)] flex items-end gap-2 flex-wrap">
           <div className="flex-1 min-w-[160px]">
-            <label className="text-xs text-[var(--muted)] block mb-1">
-              Save this to a profile that survives a new device? (optional)
-            </label>
+            <label className="text-[10px] text-[var(--muted)] block mb-0.5">Save your streak to an email? (optional)</label>
             <input
               type="email"
               placeholder="you@example.com"
               value={saveEmail}
               onChange={(e) => setSaveEmail(e.target.value)}
-              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
             />
           </div>
           <button
@@ -208,28 +209,31 @@ export function PredictCard({ projectId }: { projectId: string }) {
             disabled={saveStatus === "sending"}
             className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60"
           >
-            {saveStatus === "sending" ? "Sending…" : "Send magic link"}
+            {saveStatus === "sending" ? "Sending…" : "Send link"}
           </button>
           {saveStatus === "error" && <p className="text-xs text-red-600 dark:text-red-400 w-full">Couldn&rsquo;t send that — try again.</p>}
         </form>
       )}
       {saveStatus === "sent" && (
-        <p className="text-xs text-[var(--muted)] mt-3 pt-3 border-t border-[var(--border)]">
+        <p className="text-xs text-[var(--muted)] mt-2 pt-2 border-t border-[var(--border)]">
           Check your email for a link to confirm.
         </p>
       )}
 
       {guesses.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-[var(--border)]">
-          <p className="text-xs text-[var(--muted)] mb-1.5">{guesses.length} guess{guesses.length === 1 ? "" : "es"} so far</p>
-          <div className="flex flex-col gap-1">
+        <div className="mt-2 pt-2 border-t border-[var(--border)]">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] text-[var(--muted)]">{guesses.length} guess{guesses.length === 1 ? "" : "es"} so far</p>
+            <Link href="/leaderboard" className="text-[10px] underline text-[var(--accent)]">leaderboard</Link>
+          </div>
+          <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
             {guesses.map((g, i) => (
               <div key={`${g.label}-${i}`} className="flex items-center gap-2 text-xs">
-                <span className="flex-1">{g.label}</span>
+                <span className="flex-1 truncate">{g.label}</span>
                 {g.isAgent && (
-                  <span className="text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5">via API</span>
+                  <span className="text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5 shrink-0">via API</span>
                 )}
-                <span className="text-[var(--muted)]">{formatDate(g.predictedDate)}</span>
+                <span className="text-[var(--muted)] shrink-0">{formatDate(g.predictedDate)}</span>
               </div>
             ))}
           </div>

@@ -19,11 +19,16 @@ export async function POST(req: NextRequest) {
   const projectId = String(body.projectId ?? "").trim();
   const anonymousKey = String(body.anonymousKey ?? "").trim();
   const predictedDateRaw = String(body.predictedDate ?? "").trim();
-  const displayNameRaw = String(body.displayName ?? "").trim();
-  const displayName = displayNameRaw.length > 0 && displayNameRaw.length <= 40 ? displayNameRaw : undefined;
+  const displayName = String(body.displayName ?? "").trim();
 
   if (!projectId || !anonymousKey || !predictedDateRaw) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+  }
+  // A leaderboard entry needs a name to actually be one — unlike the old
+  // "optional nickname," this is required so "anonymous" never shows up
+  // as a leaderboard identity (email, kept separate, stays optional).
+  if (displayName.length === 0 || displayName.length > 40) {
+    return NextResponse.json({ error: "Enter a name (up to 40 characters)." }, { status: 400 });
   }
   // A random client-generated key, not a guessable id — same shape as this
   // site's other anonymous, no-login features (see GreenlightVote's old

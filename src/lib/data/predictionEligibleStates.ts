@@ -1,0 +1,52 @@
+import { splitStateCodes } from "@/lib/data/usStates";
+
+// States where a project's ingest module extracts a real, source-published
+// resolutionDate — see src/lib/ingest/README.md's "resolutionDate /
+// resolutionDateConfidence" section. The prediction game only opens on a
+// project in one of these states: predicting on a project whose state can
+// never get a real resolutionDate would have nothing to score against.
+// Keep in sync with that README section when a currently-uncertain state
+// (Delaware, Illinois, North Carolina) gets resolved one way or the other.
+export const PREDICTION_ELIGIBLE_STATES: ReadonlySet<string> = new Set([
+  "AL",
+  "AR",
+  "AZ",
+  "CA",
+  "CO",
+  "CT",
+  "FL",
+  "ID",
+  "IN",
+  "KY",
+  "LA",
+  "MA",
+  "MO",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "ND",
+  "OK",
+  "OR",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VA",
+  "VT",
+  "WA",
+  "WV",
+  "WI",
+]);
+
+// A project's `state` can hold multiple comma-joined codes for a
+// multi-state transmission/pipeline project — eligible if ANY of its
+// states can produce a real date, since the resolution event is shared
+// across the whole project either way.
+export function isPredictionEligibleState(state: string | null | undefined): boolean {
+  return splitStateCodes(state ?? null).some((code) => PREDICTION_ELIGIBLE_STATES.has(code));
+}

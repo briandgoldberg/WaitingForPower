@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
-import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
+import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
+import { PredictCard } from "@/components/PredictCard";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +165,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
       {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
         <p className="text-xs text-[var(--muted)] -mt-2">* Approximate / developer-estimated date, not a firm commitment.</p>
+      )}
+
+      {!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state) && (
+        <PredictCard projectId={p.id} />
       )}
 
       <div className={`grid grid-cols-1 gap-4 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>

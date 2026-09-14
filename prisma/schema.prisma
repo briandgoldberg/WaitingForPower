@@ -223,11 +223,12 @@ model Project {
   // source's value.
   hearingDetailsLink String?
 
-  causes     ProjectCause[]
-  sources    ProjectSource[]
-  milestones Milestone[]
-  hearings   ProjectHearing[]
-  changes    ProjectChange[]
+  causes      ProjectCause[]
+  sources     ProjectSource[]
+  milestones  Milestone[]
+  hearings    ProjectHearing[]
+  changes     ProjectChange[]
+  predictions Prediction[]
 
   @@index([projectType])
   @@index([fuelType])
@@ -551,4 +552,84 @@ model ContactSubmission {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// One row per predictor in the "when will this resolve" prediction game —
+// a human (identified at first by an anonymous browser-generated key, same
+// zero-friction pattern as the site's other no-login features, upgradeable
+// later to a verified email so their history survives a device change) or
+// an agent (identified by a self-declared name via the MCP submit_prediction
+// tool). Exactly one of anonymousKey/agentName is set at creation — enforced
+// by a CHECK constraint in the migration, not just convention — and email
+// may be added later on either kind of row. No password, ever: email
+// ownership is proven once via PredictorEmailVerification's token, the same
+// pattern FeedSubscription already uses for its confirm link.
+model Predictor {
+  id String @id @default(cuid())
+
+  anonymousKey String? @unique
+  agentName    String? @unique
+
+  // Set once a human confirms a save-your-profile email — see
+  // PredictorEmailVerification. This is what makes a predictor's leaderboard
+  // history durable across devices instead of tied to one browser's
+  // localStorage; null until they choose to do this, never required to
+  // participate.
+  email       String?  @unique
+  displayName String?
+  createdAt   DateTime @default(now())
+
+  predictions         Prediction[]
+  emailVerifications  PredictorEmailVerification[]
+
+  @@index([email])
+}
+
+// A pending (or completed) "save your profile" email confirmation —
+// opaque bearer token, same shape as FeedSubscription's confirmToken.
+// Kept as its own table (not just fields on Predictor) so a predictor can
+// request a new verification email without losing the record of an earlier
+// attempt, and so an unconfirmed, abandoned request never blocks a retry.
+model PredictorEmailVerification {
+  id          String    @id @default(cuid())
+  predictorId String
+  predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+  email       String
+  token       String    @unique
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+
+  @@index([predictorId])
+}
+
+// One row per (project, predictor) — a guess for when this project will
+// reach a resolved stage (see RESOLVED_STAGES). Upserted on resubmission,
+// not append-only, via the @@unique below — a predictor can revise their
+// guess right up until the project actually resolves. Only ever created for
+// a project whose state is in the resolutionDate-eligible list (see
+// src/lib/data/predictionEligibleStates.ts) — predicting on a project this
+// site can never attach a real resolution date to would have nothing to
+// score against.
+model Prediction {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predictorId String
+  predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+
+  predictedDate DateTime
+  submittedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Filled in once, the first time this project's own Project.resolutionDate
+  // populates (see the scoring job) — kept on the Prediction row itself
+  // rather than recomputed from Project at read time, so a predictor's
+  // historical score stays frozen even if resolutionDate is later corrected
+  // by an unrelated data-quality fix.
+  daysOff  Int?
+  scoredAt DateTime?
+
+  @@unique([projectId, predictorId])
+  @@index([projectId])
+  @@index([predictorId])
 }

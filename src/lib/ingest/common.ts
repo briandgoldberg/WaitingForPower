@@ -24,6 +24,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { isMergedMatchKey } from "@/lib/ingest/manualOverrides";
+import { scorePredictionsForProject } from "@/lib/predictions";
 
 export interface NormalizedSource {
   label: string;
@@ -413,6 +414,24 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     : await prisma.project.create({
         data: { ...fields, slug, matchKey: p.matchKey, verificationStatus: "verified" },
       });
+
+  // Score the prediction game (see src/lib/predictions.ts) the moment a
+  // real resolutionDate first lands on this project — existing had none,
+  // this run just set one. Awaited (not fire-and-forget) since a Vercel
+  // function can freeze the process right after its response is sent,
+  // which would silently kill an un-awaited promise mid-write. Wrapped in
+  // its own try/catch so a scoring failure never fails the ingestion run
+  // itself over a feature this supplementary — it'll simply catch up
+  // whenever this project is next re-ingested with a resolutionDate
+  // already present, since scoring only ever touches predictions still
+  // missing a scoredAt.
+  if (!existing?.resolutionDate && project.resolutionDate) {
+    try {
+      await scorePredictionsForProject(project.id, project.resolutionDate);
+    } catch (err) {
+      console.error(`Failed to score predictions for project ${project.id}:`, err);
+    }
+  }
 
   await prisma.projectCause.deleteMany({ where: { projectId: project.id } });
   await prisma.projectCause.createMany({

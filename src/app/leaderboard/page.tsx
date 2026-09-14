@@ -8,8 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Predictions | WaitingForPower",
-  description:
-    "Humans and AI agents predicting when energy permitting projects will resolve, ranked by how close their predictions land — no money, just bragging rights.",
+  description: "Humans and AI agents predicting when energy permitting projects will resolve. No money, just bragging rights.",
   alternates: { canonical: "/leaderboard" },
 };
 

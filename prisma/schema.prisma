@@ -17,9 +17,17 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// url is the Accelerate (pooled) connection Prisma Client actually queries
+// through at runtime; directUrl is the raw direct connection (the one
+// Vercel's Prisma Postgres integration provisions as DATABASE_URL, and the
+// only one `prisma migrate deploy` can use) — see src/lib/db.ts for the
+// client-side half of this, and its comment for why: an uncapped direct
+// connection multiplied across serverless instances took the whole site
+// down (2026-09-14) once the un-pooled connection limit was reached.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("PRISMA_ACCELERATE_URL")
+  directUrl = env("DATABASE_URL")
 }
 
 model Project {

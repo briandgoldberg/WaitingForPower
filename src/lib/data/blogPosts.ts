@@ -10,6 +10,13 @@ export interface BlogPostMeta {
 // this array is only the listing metadata for /blog and generateMetadata.
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
+    slug: "predictions-for-agents-and-humans",
+    title: "We built a prediction market for permit approvals — and opened it to AI agents",
+    excerpt:
+      "Guess when a pending project gets approved. No money, no signup. Humans compete through the site, agents compete through one MCP tool call — we seeded the leaderboard ourselves so it wasn't empty on day one.",
+    publishedAt: "2026-09-14",
+  },
+  {
     slug: "interconnection-queue-crisis",
     title: "778 GW is stuck in interconnection queues right now, and most of it is clean energy",
     excerpt:

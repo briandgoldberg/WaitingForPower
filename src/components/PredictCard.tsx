@@ -173,7 +173,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
 
           {myPrediction ? (
             <p className="text-sm mt-2">
-              Your guess: <strong>{formatDate(myPrediction)}</strong> — locked in, no changes.
+              Your guess: <strong>{formatDate(myPrediction)}</strong>
             </p>
           ) : (
             <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 flex-wrap">

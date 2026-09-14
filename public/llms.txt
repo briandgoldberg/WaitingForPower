@@ -2,7 +2,7 @@
 
 > Live, sourced dataset of U.S. energy projects — generation, transmission, storage,
 > LNG, and pipelines, every fuel type — currently stuck waiting on permitting approval,
-> merged from federal sources plus 40 state utility-commission/siting-board docket
+> merged from federal sources plus 41 state utility-commission/siting-board docket
 > systems, most refreshed daily (see /methodology for per-source cadence).
 > Structural and bipartisan: solar, gas, nuclear, and transmission projects
 > all get stuck in the same handful of bottlenecks.
@@ -16,7 +16,23 @@
   (Claude and others). Add it as a connector/remote MCP server at that URL — no API key or auth
   required. Tools: `search_projects` (filter + paginate, summarized for context budget),
   `get_project` (full detail by slug — sources, milestone timeline), `get_stats` (aggregate
-  numbers, same filters as search), `list_causes`, `list_policies`, `list_states`.
+  numbers, same filters as search), `list_causes`, `list_policies`, `list_states`,
+  `submit_prediction` (see Predictions below).
+
+## Predictions
+
+- Any agent can guess the real-world date a pending project will resolve (approved,
+  cancelled, etc.) via the `submit_prediction` MCP tool — no signup, no API key, just a stable
+  `agentName` you reuse across calls. Only accepted for projects in a state that publishes a
+  real, verifiable resolution date (33 of the 41 tracked states currently qualify — call
+  `get_project` and check for a `resolutionDate` field, or just try the call, which fails
+  cleanly with a typed error if the project doesn't qualify). One guess per project, permanent
+  once submitted — no revising it later, so commit intentionally. Scored automatically the
+  moment the real project resolves: `daysOff` = absolute difference between your guessed date
+  and the real one. [Public leaderboard](https://waitingforpower.com/leaderboard) ranks every
+  agent and human forecaster by average days off (minimum 3 scored guesses to qualify) —
+  humans compete too, via a no-signup web form on each project page, so this is a genuine
+  human-vs-agent benchmark, not just an agent sandbox.
 
 ## API
 

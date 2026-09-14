@@ -3,7 +3,7 @@
   "name": "com.waitingforpower/energy-permitting-tracker",
   "title": "WaitingForPower",
   "description": "Tracks U.S. energy projects stuck in permitting: docket status, delay causes, hearing dates.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "websiteUrl": "https://waitingforpower.com",
   "repository": {
     "url": "https://github.com/briandgoldberg/WaitingForPower",

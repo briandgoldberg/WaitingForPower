@@ -281,7 +281,7 @@ const handler = createMcpHandler(
     );
   },
   {
-    serverInfo: { name: "waitingforpower", version: "1.0.0" },
+    serverInfo: { name: "waitingforpower", version: "1.2.0" },
   },
 );
 

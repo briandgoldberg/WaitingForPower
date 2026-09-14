@@ -25,7 +25,7 @@ export default async function LeaderboardPage() {
         <p className="text-xs text-[var(--muted)] mb-1.5">People predicting when projects will be approved</p>
         {topPredictions.length === 0 ? (
           <p className="text-sm text-[var(--muted)] rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-            No open predictions yet — be the first, from any project page in an eligible state.
+            No open predictions yet. Be the first from any eligible project page.
           </p>
         ) : (
           <ul className="flex flex-col gap-1.5">
@@ -61,9 +61,8 @@ export default async function LeaderboardPage() {
         <h2 className="text-sm font-semibold mb-1.5">Leaderboard</h2>
         {leaders.length === 0 ? (
           <p className="text-sm text-[var(--muted)] rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-            No one has qualified yet — a predictor needs at least 3 scored predictions to appear
-            here. Predictions score automatically once a project actually resolves, so check back
-            as more projects clear permitting.
+            No one has qualified yet. Predictors need at least 3 scored predictions to appear
+            here, and scoring happens automatically once a project resolves.
           </p>
         ) : (
           <ol className="flex flex-col gap-1.5">

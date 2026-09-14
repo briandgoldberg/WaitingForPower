@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.variable} min-h-screen flex flex-col`}>
         <header className="border-b border-[var(--border)] bg-[var(--panel)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2 order-2 sm:order-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.svg" alt="" width={28} height={28} className="rounded-full shrink-0" />
               <span className="flex items-baseline gap-2">
@@ -61,11 +61,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </span>
               </span>
             </Link>
-            {/* flex-nowrap + overflow-x-auto: on a narrow viewport this
-                keeps every link on one scrollable row instead of wrapping
-                (previously "Contact Us" alone dropped to its own third
-                header row on mobile). Scrollbar hidden since the row fits
-                without scrolling on anything past a small phone anyway. */}
+            {/* Below sm, SiteNav renders only a hamburger + dropdown (see
+                that component) — ordered before the logo here so the
+                trigger sits on the left, matching the standard mobile
+                pattern. Desktop keeps its original horizontal row on the
+                right, unaffected by this order swap. */}
             <SiteNav />
           </div>
         </header>

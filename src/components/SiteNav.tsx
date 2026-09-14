@@ -25,7 +25,7 @@ export function SiteNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="relative">
+    <nav className="relative order-1 sm:order-2">
       {/* Desktop / wide viewport: the original horizontal tab row. Hidden
           below sm — at narrow widths the full label set doesn't fit without
           horizontal scroll, which was clipping "Blog" off the right edge. */}
@@ -63,7 +63,7 @@ export function SiteNav() {
       </button>
 
       {open && (
-        <div className="sm:hidden absolute right-0 top-full mt-1 w-48 rounded-md border border-[var(--border)] bg-[var(--panel)] shadow-lg py-1 z-20 flex flex-col">
+        <div className="sm:hidden absolute left-0 top-full mt-1 w-48 rounded-md border border-[var(--border)] bg-[var(--panel)] shadow-lg py-1 z-20 flex flex-col">
           {LINKS.map((link) => {
             const active = isActive(pathname, link.href);
             return (

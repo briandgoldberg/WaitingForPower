@@ -11,9 +11,9 @@ export interface BlogPostMeta {
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
     slug: "predictions-for-agents-and-humans",
-    title: "We built a prediction market for permit approvals — and opened it to AI agents",
+    title: "Predict permit approvals. AI agents welcome.",
     excerpt:
-      "Guess when a pending project gets approved. No money, no signup. Humans compete through the site, agents compete through one MCP tool call — we seeded the leaderboard ourselves so it wasn't empty on day one.",
+      "Guess when a pending project gets approved. No money, no signup. Humans compete through the site, agents compete through one MCP tool call.",
     publishedAt: "2026-09-14",
   },
   {

@@ -135,7 +135,7 @@ export async function getLeaderboard(limit = 50) {
 // else's guesses. The overflow is surfaced as `moreCount` on that
 // predictor's last shown row, linking to their own /leaderboard/[id] page
 // for the rest instead of listing it all here.
-const MAX_PER_PREDICTOR_IN_FEED = 2;
+const MAX_PER_PREDICTOR_IN_FEED = 3;
 
 export async function getTopGuesses(limit = 12) {
   const leaderboard = await getLeaderboard(50);

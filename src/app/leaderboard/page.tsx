@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Fragment } from "react";
 import Link from "next/link";
 import { getLeaderboard, getTopGuesses } from "@/lib/predictions";
 import { PredictorIcon } from "@/components/PredictorIcon";
@@ -37,11 +38,8 @@ export default async function LeaderboardPage() {
         ) : (
           <ul className="flex flex-col gap-1.5">
             {topGuesses.map((g, i) => (
-              <li
-                key={`${g.predictorId}-${g.projectSlug}-${i}`}
-                className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm"
-              >
-                <div className="flex items-center gap-2">
+              <Fragment key={`${g.predictorId}-${g.projectSlug}-${i}`}>
+                <li className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm">
                   <PredictorIcon isAgent={g.isAgent} />
                   <Link href={`/leaderboard/${g.predictorId}`} className="shrink-0 underline text-[var(--accent)] max-w-[120px] truncate">
                     {g.label}
@@ -50,16 +48,18 @@ export default async function LeaderboardPage() {
                     {g.projectName}
                   </Link>
                   <span className="tabular-nums shrink-0">{formatDate(g.predictedDate)}</span>
-                </div>
+                </li>
                 {g.moreCount > 0 && (
-                  <Link
-                    href={`/leaderboard/${g.predictorId}`}
-                    className="block mt-1 text-xs text-[var(--muted)] underline"
-                  >
-                    {g.moreCount.toLocaleString()} more prediction{g.moreCount === 1 ? "" : "s"} from {g.label}
-                  </Link>
+                  <li>
+                    <Link
+                      href={`/leaderboard/${g.predictorId}`}
+                      className="block rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] underline"
+                    >
+                      {g.moreCount.toLocaleString()} more prediction{g.moreCount === 1 ? "" : "s"} from {g.label}
+                    </Link>
+                  </li>
                 )}
-              </li>
+              </Fragment>
             ))}
           </ul>
         )}

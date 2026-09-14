@@ -2,8 +2,8 @@
 // the human-facing API route (src/app/api/predictions/route.ts), the MCP
 // submit_prediction tool, and the scoring hook src/lib/ingest/common.ts
 // calls once a project's real resolutionDate lands. Kept in one place so
-// a human's guess and an agent's guess are scored identically, no
-// duplicated logic to drift apart.
+// a human's prediction and an agent's prediction are scored identically,
+// no duplicated logic to drift apart.
 import { prisma } from "@/lib/db";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { RESOLVED_STAGES, type ProjectStage } from "@/lib/data/taxonomies";
@@ -52,14 +52,14 @@ export async function submitPrediction(params: SubmitPredictionParams) {
         update: {},
       });
 
-  // A guess is a one-time commitment, not an editable draft — once it's in,
-  // it's in, for both humans and agents. Enforced here (not just hidden in
-  // the UI) since the MCP tool talks to submitPrediction directly.
+  // A prediction is a one-time commitment, not an editable draft — once
+  // it's in, it's in, for both humans and agents. Enforced here (not just
+  // hidden in the UI) since the MCP tool talks to submitPrediction directly.
   const existing = await prisma.prediction.findUnique({
     where: { projectId_predictorId: { projectId: project.id, predictorId: predictor.id } },
   });
   if (existing) {
-    throw new PredictionError("already_predicted", "You've already predicted on this project — guesses can't be changed once submitted.");
+    throw new PredictionError("already_predicted", "You've already predicted on this project — predictions can't be changed once submitted.");
   }
 
   const prediction = await prisma.prediction.create({
@@ -73,7 +73,7 @@ function predictorLabel(p: { displayName: string | null; agentName: string | nul
   return p.displayName ?? p.agentName ?? "anonymous";
 }
 
-export async function getProjectGuesses(projectId: string) {
+export async function getProjectPredictions(projectId: string) {
   const rows = await prisma.prediction.findMany({
     where: { projectId },
     include: { predictor: { select: { displayName: true, agentName: true } } },
@@ -91,7 +91,7 @@ export async function getProjectGuesses(projectId: string) {
 // volume across every prediction-eligible state is only ~4/month (confirmed
 // live 2026-09-14), so a monthly board would read as empty most months.
 // This accumulates real signal permanently instead. Minimum scored count
-// keeps one lucky first guess from sitting at #1 forever.
+// keeps one lucky first prediction from sitting at #1 forever.
 const MIN_SCORED_FOR_LEADERBOARD = 3;
 
 export async function getLeaderboard(limit = 50) {
@@ -123,28 +123,28 @@ export async function getLeaderboard(limit = 50) {
     .slice(0, limit);
 }
 
-// Live feed of current (unscored) guesses for the leaderboard page — "what
-// is everyone predicting right now." Leaderboard-ranked predictors' guesses
-// surface first (rank ascending); with real resolution volume this low
-// (~4/month, see MIN_SCORED_FOR_LEADERBOARD above), the leaderboard itself
-// stays empty for long stretches, so this falls back to plain recency
-// rather than going blank whenever nobody has qualified yet.
+// Live feed of current (unscored) predictions for the leaderboard page —
+// "what is everyone predicting right now." Leaderboard-ranked predictors'
+// predictions surface first (rank ascending); with real resolution volume
+// this low (~4/month, see MIN_SCORED_FOR_LEADERBOARD above), the
+// leaderboard itself stays empty for long stretches, so this falls back to
+// plain recency rather than going blank whenever nobody has qualified yet.
 // A predictor is capped to MAX_PER_PREDICTOR rows here — without it, one
-// prolific guesser (an agent that predicted on hundreds of projects in a
+// prolific predictor (an agent that predicted on hundreds of projects in a
 // single run, say) would fill the entire feed and crowd out everyone
-// else's guesses. The overflow is surfaced as `moreCount` on that
+// else's predictions. The overflow is surfaced as `moreCount` on that
 // predictor's last shown row, linking to their own /leaderboard/[id] page
 // for the rest instead of listing it all here.
 const MAX_PER_PREDICTOR_IN_FEED = 3;
 
-export async function getTopGuesses(limit = 12) {
+export async function getTopPredictions(limit = 12) {
   const leaderboard = await getLeaderboard(50);
   const rankById = new Map(leaderboard.map((l, i) => [l.id, i]));
 
   // No `take` cap here (beyond this generous ceiling) — capping the raw
   // query by recency would risk the fetch itself being dominated by one
   // predictor's flood before per-predictor capping ever gets a chance to
-  // run, silently hiding everyone else's guesses.
+  // run, silently hiding everyone else's predictions.
   const outstanding = await prisma.prediction.findMany({
     where: { scoredAt: null },
     include: {

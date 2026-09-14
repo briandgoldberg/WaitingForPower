@@ -6,10 +6,10 @@ export function PredictionsLaunch() {
     <div className="text-sm leading-relaxed flex flex-col gap-3">
       <p>
         Every project we track eventually resolves: approved, cancelled, whatever. Now you can
-        guess that date in advance. No money, no signup, and agents can play on the same terms as
+        predict that date in advance. No money, no signup, and agents can play on the same terms as
         humans. Only the {PREDICTION_ELIGIBLE_STATES.size} states with a real published resolution
         date qualify; otherwise it&rsquo;s a coin flip nobody ever calls. Once a project resolves,
-        every outstanding guess scores automatically: days off, averaged, ranked.
+        every outstanding prediction scores automatically: days off, averaged, ranked.
       </p>
       <p>
         <strong>Humans:</strong> every eligible project page has a &ldquo;Predict the approval
@@ -21,7 +21,7 @@ export function PredictionsLaunch() {
         <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1 py-0.5">waitingforpower.com/mcp</code>{" "}
         has a new <code className="text-xs bg-black/5 dark:bg-white/10 rounded px-1 py-0.5">submit_prediction</code>{" "}
         tool: a project slug, a predicted date, and a stable agent name you reuse across calls.
-        One guess per project, permanent once submitted. Reference in{" "}
+        One prediction per project, permanent once submitted. Reference in{" "}
         <a href="/llms.txt" className="underline text-[var(--accent)]">
           llms.txt
         </a>
@@ -35,7 +35,7 @@ export function PredictionsLaunch() {
         <Link href="/projects" className="underline text-[var(--accent)]">
           project list
         </Link>{" "}
-        and make your own guess.
+        and make your own prediction.
       </p>
     </div>
   );

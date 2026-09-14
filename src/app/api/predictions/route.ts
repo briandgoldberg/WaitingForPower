@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { submitPrediction, getProjectGuesses, PredictionError } from "@/lib/predictions";
+import { submitPrediction, getProjectPredictions, PredictionError } from "@/lib/predictions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Every current guess on one project — see getProjectGuesses in
-// src/lib/predictions.ts. Powers the "everyone's guesses" list on the
+// Every current prediction on one project — see getProjectPredictions in
+// src/lib/predictions.ts. Powers the "everyone's predictions" list on the
 // project page; no auth, same as every other read on this site's public API.
 export async function GET(req: NextRequest) {
   const projectId = req.nextUrl.searchParams.get("projectId") ?? "";
@@ -68,6 +68,6 @@ export async function GET(req: NextRequest) {
   if (!project) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
-  const guesses = await getProjectGuesses(projectId);
-  return NextResponse.json({ guesses });
+  const predictions = await getProjectPredictions(projectId);
+  return NextResponse.json({ predictions });
 }

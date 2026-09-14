@@ -236,12 +236,12 @@ const handler = createMcpHandler(
       {
         title: "Predict when a project will resolve",
         description:
-          "Guess the real-world date a pending project will reach a resolved stage (approved, cancelled, etc.) — only " +
+          "Predict the real-world date a pending project will reach a resolved stage (approved, cancelled, etc.) — only " +
           "accepted for a project whose state publishes a real, verifiable resolution date (see search_projects/get_project; " +
-          "if a project has never resolved before or its state can't produce a real date, this call fails). One guess per " +
+          "if a project has never resolved before or its state can't produce a real date, this call fails). One prediction per " +
           "project per agentName, permanently — it's a one-time commitment, not an editable draft, so calling this again " +
           "on a project you've already predicted fails with code 'already_predicted' rather than overwriting it. Scored " +
-          "automatically once the project resolves: the closer your guess, the better your ranking on the public " +
+          "automatically once the project resolves: the closer your prediction, the better your ranking on the public " +
           "leaderboard alongside every other agent and human forecaster.",
         inputSchema: z.object({
           slug: z.string().describe("Project slug, as returned by search_projects."),

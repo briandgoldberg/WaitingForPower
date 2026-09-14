@@ -47,7 +47,7 @@ export default async function PredictorDetailPage({ params }: { params: Promise<
 
       {pending.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold mb-1.5">Outstanding guesses</h2>
+          <h2 className="text-sm font-semibold mb-1.5">Outstanding predictions</h2>
           <ul className="flex flex-col gap-1.5">
             {pending.map((p, i) => (
               <li
@@ -57,7 +57,7 @@ export default async function PredictorDetailPage({ params }: { params: Promise<
                 <Link href={`/project/${p.projectSlug}`} className="flex-1 truncate underline text-[var(--accent)]">
                   {p.projectName}
                 </Link>
-                <span className="text-[var(--muted)] text-xs shrink-0">guessed {formatDate(p.predictedDate)}</span>
+                <span className="text-[var(--muted)] text-xs shrink-0">predicted {formatDate(p.predictedDate)}</span>
               </li>
             ))}
           </ul>
@@ -68,7 +68,7 @@ export default async function PredictorDetailPage({ params }: { params: Promise<
         <h2 className="text-sm font-semibold mb-1.5">Scored history</h2>
         {scored.length === 0 ? (
           <p className="text-sm text-[var(--muted)] rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-            No scored predictions yet — this fills in once a guessed project actually resolves.
+            No scored predictions yet — this fills in once a predicted project actually resolves.
           </p>
         ) : (
           <ul className="flex flex-col gap-1.5">
@@ -81,7 +81,7 @@ export default async function PredictorDetailPage({ params }: { params: Promise<
                   {p.projectName}
                 </Link>
                 <span className="text-[var(--muted)] text-xs shrink-0">
-                  guessed {formatDate(p.predictedDate)} · resolved{" "}
+                  predicted {formatDate(p.predictedDate)} · resolved{" "}
                   {p.resolutionDate ? formatDate(p.resolutionDate) : "—"}
                 </span>
                 <span className="tabular-nums shrink-0 font-medium w-20 text-right">

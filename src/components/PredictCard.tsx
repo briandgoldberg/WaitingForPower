@@ -23,7 +23,7 @@ function predictionKey(projectId: string): string {
   return `wfp_prediction_${projectId}`;
 }
 
-interface Guess {
+interface PredictionEntry {
   label: string;
   isAgent: boolean;
   predictedDate: string;
@@ -49,7 +49,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
   const [predictedDate, setPredictedDate] = useState("");
   const [nickname, setNickname] = useState("");
   const [myPrediction, setMyPrediction] = useState<string | null>(null);
-  const [guesses, setGuesses] = useState<Guess[]>([]);
+  const [predictions, setPredictions] = useState<PredictionEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -70,10 +70,10 @@ export function PredictCard({ projectId }: { projectId: string }) {
     fetch(`/api/predictions?projectId=${encodeURIComponent(projectId)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data?.guesses) setGuesses(data.guesses);
+        if (data?.predictions) setPredictions(data.predictions);
       })
       .catch(() => {
-        // Non-critical — the predict form still works without the guess list.
+        // Non-critical — the predict form still works without the prediction list.
       });
 
     return () => clearTimeout(t);
@@ -117,7 +117,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
         setShowSavePrompt(true);
       }
       const label = nickname.trim();
-      setGuesses((prev) => [...prev.filter((g) => g.label !== label), { label, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) => a.predictedDate.localeCompare(b.predictedDate)));
+      setPredictions((prev) => [...prev.filter((p) => p.label !== label), { label, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) => a.predictedDate.localeCompare(b.predictedDate)));
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {
@@ -161,7 +161,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
             🔮 Predict the approval date
           </button>
           <p className="text-xs text-[var(--muted)]">
-            No sign-in needed{guesses.length > 0 && <> · {guesses.length} guess{guesses.length === 1 ? "" : "es"} so far</>}
+            No sign-in needed{predictions.length > 0 && <> · {predictions.length} prediction{predictions.length === 1 ? "" : "s"} so far</>}
           </p>
         </div>
       ) : (
@@ -173,7 +173,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
 
           {myPrediction ? (
             <p className="text-sm mt-2">
-              Your guess: <strong>{formatDate(myPrediction)}</strong>
+              Your prediction: <strong>{formatDate(myPrediction)}</strong>
             </p>
           ) : (
             <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 flex-wrap">
@@ -237,18 +237,18 @@ export function PredictCard({ projectId }: { projectId: string }) {
             </p>
           )}
 
-          {guesses.length > 0 && (
+          {predictions.length > 0 && (
             <div className="mt-2 pt-2 border-t border-[var(--border)]">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] text-[var(--muted)]">{guesses.length} guess{guesses.length === 1 ? "" : "es"} so far</p>
+                <p className="text-[10px] text-[var(--muted)]">{predictions.length} prediction{predictions.length === 1 ? "" : "s"} so far</p>
                 <Link href="/leaderboard" className="text-[10px] underline text-[var(--accent)]">leaderboard</Link>
               </div>
               <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                {guesses.map((g, i) => (
-                  <div key={`${g.label}-${i}`} className="flex items-center gap-1.5 text-xs">
-                    <PredictorIcon isAgent={g.isAgent} />
-                    <span className="flex-1 truncate">{g.label}</span>
-                    <span className="text-[var(--muted)] shrink-0">{formatDate(g.predictedDate)}</span>
+                {predictions.map((p, i) => (
+                  <div key={`${p.label}-${i}`} className="flex items-center gap-1.5 text-xs">
+                    <PredictorIcon isAgent={p.isAgent} />
+                    <span className="flex-1 truncate">{p.label}</span>
+                    <span className="text-[var(--muted)] shrink-0">{formatDate(p.predictedDate)}</span>
                   </div>
                 ))}
               </div>

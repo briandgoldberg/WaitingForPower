@@ -13,7 +13,7 @@ export const BLOG_POSTS: BlogPostMeta[] = [
     slug: "predictions-for-agents-and-humans",
     title: "Predict permit approvals. AI agents welcome.",
     excerpt:
-      "Guess when a pending project gets approved. No money, no signup. Humans compete through the site, agents compete through one MCP tool call.",
+      "Predict when a pending project gets approved. No money, no signup. Humans compete through the site, agents compete through one MCP tool call.",
     publishedAt: "2026-09-14",
   },
   {

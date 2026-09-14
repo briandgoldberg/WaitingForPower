@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Fragment } from "react";
 import Link from "next/link";
-import { getLeaderboard, getTopGuesses } from "@/lib/predictions";
+import { getLeaderboard, getTopPredictions } from "@/lib/predictions";
 import { PredictorIcon } from "@/components/PredictorIcon";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Predictions | WaitingForPower",
   description:
-    "Humans and AI agents guessing when energy permitting projects will resolve, ranked by how close their guesses land — no money, just bragging rights.",
+    "Humans and AI agents predicting when energy permitting projects will resolve, ranked by how close their predictions land — no money, just bragging rights.",
   alternates: { canonical: "/leaderboard" },
 };
 
@@ -18,37 +18,37 @@ function formatDate(iso: string): string {
 }
 
 export default async function LeaderboardPage() {
-  const [leaders, topGuesses] = await Promise.all([getLeaderboard(), getTopGuesses()]);
+  const [leaders, topPredictions] = await Promise.all([getLeaderboard(), getTopPredictions()]);
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
       <div>
-        <p className="text-xs text-[var(--muted)] mb-1.5">People guessing when projects will be approved</p>
-        {topGuesses.length === 0 ? (
+        <p className="text-xs text-[var(--muted)] mb-1.5">People predicting when projects will be approved</p>
+        {topPredictions.length === 0 ? (
           <p className="text-sm text-[var(--muted)] rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-            No open guesses yet — be the first, from any project page in an eligible state.
+            No open predictions yet — be the first, from any project page in an eligible state.
           </p>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {topGuesses.map((g, i) => (
-              <Fragment key={`${g.predictorId}-${g.projectSlug}-${i}`}>
+            {topPredictions.map((p, i) => (
+              <Fragment key={`${p.predictorId}-${p.projectSlug}-${i}`}>
                 <li className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm">
-                  <PredictorIcon isAgent={g.isAgent} />
-                  <Link href={`/leaderboard/${g.predictorId}`} className="shrink-0 underline text-[var(--accent)] max-w-[120px] truncate">
-                    {g.label}
+                  <PredictorIcon isAgent={p.isAgent} />
+                  <Link href={`/leaderboard/${p.predictorId}`} className="shrink-0 underline text-[var(--accent)] max-w-[120px] truncate">
+                    {p.label}
                   </Link>
-                  <Link href={`/project/${g.projectSlug}`} className="flex-1 truncate text-[var(--muted)]">
-                    {g.projectName}
+                  <Link href={`/project/${p.projectSlug}`} className="flex-1 truncate text-[var(--muted)]">
+                    {p.projectName}
                   </Link>
-                  <span className="tabular-nums shrink-0">{formatDate(g.predictedDate)}</span>
+                  <span className="tabular-nums shrink-0">{formatDate(p.predictedDate)}</span>
                 </li>
-                {g.moreCount > 0 && (
+                {p.moreCount > 0 && (
                   <li>
                     <Link
-                      href={`/leaderboard/${g.predictorId}`}
+                      href={`/leaderboard/${p.predictorId}`}
                       className="block rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] underline"
                     >
-                      {g.moreCount.toLocaleString()} more prediction{g.moreCount === 1 ? "" : "s"} from {g.label}
+                      {p.moreCount.toLocaleString()} more prediction{p.moreCount === 1 ? "" : "s"} from {p.label}
                     </Link>
                   </li>
                 )}

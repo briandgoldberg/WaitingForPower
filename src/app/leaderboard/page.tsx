@@ -23,14 +23,7 @@ export default async function LeaderboardPage() {
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Predictions</h1>
-        <p className="text-sm text-[var(--muted)] mt-0.5">
-          Guess when a project resolves. No money, no signup required.
-        </p>
-      </div>
-
-      <div>
-        <h2 className="text-sm font-semibold mb-1.5">What people are guessing right now</h2>
+        <p className="text-xs text-[var(--muted)] mb-1.5">People guessing when these projects will be approved</p>
         {topGuesses.length === 0 ? (
           <p className="text-sm text-[var(--muted)] rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
             No open guesses yet — be the first, from any project page in an eligible state.

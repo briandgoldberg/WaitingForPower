@@ -146,8 +146,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      {!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state) && (
+        <PredictCard projectId={p.id} />
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} />
+        <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} accentColor={fuel?.color} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
         <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
         <Stat label="Verification" value={VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")} />
@@ -165,10 +169,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
       {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
         <p className="text-xs text-[var(--muted)] -mt-2">* Approximate / developer-estimated date, not a firm commitment.</p>
-      )}
-
-      {!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state) && (
-        <PredictCard projectId={p.id} />
       )}
 
       <div className={`grid grid-cols-1 gap-4 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
@@ -314,11 +314,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, accentColor }: { label: string; value: string; accentColor?: string }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">
-      <div className="text-sm font-semibold text-[var(--accent)]">{label}</div>
-      <div className="text-sm text-[var(--text-secondary)] mt-1">{value}</div>
+    <div
+      className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 border-l-[3px]"
+      style={{ borderLeftColor: accentColor ?? "var(--accent)" }}
+    >
+      <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="text-base font-bold mt-0.5">{value}</div>
     </div>
   );
 }

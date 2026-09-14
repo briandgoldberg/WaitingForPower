@@ -121,10 +121,22 @@ export async function getLeaderboard(limit = 50) {
 // (~4/month, see MIN_SCORED_FOR_LEADERBOARD above), the leaderboard itself
 // stays empty for long stretches, so this falls back to plain recency
 // rather than going blank whenever nobody has qualified yet.
+// A predictor is capped to MAX_PER_PREDICTOR rows here — without it, one
+// prolific guesser (an agent that predicted on hundreds of projects in a
+// single run, say) would fill the entire feed and crowd out everyone
+// else's guesses. The overflow is surfaced as `moreCount` on that
+// predictor's last shown row, linking to their own /leaderboard/[id] page
+// for the rest instead of listing it all here.
+const MAX_PER_PREDICTOR_IN_FEED = 2;
+
 export async function getTopGuesses(limit = 12) {
   const leaderboard = await getLeaderboard(50);
   const rankById = new Map(leaderboard.map((l, i) => [l.id, i]));
 
+  // No `take` cap here (beyond this generous ceiling) — capping the raw
+  // query by recency would risk the fetch itself being dominated by one
+  // predictor's flood before per-predictor capping ever gets a chance to
+  // run, silently hiding everyone else's guesses.
   const outstanding = await prisma.prediction.findMany({
     where: { scoredAt: null },
     include: {
@@ -132,27 +144,48 @@ export async function getTopGuesses(limit = 12) {
       project: { select: { slug: true, name: true } },
     },
     orderBy: { submittedAt: "desc" },
-    take: 200,
+    take: 5000,
   });
 
-  return outstanding
-    .map((p) => ({
-      predictorId: p.predictor.id,
-      label: predictorLabel(p.predictor),
-      isAgent: p.predictor.agentName != null,
-      rank: rankById.get(p.predictor.id),
-      projectSlug: p.project.slug,
-      projectName: p.project.name,
-      predictedDate: p.predictedDate.toISOString(),
-      submittedAt: p.submittedAt.toISOString(),
-    }))
-    .sort((a, b) => {
-      const ar = a.rank ?? Infinity;
-      const br = b.rank ?? Infinity;
-      if (ar !== br) return ar - br;
-      return b.submittedAt.localeCompare(a.submittedAt);
-    })
-    .slice(0, limit);
+  const mapped = outstanding.map((p) => ({
+    predictorId: p.predictor.id,
+    label: predictorLabel(p.predictor),
+    isAgent: p.predictor.agentName != null,
+    rank: rankById.get(p.predictor.id),
+    projectSlug: p.project.slug,
+    projectName: p.project.name,
+    predictedDate: p.predictedDate.toISOString(),
+    submittedAt: p.submittedAt.toISOString(),
+  }));
+
+  mapped.sort((a, b) => {
+    const ar = a.rank ?? Infinity;
+    const br = b.rank ?? Infinity;
+    if (ar !== br) return ar - br;
+    return b.submittedAt.localeCompare(a.submittedAt);
+  });
+
+  const totalByPredictor = new Map<string, number>();
+  for (const g of mapped) totalByPredictor.set(g.predictorId, (totalByPredictor.get(g.predictorId) ?? 0) + 1);
+
+  const shownByPredictor = new Map<string, number>();
+  const capped: (typeof mapped[number] & { moreCount: number })[] = [];
+  for (const g of mapped) {
+    const shown = shownByPredictor.get(g.predictorId) ?? 0;
+    if (shown >= MAX_PER_PREDICTOR_IN_FEED) continue;
+    shownByPredictor.set(g.predictorId, shown + 1);
+    capped.push({ ...g, moreCount: 0 });
+  }
+
+  const lastIndexByPredictor = new Map<string, number>();
+  capped.forEach((g, i) => lastIndexByPredictor.set(g.predictorId, i));
+  for (const [predictorId, lastIndex] of lastIndexByPredictor) {
+    const total = totalByPredictor.get(predictorId) ?? 0;
+    const shown = shownByPredictor.get(predictorId) ?? 0;
+    if (total > shown) capped[lastIndex].moreCount = total - shown;
+  }
+
+  return capped.slice(0, limit);
 }
 
 // One predictor's full track record — every prediction they've made,

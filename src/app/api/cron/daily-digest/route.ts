@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, newSubscriptions] = await Promise.all([
+  const [apiLogs, feedbackRows, newSubscriptions, newPredictions, newlyScored, newPredictorEmails] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -42,6 +42,29 @@ export async function GET(req: NextRequest) {
       where: { createdAt: { gte: since } },
       select: { email: true, confirmed: true, state: true },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.prediction.findMany({
+      where: { submittedAt: { gte: since } },
+      select: {
+        predictedDate: true,
+        predictor: { select: { displayName: true, agentName: true } },
+        project: { select: { name: true } },
+      },
+      orderBy: { submittedAt: "asc" },
+    }),
+    prisma.prediction.findMany({
+      where: { scoredAt: { gte: since } },
+      select: {
+        daysOff: true,
+        predictor: { select: { displayName: true, agentName: true } },
+        project: { select: { name: true } },
+      },
+      orderBy: { scoredAt: "asc" },
+    }),
+    prisma.predictorEmailVerification.findMany({
+      where: { confirmedAt: { gte: since } },
+      select: { email: true, predictor: { select: { displayName: true, agentName: true } } },
+      orderBy: { confirmedAt: "asc" },
     }),
   ]);
 
@@ -75,6 +98,22 @@ export async function GET(req: NextRequest) {
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
+    newPredictions: newPredictions.map((p) => ({
+      label: p.predictor.displayName ?? p.predictor.agentName ?? "anonymous",
+      isAgent: p.predictor.agentName != null,
+      projectName: p.project.name,
+      predictedDate: p.predictedDate.toISOString(),
+    })),
+    newlyScored: newlyScored.map((p) => ({
+      label: p.predictor.displayName ?? p.predictor.agentName ?? "anonymous",
+      isAgent: p.predictor.agentName != null,
+      projectName: p.project.name,
+      daysOff: p.daysOff ?? 0,
+    })),
+    newPredictorEmails: newPredictorEmails.map((v) => ({
+      email: v.email,
+      label: v.predictor.displayName ?? v.predictor.agentName ?? "anonymous",
+    })),
   });
 
   if (!result.ok) {
@@ -88,6 +127,9 @@ export async function GET(req: NextRequest) {
     apiTrafficBreakdown: trafficBreakdown,
     feedbackCount: feedbackRows.length,
     newSubscriptionCount: newSubscriptions.length,
+    newPredictionCount: newPredictions.length,
+    newlyScoredCount: newlyScored.length,
+    newPredictorEmailCount: newPredictorEmails.length,
   };
   console.log("daily-digest cron:", summary);
   return NextResponse.json(summary);

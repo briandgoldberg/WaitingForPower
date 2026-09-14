@@ -28,6 +28,9 @@ export interface DailyDigestData {
   // scope is already the human label ("California" or "All states") — see
   // src/app/api/cron/daily-digest/route.ts.
   newSubscriptions: { scope: string; email: string; confirmed: boolean }[];
+  newPredictions: { label: string; isAgent: boolean; projectName: string; predictedDate: string }[];
+  newlyScored: { label: string; isAgent: boolean; projectName: string; daysOff: number }[];
+  newPredictorEmails: { email: string; label: string }[];
 }
 
 function section(title: string, bodyHtml: string): string {
@@ -74,11 +77,39 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
           .map((s) => `<li>${escapeHtml(s.email)} — ${escapeHtml(s.scope)}${s.confirmed ? "" : " (unconfirmed)"}</li>`)
           .join("")}</ul>`;
 
+  const predictionsSectionHtml =
+    data.newPredictions.length === 0
+      ? "<p>None.</p>"
+      : `<ul>${data.newPredictions
+          .map(
+            (p) =>
+              `<li>${p.isAgent ? "🤖" : "🙂"} ${escapeHtml(p.label)} → <strong>${escapeHtml(p.projectName)}</strong>: ${new Date(p.predictedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</li>`,
+          )
+          .join("")}</ul>`;
+
+  const scoredSectionHtml =
+    data.newlyScored.length === 0
+      ? "<p>None.</p>"
+      : `<ul>${data.newlyScored
+          .map(
+            (p) =>
+              `<li>${p.isAgent ? "🤖" : "🙂"} ${escapeHtml(p.label)} on <strong>${escapeHtml(p.projectName)}</strong>: ${p.daysOff} day${p.daysOff === 1 ? "" : "s"} off</li>`,
+          )
+          .join("")}</ul>`;
+
+  const predictorEmailsSectionHtml =
+    data.newPredictorEmails.length === 0
+      ? "<p>None.</p>"
+      : `<ul>${data.newPredictorEmails.map((v) => `<li>${escapeHtml(v.label)} — ${escapeHtml(v.email)}</li>`).join("")}</ul>`;
+
   const html = `
     <p style="color:#666;font-size:13px;">WaitingForPower daily digest — ${escapeHtml(data.windowLabel)}</p>
     ${section("Bot / MCP / API calls", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
     ${section("New feed subscriptions", subsSectionHtml)}
+    ${section("New predictions", predictionsSectionHtml)}
+    ${section("Newly scored predictions", scoredSectionHtml)}
+    ${section("Predictor profiles confirmed via magic link", predictorEmailsSectionHtml)}
   `;
 
   const text = [
@@ -101,6 +132,28 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     data.newSubscriptions.length === 0
       ? "None."
       : data.newSubscriptions.map((s) => `- ${s.email} — ${s.scope}${s.confirmed ? "" : " (unconfirmed)"}`).join("\n"),
+    "",
+    "NEW PREDICTIONS",
+    data.newPredictions.length === 0
+      ? "None."
+      : data.newPredictions
+          .map(
+            (p) =>
+              `- [${p.isAgent ? "agent" : "human"}] ${p.label} -> ${p.projectName}: ${new Date(p.predictedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`,
+          )
+          .join("\n"),
+    "",
+    "NEWLY SCORED PREDICTIONS",
+    data.newlyScored.length === 0
+      ? "None."
+      : data.newlyScored
+          .map((p) => `- [${p.isAgent ? "agent" : "human"}] ${p.label} on ${p.projectName}: ${p.daysOff} day${p.daysOff === 1 ? "" : "s"} off`)
+          .join("\n"),
+    "",
+    "PREDICTOR PROFILES CONFIRMED VIA MAGIC LINK",
+    data.newPredictorEmails.length === 0
+      ? "None."
+      : data.newPredictorEmails.map((v) => `- ${v.label} — ${v.email}`).join("\n"),
   ].join("\n");
 
   const { error } = await resend.emails.send({

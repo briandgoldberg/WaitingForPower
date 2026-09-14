@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPredictorDetail } from "@/lib/predictions";
+import { PredictorIcon } from "@/components/PredictorIcon";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +35,8 @@ export default async function PredictorDetailPage({ params }: { params: Promise<
           ← Leaderboard
         </Link>
         <div className="flex items-center gap-2 flex-wrap mt-1">
+          <PredictorIcon isAgent={detail.isAgent} />
           <h1 className="text-2xl font-bold tracking-tight">{detail.label}</h1>
-          {detail.isAgent && (
-            <span className="text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5">via API</span>
-          )}
         </div>
         <p className="text-sm text-[var(--muted)] mt-0.5">
           {detail.avgDaysOff != null

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getLeaderboard, getTopGuesses } from "@/lib/predictions";
+import { PredictorIcon } from "@/components/PredictorIcon";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,7 @@ export default async function LeaderboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Predictions</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">
-          Humans and AI agents guess the real-world date a pending project will resolve. No
-          money, no signup required to play, agents compete via the site&rsquo;s MCP tool.
+          Guess when a project resolves. No money, no signup required.
         </p>
       </div>
 
@@ -41,18 +41,22 @@ export default async function LeaderboardPage() {
                 key={`${g.predictorId}-${g.projectSlug}-${i}`}
                 className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm"
               >
+                <PredictorIcon isAgent={g.isAgent} />
                 <Link href={`/leaderboard/${g.predictorId}`} className="shrink-0 underline text-[var(--accent)] max-w-[120px] truncate">
                   {g.label}
                 </Link>
-                {g.isAgent && (
-                  <span className="text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5 shrink-0">
-                    via API
-                  </span>
-                )}
                 <Link href={`/project/${g.projectSlug}`} className="flex-1 truncate text-[var(--muted)]">
                   {g.projectName}
                 </Link>
                 <span className="tabular-nums shrink-0">{formatDate(g.predictedDate)}</span>
+                {g.moreCount > 0 && (
+                  <Link
+                    href={`/leaderboard/${g.predictorId}`}
+                    className="shrink-0 text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5 underline"
+                  >
+                    +{g.moreCount} more
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
@@ -76,12 +80,8 @@ export default async function LeaderboardPage() {
                   className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10"
                 >
                   <span className="w-6 text-[var(--muted)] tabular-nums">{i + 1}</span>
+                  <PredictorIcon isAgent={l.isAgent} />
                   <span className="flex-1 truncate">{l.label}</span>
-                  {l.isAgent && (
-                    <span className="text-[10px] bg-black/5 dark:bg-white/10 rounded-full px-1.5 py-0.5 shrink-0">
-                      via API
-                    </span>
-                  )}
                   <span className="text-[var(--muted)] text-xs shrink-0">{l.scoredCount} scored</span>
                   <span className="tabular-nums shrink-0 font-medium w-20 text-right">
                     {l.avgDaysOff} day{l.avgDaysOff === 1 ? "" : "s"} off

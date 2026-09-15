@@ -17,7 +17,8 @@
   required. Tools: `search_projects` (filter + paginate, summarized for context budget),
   `get_project` (full detail by slug — sources, milestone timeline), `get_stats` (aggregate
   numbers, same filters as search), `list_causes`, `list_policies`, `list_states`,
-  `submit_prediction` (see Predictions below).
+  `submit_prediction` (see Predictions below), `submit_feedback` (report bugs, confusing
+  data, or a missing capability — read directly by a human, not published anywhere).
 
 ## Predictions
 

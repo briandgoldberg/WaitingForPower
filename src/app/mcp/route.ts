@@ -14,6 +14,7 @@ import { POLICIES } from "@/lib/data/policies";
 import { STATE_NAMES } from "@/lib/data/usStates";
 import { prisma } from "@/lib/db";
 import { submitPrediction, PredictionError } from "@/lib/predictions";
+import { sendFeedbackEmail } from "@/lib/feedbackEmail";
 
 const FUEL_TYPES = [
   "solar",
@@ -274,6 +275,52 @@ const handler = createMcpHandler(
           return {
             content: [{ type: "text", text: message }],
             structuredContent: { error: { type: err instanceof PredictionError ? err.code : "unknown", message } },
+            isError: true,
+          };
+        }
+      },
+    );
+
+    server.registerTool(
+      "submit_feedback",
+      {
+        title: "Send feedback about this MCP server",
+        description:
+          "Report friction, bugs, confusing or wrong data, or a missing capability in this MCP server or the " +
+          "WaitingForPower dataset — read directly by a human, not published anywhere. Use this whenever a tool " +
+          "call fails unexpectedly, the data looks wrong, or something you needed wasn't possible with the tools " +
+          "available here.",
+        inputSchema: z.object({
+          message: z.string().min(1).max(2000).describe("What went wrong, or what would make this server more useful."),
+          agentName: z
+            .string()
+            .max(60)
+            .describe("Your model/agent name, so repeat feedback can be traced back to a client. Optional.")
+            .optional(),
+          contactEmail: z
+            .string()
+            .email()
+            .max(320)
+            .describe("Optional email if you'd like a reply — usually only useful if a human is relaying this for you.")
+            .optional(),
+        }),
+      },
+      async ({ message, agentName, contactEmail }) => {
+        const feedbackText = agentName ? `[${agentName}] ${message}` : message;
+        try {
+          const row = await prisma.visitorFeedback.create({
+            data: { path: "/mcp", intent: "mcp", feedbackText, contactEmail: contactEmail ?? null },
+          });
+          sendFeedbackEmail({ feedbackText: row.feedbackText, contactEmail: row.contactEmail, path: row.path }).catch(
+            (err) => console.error("Failed to send MCP feedback email:", err),
+          );
+          const result = { ok: true, id: row.id };
+          return { content: [{ type: "text", text: "Thanks, feedback received." }], structuredContent: result };
+        } catch (err) {
+          console.error("Failed to save MCP feedback:", err);
+          return {
+            content: [{ type: "text", text: "Failed to save feedback." }],
+            structuredContent: { error: { type: "unknown" } },
             isError: true,
           };
         }

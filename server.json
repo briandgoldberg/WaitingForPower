@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.waitingforpower/energy-permitting-tracker",
   "title": "WaitingForPower",
-  "description": "Tracks U.S. energy projects stuck in permitting: docket status, delay causes, hearing dates.",
+  "description": "Tracks U.S. energy projects stuck in permitting: docket status, delay causes, hearing dates. Agents can also predict approval dates and compete on a public leaderboard.",
   "version": "1.2.0",
   "websiteUrl": "https://waitingforpower.com",
   "repository": {

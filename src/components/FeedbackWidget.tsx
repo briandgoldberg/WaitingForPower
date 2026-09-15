@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "wfp_feedback_auto_shown";
-const SHOW_AFTER_MS = 15000;
+const SHOW_AFTER_MS = 8000;
 
 // Fired by anything site-wide that wants to open the feedback form on
 // demand — see the footer's "Reach out" button in src/app/layout.tsx, the
@@ -109,9 +109,10 @@ export function FeedbackWidget() {
 
       {step === "form" && (
         <>
-          <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">Got feedback?</p>
+          <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">What are you doing here?</p>
           <p className="text-xs text-[var(--text-secondary)] mb-2">
-            Leave a note or an email if you&rsquo;d like us to reach out.
+            We need your feedback to improve our site, and will be offering paid feedback
+            engagements with visitors.
           </p>
           <textarea
             value={feedbackText}

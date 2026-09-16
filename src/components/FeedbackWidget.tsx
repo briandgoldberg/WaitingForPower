@@ -111,7 +111,7 @@ export function FeedbackWidget() {
         <>
           <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">What are you doing here?</p>
           <p className="text-xs text-[var(--text-secondary)] mb-2">
-            We want to help, and we&rsquo;re offering some visitors compensation for feedback.
+            We want to help and we&rsquo;re offering some visitors compensation for feedback.
           </p>
           <textarea
             value={feedbackText}

@@ -110,10 +110,7 @@ export function FeedbackWidget() {
       {step === "form" && (
         <>
           <p className="text-sm font-semibold text-[var(--accent)] pr-4 mb-1">What are you doing here?</p>
-          <p className="text-xs text-[var(--text-secondary)] mb-2">
-            We need your feedback to improve our site, and will be offering paid feedback
-            engagements with visitors.
-          </p>
+          <p className="text-xs text-[var(--text-secondary)] mb-2">Tell us. We pay for good feedback.</p>
           <textarea
             value={feedbackText}
             onChange={(e) => setFeedbackText(e.target.value)}

@@ -41,11 +41,28 @@ export function toFilterState(q: ProjectQuery): FilterState {
   };
 }
 
+// Prisma Accelerate hard-caps a single query's response at 5MB — the full
+// dataset with all three relations included is already past that (8MB+ and
+// growing), so this fetches it in pages instead of one findMany(). Every
+// caller (this site's own API routes, the MCP server's search_projects/
+// get_stats) goes through here, so this fixes all of them at once rather
+// than each route working around the limit separately.
+const FETCH_PAGE_SIZE = 250;
+
 export async function queryProjects(filters: FilterState, opts: { allStatuses?: boolean } = {}): Promise<ProjectDTO[]> {
-  const projects = await prisma.project.findMany({
-    include: { causes: true, sources: true, milestones: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const total = await prisma.project.count();
+  const pageCount = Math.max(1, Math.ceil(total / FETCH_PAGE_SIZE));
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) =>
+      prisma.project.findMany({
+        include: { causes: true, sources: true, milestones: true },
+        orderBy: { createdAt: "asc" },
+        skip: i * FETCH_PAGE_SIZE,
+        take: FETCH_PAGE_SIZE,
+      }),
+    ),
+  );
+  const projects = pages.flat();
   return projects.map(serializeProject).filter((p) => matchesFilters(p, filters, { ignoreStatus: opts.allStatuses }));
 }
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { prisma } from "@/lib/db";
-import { serializeProject } from "@/lib/serialize";
+import { queryProjects } from "@/lib/queryProjects";
+import { DEFAULT_FILTERS } from "@/lib/filters";
 import { Explorer } from "@/components/Explorer";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +44,12 @@ const DATASET_JSON_LD = {
 };
 
 export default async function ProjectsPage() {
-  const projects = await prisma.project.findMany({
-    include: { causes: true, sources: true, milestones: true },
-    orderBy: { createdAt: "asc" },
-  });
+  // Every status bucket, unfiltered — the Explorer does its own client-side
+  // filtering (including status). Goes through the shared, paginated
+  // queryProjects() (see src/lib/queryProjects.ts) rather than a raw
+  // findMany() here, since the full dataset with all relations included
+  // exceeds Prisma Accelerate's per-query response size cap.
+  const projects = await queryProjects(DEFAULT_FILTERS, { allStatuses: true });
 
   return (
     <>
@@ -56,7 +58,7 @@ export default async function ProjectsPage() {
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
       />
-      <Explorer projects={projects.map(serializeProject)} />
+      <Explorer projects={projects} />
     </>
   );
 }

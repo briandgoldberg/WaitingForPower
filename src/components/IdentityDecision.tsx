@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DeviceIcon } from "./PosterBadge";
+import { GuestTag } from "./PosterBadge";
 import { SaveProfilePrompt } from "./SaveProfilePrompt";
 
 // Shown to a first-time poster instead of the composer. Their post is held
@@ -56,7 +56,7 @@ export function IdentityDecision({
           ) : (
             <span className="inline-flex items-center gap-1.5">
               Post as {label}
-              <DeviceIcon className="!text-white/80" />
+              <GuestTag className="border-white/50 text-white/80" />
             </span>
           )}
         </button>

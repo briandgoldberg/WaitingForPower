@@ -23,7 +23,7 @@ export function AdvocacyTabs({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex gap-1.5 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit max-w-full overflow-x-auto">
+      <div className="grid grid-cols-2 gap-1 rounded-2xl sm:flex sm:gap-1.5 sm:rounded-full bg-black/5 dark:bg-white/10 p-1 w-full sm:w-fit sm:max-w-full sm:overflow-x-auto">
         <TabButton active={tab === "national"} onClick={() => setTab("national")}>
           National Advocacy
         </TabButton>
@@ -51,7 +51,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+      className={`sm:shrink-0 px-2.5 sm:px-3.5 py-1.5 rounded-full text-sm font-medium text-center sm:whitespace-nowrap transition-colors ${
         active
           ? "bg-[var(--panel)] shadow-sm"
           : "text-[var(--muted)] hover:text-[var(--text-secondary)]"

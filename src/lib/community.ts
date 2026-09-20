@@ -2,7 +2,7 @@
 // carry a "why". One identity (Predictor) covers both — anonymous browser key
 // plus a required nickname, optionally upgraded to a saved email profile.
 import { prisma } from "@/lib/db";
-import { getOrCreateHumanPredictor } from "@/lib/predictions";
+import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
 
 export const MAX_COMMENT_LENGTH = 1000;
 const MAX_COMMENTS_PER_HOUR = 10;
@@ -56,7 +56,13 @@ export async function submitComment(params: {
   const project = await prisma.project.findUnique({ where: { id: params.projectId }, select: { id: true } });
   if (!project) throw new CommentError("not_found", "Project not found.");
 
-  const predictor = await getOrCreateHumanPredictor(params.anonymousKey, params.displayName);
+  let predictor;
+  try {
+    predictor = await getOrCreateHumanPredictor(params.anonymousKey, params.displayName);
+  } catch (err) {
+    if (err instanceof PredictionError) throw new CommentError(err.code, err.message);
+    throw err;
+  }
 
   const recent = await prisma.projectComment.findMany({
     where: { predictorId: predictor.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },

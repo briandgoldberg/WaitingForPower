@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       id: comment.id,
       createdAt: comment.createdAt.toISOString(),
+      displayName: predictor.displayName,
       hasSavedProfile: predictor.email != null,
     });
   } catch (err) {

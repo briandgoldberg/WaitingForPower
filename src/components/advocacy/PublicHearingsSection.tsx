@@ -4,6 +4,9 @@ import type { UpcomingHearingGroup } from "@/lib/hearings";
 export function PublicHearingsSection({ groups }: { groups: UpcomingHearingGroup[] }) {
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-sm text-[var(--muted)] max-w-2xl">
+        Speak up at a real public hearing on a project. Upcoming dates are listed below.
+      </p>
       <a href="/hearings.rss" className="text-sm text-[var(--accent)] underline">
         RSS feed
       </a>

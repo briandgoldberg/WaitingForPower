@@ -28,14 +28,17 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-// Comments on one project: predictions that came with a "why" appear here
-// automatically, next to free-form comments. Same identity as predicting —
-// anonymous browser key plus a required name, optional email to save it.
+// The comment thread at the bottom of a project page, like a news article:
+// predictions that came with a "why" appear here automatically, next to
+// free-form comments. Same identity as predicting: an anonymous browser key
+// plus a name that's asked for once and then locked, with an optional email
+// to save the profile.
 export function ProjectDiscussion({ projectId }: { projectId: string }) {
   const [items, setItems] = useState<DiscussionItem[] | null>(null);
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [key, setKey] = useState<string | null>(null);
-  const [nickname, setNickname] = useState("");
+  const [lockedName, setLockedName] = useState("");
+  const [typedName, setTypedName] = useState("");
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +59,10 @@ export function ProjectDiscussion({ projectId }: { projectId: string }) {
   useEffect(() => {
     const t = setTimeout(() => {
       setKey(getOrCreatePredictorKey());
-      setNickname(getStoredNickname());
+      setLockedName(getStoredNickname());
       load();
     }, 0);
-    const syncName = () => setNickname((prev) => prev || getStoredNickname());
+    const syncName = () => setLockedName(getStoredNickname());
     window.addEventListener(DISCUSSION_CHANGED_EVENT, load);
     window.addEventListener(IDENTITY_CHANGED_EVENT, syncName);
     return () => {
@@ -72,7 +75,8 @@ export function ProjectDiscussion({ projectId }: { projectId: string }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!key) return;
-    if (!nickname.trim()) {
+    const name = lockedName || typedName.trim();
+    if (!name) {
       setError("Enter a name so people know who's commenting.");
       return;
     }
@@ -86,14 +90,14 @@ export function ProjectDiscussion({ projectId }: { projectId: string }) {
       const res = await fetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, anonymousKey: key, displayName: nickname.trim(), body: text.trim() }),
+        body: JSON.stringify({ projectId, anonymousKey: key, displayName: name, body: text.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Something went wrong.");
         return;
       }
-      storeNickname(nickname.trim());
+      storeNickname(data.displayName ?? name);
       setText("");
       if (shouldOfferSaveProfile(data.hasSavedProfile)) setShowSavePrompt(true);
       load();
@@ -106,38 +110,42 @@ export function ProjectDiscussion({ projectId }: { projectId: string }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-2">Comments{items && items.length > 0 ? ` (${items.length})` : ""}</h3>
+      <h2 className="text-base font-semibold text-[var(--accent)] mb-3">
+        Comments{items && items.length > 0 ? ` (${items.length})` : ""}
+      </h2>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <div className="flex items-end gap-2 flex-wrap">
-          <div className="w-28">
-            <label className="text-[10px] text-[var(--muted)] block mb-0.5">Name</label>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={MAX_COMMENT}
+          rows={3}
+          aria-label="Add a comment"
+          placeholder="Share what you know or think"
+          className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm resize-none"
+        />
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {lockedName ? (
+            <span className="text-xs text-[var(--muted)]">
+              Commenting as <strong className="text-[var(--foreground)]">{lockedName}</strong>
+            </span>
+          ) : (
             <input
               type="text"
-              placeholder="e.g. Alex"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
+              placeholder="Your name"
+              aria-label="Your name"
+              value={typedName}
+              onChange={(e) => setTypedName(e.target.value)}
               maxLength={40}
-              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+              className="w-40 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
             />
-          </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="text-[10px] text-[var(--muted)] block mb-0.5">Add a comment</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={MAX_COMMENT}
-              rows={2}
-              placeholder="Share what you know or think"
-              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm resize-none"
-            />
-          </div>
+          )}
           <button
             type="submit"
             disabled={posting}
             className="rounded-md bg-[var(--accent)] text-white px-4 py-1.5 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
           >
-            {posting ? "…" : "Post"}
+            {posting ? "…" : "Post comment"}
           </button>
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -146,18 +154,18 @@ export function ProjectDiscussion({ projectId }: { projectId: string }) {
       {showSavePrompt && key && <SaveProfilePrompt anonymousKey={key} />}
 
       {items && items.length > 0 && (
-        <ul className="mt-3 pt-3 border-t border-[var(--border)] flex flex-col gap-3 max-h-96 overflow-y-auto">
+        <ul className="mt-4 pt-4 border-t border-[var(--border)] flex flex-col gap-4">
           {items.map((c) => (
             <li key={c.id} className="text-sm">
               <div className="flex items-center gap-1.5 text-xs">
                 <PredictorIcon isAgent={c.isAgent} />
-                <span className="font-medium truncate">{c.label}</span>
-                {c.kind === "prediction" && c.predictedDate && (
-                  <span className="text-[var(--muted)]">predicted {formatDate(c.predictedDate)}</span>
-                )}
-                {nowMs != null && <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(c.createdAt, nowMs)}</span>}
+                <span className="font-semibold truncate">{c.label}</span>
+                {nowMs != null && <span className="text-[var(--muted)]">· {relativeTime(c.createdAt, nowMs)}</span>}
               </div>
-              {c.body && <p className="mt-0.5 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{c.body}</p>}
+              {c.kind === "prediction" && c.predictedDate && (
+                <p className="text-xs text-[var(--muted)] mt-0.5">Predicted approval on {formatDate(c.predictedDate)}</p>
+              )}
+              {c.body && <p className="mt-1 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{c.body}</p>}
             </li>
           ))}
         </ul>

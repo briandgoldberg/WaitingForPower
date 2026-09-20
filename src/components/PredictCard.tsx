@@ -28,17 +28,20 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-// Collapsed-by-default so the page doesn't read as long, but the closed
-// state is a bold single CTA button rather than a quiet link. Two-step flow
+// A slim one-line prompt that opens into a single compact row. Two-step flow
 // beyond that, deliberately in this order: (1) let someone predict
 // immediately, no barrier at all; (2) only once that's done, offer to save
 // it under an email so it survives a device change. Skipping step 2 costs
-// nothing — the prediction already counts either way.
+// nothing; the prediction already counts either way.
+//
+// The name is asked for once. After that it is locked to this profile (the
+// server ignores later name changes), so it shows as read-only text.
 export function PredictCard({ projectId }: { projectId: string }) {
   const [predictorKey, setPredictorKey] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [predictedDate, setPredictedDate] = useState("");
-  const [nickname, setNickname] = useState("");
+  const [lockedName, setLockedName] = useState("");
+  const [typedName, setTypedName] = useState("");
   const [why, setWhy] = useState("");
   const [myPrediction, setMyPrediction] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<PredictionEntry[]>([]);
@@ -51,7 +54,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
   useEffect(() => {
     const t = setTimeout(() => {
       setPredictorKey(getOrCreatePredictorKey());
-      setNickname(getStoredNickname());
+      setLockedName(getStoredNickname());
       const stored = localStorage.getItem(predictionKey(projectId));
       if (stored) setMyPrediction(stored);
     }, 0);
@@ -65,7 +68,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
         // Non-critical — the predict form still works without the prediction list.
       });
 
-    const syncName = () => setNickname((prev) => prev || getStoredNickname());
+    const syncName = () => setLockedName(getStoredNickname());
     window.addEventListener(IDENTITY_CHANGED_EVENT, syncName);
 
     return () => {
@@ -77,7 +80,8 @@ export function PredictCard({ projectId }: { projectId: string }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!predictorKey) return;
-    if (!nickname.trim()) {
+    const name = lockedName || typedName.trim();
+    if (!name) {
       setError("Enter a name so people know who predicted.");
       return;
     }
@@ -95,7 +99,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
           projectId,
           predictedDate,
           anonymousKey: predictorKey,
-          displayName: nickname.trim(),
+          displayName: name,
           why: why.trim(),
         }),
       });
@@ -104,15 +108,15 @@ export function PredictCard({ projectId }: { projectId: string }) {
         setError(data.error ?? "Something went wrong.");
         return;
       }
+      const finalName: string = data.displayName ?? name;
       localStorage.setItem(predictionKey(projectId), data.predictedDate);
-      storeNickname(nickname.trim());
+      storeNickname(finalName);
       setMyPrediction(data.predictedDate);
-      // Only nag once, ever, per browser — not on every project someone
+      // Only nag once, ever, per browser, not on every project someone
       // predicts on.
       if (shouldOfferSaveProfile(data.hasSavedProfile)) setShowSavePrompt(true);
-      const label = nickname.trim();
       setPredictions((prev) =>
-        [...prev.filter((p) => p.label !== label), { label, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) =>
+        [...prev.filter((p) => p.label !== finalName), { label: finalName, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) =>
           a.predictedDate.localeCompare(b.predictedDate),
         ),
       );
@@ -125,98 +129,92 @@ export function PredictCard({ projectId }: { projectId: string }) {
   }
 
   const open = expanded || myPrediction != null;
+  const countText = predictions.length > 0 ? `${predictions.length} prediction${predictions.length === 1 ? "" : "s"}` : null;
 
   return (
-    <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4">
+    <div className="rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-3 py-2.5">
       {!open ? (
-        <div className="flex flex-col items-center text-center gap-2 py-2">
-          <p className="text-sm font-semibold">Think you know when this project will be approved?</p>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm">
+            <span className="font-semibold">🔮 When will this be approved?</span>
+            {countText && <span className="text-xs text-[var(--muted)]"> · {countText}</span>}
+          </p>
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="w-full sm:w-auto rounded-lg bg-[var(--accent)] text-white px-6 py-3 text-base font-semibold hover:opacity-90 transition-opacity"
+            className="rounded-md bg-[var(--accent)] text-white px-3.5 py-1.5 text-sm font-semibold hover:opacity-90 transition-opacity"
           >
-            🔮 Predict the approval date
+            Predict
           </button>
-          <p className="text-xs text-[var(--muted)]">
-            No sign-in needed{predictions.length > 0 && <> · {predictions.length} prediction{predictions.length === 1 ? "" : "s"} so far</>}
-          </p>
         </div>
+      ) : myPrediction ? (
+        <p className="text-sm">
+          🔮 Your prediction: <strong>{formatDate(myPrediction)}</strong>
+          {countText && <span className="text-xs text-[var(--muted)]"> · {countText}</span>}
+        </p>
       ) : (
-        <>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="text-sm font-semibold">Predict when this project is approved</h3>
-            <span className="text-[10px] text-[var(--muted)]">No sign-in needed</span>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold shrink-0">🔮 Predict the date</span>
+            {lockedName ? (
+              <span className="text-xs text-[var(--muted)] shrink-0">
+                as <strong className="text-[var(--foreground)]">{lockedName}</strong>
+              </span>
+            ) : (
+              <input
+                type="text"
+                placeholder="Your name"
+                aria-label="Your name"
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                maxLength={40}
+                autoFocus
+                className="w-28 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm"
+              />
+            )}
+            <input
+              type="date"
+              aria-label="Predicted approval date"
+              value={predictedDate}
+              onChange={(e) => setPredictedDate(e.target.value)}
+              className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-md bg-[var(--accent)] text-white px-3.5 py-1 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            >
+              {loading ? "…" : "Submit"}
+            </button>
           </div>
+          <input
+            type="text"
+            aria-label="Why (optional)"
+            placeholder="Why? (optional)"
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            maxLength={MAX_WHY}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm"
+          />
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+        </form>
+      )}
 
-          {myPrediction ? (
-            <p className="text-sm mt-2">
-              Your prediction: <strong>{formatDate(myPrediction)}</strong>
-            </p>
-          ) : (
-            <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 flex-wrap">
-              <div className="w-28">
-                <label className="text-[10px] text-[var(--muted)] block mb-0.5">Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Alex"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  maxLength={40}
-                  autoFocus
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] text-[var(--muted)] block mb-0.5">Resolution date</label>
-                <input
-                  type="date"
-                  value={predictedDate}
-                  onChange={(e) => setPredictedDate(e.target.value)}
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div className="w-full">
-                <label className="text-[10px] text-[var(--muted)] block mb-0.5">Why? (optional)</label>
-                <textarea
-                  value={why}
-                  onChange={(e) => setWhy(e.target.value)}
-                  maxLength={MAX_WHY}
-                  rows={2}
-                  placeholder="What makes you think so?"
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm resize-none"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-md bg-[var(--accent)] text-white px-4 py-1.5 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-              >
-                {loading ? "…" : "Submit"}
-              </button>
-              {error && <p className="text-xs text-red-600 dark:text-red-400 w-full">{error}</p>}
-            </form>
-          )}
+      {showSavePrompt && predictorKey && <SaveProfilePrompt anonymousKey={predictorKey} />}
 
-          {showSavePrompt && predictorKey && <SaveProfilePrompt anonymousKey={predictorKey} />}
-
-          {predictions.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-[var(--border)]">
-              <p className="text-[10px] text-[var(--muted)] mb-1">
-                {predictions.length} prediction{predictions.length === 1 ? "" : "s"} so far
-              </p>
-              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                {predictions.map((p, i) => (
-                  <div key={`${p.label}-${i}`} className="flex items-center gap-1.5 text-xs">
-                    <PredictorIcon isAgent={p.isAgent} />
-                    <span className="flex-1 truncate">{p.label}</span>
-                    <span className="text-[var(--muted)] shrink-0">{formatDate(p.predictedDate)}</span>
-                  </div>
-                ))}
+      {open && predictions.length > 0 && (
+        <details className="mt-1.5 text-xs">
+          <summary className="cursor-pointer text-[var(--muted)]">See all {countText}</summary>
+          <div className="flex flex-col gap-1 mt-1 max-h-24 overflow-y-auto">
+            {predictions.map((p, i) => (
+              <div key={`${p.label}-${i}`} className="flex items-center gap-1.5">
+                <PredictorIcon isAgent={p.isAgent} />
+                <span className="flex-1 truncate">{p.label}</span>
+                <span className="text-[var(--muted)] shrink-0">{formatDate(p.predictedDate)}</span>
               </div>
-            </div>
-          )}
-        </>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );

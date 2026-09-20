@@ -13,7 +13,7 @@ function formatDate(iso: string): string {
 function CommunityCard({ item, nowMs }: { item: CommunityFeedItem; nowMs: number }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors">
-      <Link href={`/project/${item.projectSlug}#take-action`} className="block">
+      <Link href={`/project/${item.projectSlug}#${item.body ? "comments" : "take-action"}`} className="block">
         <div className="flex items-center gap-1.5 text-xs">
           <PredictorIcon isAgent={item.isAgent} />
           <span className="font-semibold truncate">{item.label}</span>

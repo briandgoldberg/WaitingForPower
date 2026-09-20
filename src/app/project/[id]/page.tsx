@@ -13,6 +13,7 @@ import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
+import { ProjectDiscussion } from "@/components/ProjectDiscussion";
 
 export const dynamic = "force-dynamic";
 
@@ -149,12 +150,22 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <div className="flex flex-wrap gap-3">
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} accentColor={fuel?.color} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
-        <Stat label="Stage" value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")} />
-        {p.interconnectionQueueStage && <Stat label="Queue stage" value={p.interconnectionQueueStage} />}
+        <Stat
+          label="Est. investment waiting"
+          value={p.investmentWaiting.applicable ? formatUsd(p.investmentWaiting.estimatedUsd!) : "—"}
+          sub={p.investmentWaiting.applicable ? undefined : ["Not estimated"]}
+          href="/methodology"
+        />
+        <Stat
+          label="Stage"
+          value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
+          sub={[p.interconnectionQueueStage && `Queue: ${p.interconnectionQueueStage}`, p.queueCluster && `Cluster: ${p.queueCluster}`].filter(
+            (x): x is string => Boolean(x),
+          )}
+        />
         {p.balancingAuthority && <Stat label="Grid region" value={p.balancingAuthority} />}
         {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
         {p.pointOfInterconnection && <Stat label="Point of interconnection" value={p.pointOfInterconnection} />}
-        {p.queueCluster && <Stat label="Queue cluster" value={p.queueCluster} />}
         {p.expectedOnlineDate && (
           <Stat
             label="Expected online"
@@ -172,57 +183,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         canPredict={!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state)}
       />
 
-      <div className={`grid grid-cols-1 gap-3 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
+      {p.networkUpgradeCostUsd != null && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated investment waiting</h2>
-          {p.investmentWaiting.applicable ? (
-            <>
-              <div className="text-3xl font-bold tabular-nums">{formatUsd(p.investmentWaiting.estimatedUsd!)}</div>
-              <p className="text-xs text-[var(--text-secondary)] mt-2">
-                ≈ {Math.round((p.capacityValue ?? 0) * 1000).toLocaleString("en-US")} kW × $
-                {p.investmentWaiting.costPerKw?.toLocaleString("en-US")}/kW typical overnight
-                construction cost (EIA) — the dollar value of the power plant itself sitting in
-                permitting limbo, not a bill estimate.{" "}
-                <Link href="/methodology" className="underline">
-                  Full methodology
-                </Link>
-                .
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-[var(--text-secondary)]">Not estimated: {p.investmentWaiting.reason}</p>
-          )}
-        </section>
-
-        {p.networkUpgradeCostUsd != null && (
-          <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-            <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated interconnection cost</h2>
-            <div className="text-3xl font-bold tabular-nums">
-              {formatUsd((p.poiCostUsd ?? 0) + p.networkUpgradeCostUsd)}
-            </div>
-            {p.poiCostUsd != null && (
-              <p className="text-xs text-[var(--text-secondary)] mt-1">
-                {formatUsd(p.poiCostUsd)} point-of-interconnection + {formatUsd(p.networkUpgradeCostUsd)} network upgrade
-              </p>
-            )}
-            <p className="text-xs text-[var(--text-secondary)] mt-2">
-              The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
-              interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
-              preliminary — see the data quality note below.
+          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated interconnection cost</h2>
+          <div className="text-3xl font-bold tabular-nums">
+            {formatUsd((p.poiCostUsd ?? 0) + p.networkUpgradeCostUsd)}
+          </div>
+          {p.poiCostUsd != null && (
+            <p className="text-xs text-[var(--text-secondary)] mt-1">
+              {formatUsd(p.poiCostUsd)} point-of-interconnection + {formatUsd(p.networkUpgradeCostUsd)} network upgrade
             </p>
-          </section>
-        )}
-      </div>
-
-      {(p.lat != null && p.lon != null) && (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Location</h2>
-          <p className="text-sm text-[var(--text-secondary)]">
-            {p.lat.toFixed(4)}, {p.lon.toFixed(4)} — see the{" "}
-            <Link href="/" className="underline">
-              map
-            </Link>{" "}
-            for this project in context with others.
+          )}
+          <p className="text-xs text-[var(--text-secondary)] mt-2">
+            The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
+            interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
+            preliminary — see the data quality note below.
           </p>
         </section>
       )}
@@ -279,18 +254,47 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
         )}
       </section>
+
+      <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
+        <ProjectDiscussion projectId={p.id} />
+      </section>
     </div>
   );
 }
 
-function Stat({ label, value, accentColor }: { label: string; value: string; accentColor?: string }) {
+function Stat({
+  label,
+  value,
+  accentColor,
+  sub,
+  href,
+}: {
+  label: string;
+  value: string;
+  accentColor?: string;
+  sub?: string[];
+  href?: string;
+}) {
   return (
     <div
       className="flex-1 min-w-[130px] rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 border-l-[3px]"
       style={{ borderLeftColor: accentColor ?? "var(--accent)" }}
     >
-      <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+        {href ? (
+          <Link href={href} className="hover:underline">
+            {label}
+          </Link>
+        ) : (
+          label
+        )}
+      </div>
       <div className="text-base font-bold mt-0.5">{value}</div>
+      {sub?.map((line) => (
+        <div key={line} className="text-xs text-[var(--muted)] mt-0.5">
+          {line}
+        </div>
+      ))}
     </div>
   );
 }

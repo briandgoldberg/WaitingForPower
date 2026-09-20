@@ -14,18 +14,20 @@ export interface AdvocacyProject {
   docketUrl: string | null;
 }
 
-const MAX_PROJECTS = 300;
+const MAX_PROJECTS = 500;
 
-// The projects that have waited longest, for the Advocacy > Project tab —
-// a lightweight select (no milestones/causes) so this stays small even
-// though it feeds a client-side filter. Only real, still-pending projects
-// with a known filing date, since "waiting N years" is the point.
+// The largest still-pending projects, for the Advocacy > Project tab: a
+// lightweight select (no milestones/causes) so this stays small even though
+// it feeds a client-side filter. Ranked by MW capacity, the only capacity
+// unit that compares across projects (pipelines are MMcf/d, transmission is
+// kV). Years waiting is included when a filing date is known.
 export async function getAdvocacyProjects(): Promise<AdvocacyProject[]> {
   const rows = await prisma.project.findMany({
     where: {
       isAggregateExample: false,
       noLongerReported: false,
-      applicationFiledDate: { not: null },
+      capacityUnit: "MW",
+      capacityValue: { not: null },
       currentStage: { notIn: RESOLVED_STAGES },
     },
     select: {
@@ -39,7 +41,7 @@ export async function getAdvocacyProjects(): Promise<AdvocacyProject[]> {
       currentStage: true,
       sources: { select: { label: true, url: true }, take: 1 },
     },
-    orderBy: { applicationFiledDate: "asc" },
+    orderBy: { capacityValue: "desc" },
     take: MAX_PROJECTS,
   });
 

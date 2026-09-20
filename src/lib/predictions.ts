@@ -33,13 +33,33 @@ export const MAX_WHY_LENGTH = 500;
 // One identity for everything a person does on this site: predictions and
 // comments both hang off the same Predictor row, keyed by the browser's
 // anonymous key (and optionally upgraded to a saved email profile).
+//
+// The name is set once and then locked: a later, different name is ignored
+// rather than applied, so nobody can rename themselves between posts. Names
+// are also unique (case-insensitive, and not shared with any agent name), so
+// nobody can post as someone else.
 export async function getOrCreateHumanPredictor(anonymousKey: string, displayName?: string) {
-  const displayNameUpdate = displayName ? { displayName } : {};
-  return prisma.predictor.upsert({
-    where: { anonymousKey },
-    create: { anonymousKey, ...displayNameUpdate },
-    update: displayNameUpdate,
-  });
+  const existing = await prisma.predictor.findUnique({ where: { anonymousKey } });
+  if (existing?.displayName) return existing;
+
+  if (displayName) {
+    const taken = await prisma.predictor.findFirst({
+      where: {
+        ...(existing ? { NOT: { id: existing.id } } : {}),
+        OR: [
+          { displayName: { equals: displayName, mode: "insensitive" } },
+          { agentName: { equals: displayName, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (taken) throw new PredictionError("name_taken", "That name is taken. Pick another.");
+  }
+
+  if (existing) {
+    return displayName ? prisma.predictor.update({ where: { id: existing.id }, data: { displayName } }) : existing;
+  }
+  return prisma.predictor.create({ data: { anonymousKey, ...(displayName ? { displayName } : {}) } });
 }
 
 export async function submitPrediction(params: SubmitPredictionParams) {

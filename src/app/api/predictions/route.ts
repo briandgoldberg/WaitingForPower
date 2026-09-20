@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       predictedDate: prediction.predictedDate.toISOString(),
+      displayName: predictor.displayName,
       hasSavedProfile: predictor.email != null,
     });
   } catch (err) {

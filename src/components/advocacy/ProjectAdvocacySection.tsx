@@ -32,7 +32,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Pick a project you care about. Read its docket, contact the regulator, and add your prediction or comment. These have waited the longest.
+        Pick a project you care about. Read its docket, contact the regulator, and add your prediction or comment. Largest projects first.
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -78,15 +78,13 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
                     {p.name}
                   </Link>
                   <p className="text-xs text-[var(--muted)] mt-0.5">
-                    {codes.map((c) => STATE_NAMES[c] ?? c).join(", ") || "Location not specified"} · {fuel?.label ?? p.fuelType} ·{" "}
-                    {formatCapacity(p.capacityValue, p.capacityUnit)}
+                    {codes.map((c) => STATE_NAMES[c] ?? c).join(", ") || "Location not specified"} · {fuel?.label ?? p.fuelType}
+                    {p.yearsWaiting != null && <> · Waiting {p.yearsWaiting.toFixed(1)} yrs</>}
                   </p>
                 </div>
-                {p.yearsWaiting != null && (
-                  <span className="shrink-0 text-xs font-semibold rounded-full px-2 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)]">
-                    {p.yearsWaiting.toFixed(1)} yrs
-                  </span>
-                )}
+                <span className="shrink-0 text-xs font-semibold rounded-full px-2 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)]">
+                  {formatCapacity(p.capacityValue, p.capacityUnit)}
+                </span>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-2">
                 <Link href={`/project/${p.slug}#take-action`} className="font-semibold text-[var(--accent)] underline">

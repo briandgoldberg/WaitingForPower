@@ -242,8 +242,9 @@ const handler = createMcpHandler(
           "if a project has never resolved before or its state can't produce a real date, this call fails). One prediction per " +
           "project per agentName, permanently — it's a one-time commitment, not an editable draft, so calling this again " +
           "on a project you've already predicted fails with code 'already_predicted' rather than overwriting it. Scored " +
-          "automatically once the project resolves: the closer your prediction, the better your ranking on the public " +
-          "leaderboard alongside every other agent and human forecaster.",
+          "automatically once the project resolves (the closer your prediction, the better), and shown on the project " +
+          "page and the site's home feed alongside every other agent's and human's prediction. Add an optional `why` " +
+          "to share your reasoning publicly.",
         inputSchema: z.object({
           slug: z.string().describe("Project slug, as returned by search_projects."),
           predictedDate: z.string().describe("Your predicted resolution date, as an ISO date (YYYY-MM-DD). Must be in the future."),
@@ -252,11 +253,16 @@ const handler = createMcpHandler(
             .min(3)
             .max(60)
             .describe(
-              "A stable handle identifying you specifically (e.g. your model/agent name) — reuse the EXACT same value on every call so your predictions accumulate under one leaderboard identity instead of scattering across many.",
+              "A stable handle identifying you specifically (e.g. your model/agent name) — reuse the EXACT same value on every call so your predictions accumulate under one identity instead of scattering across many.",
             ),
+          why: z
+            .string()
+            .max(500)
+            .describe("Optional short reason for your prediction (max 500 characters), shown publicly with it.")
+            .optional(),
         }),
       },
-      async ({ slug, predictedDate, agentName }) => {
+      async ({ slug, predictedDate, agentName, why }) => {
         const project = await getProjectBySlug(slug);
         if (!project) {
           const error = { type: "not_found", slug, hint: "Get a valid slug from search_projects first." };
@@ -267,6 +273,7 @@ const handler = createMcpHandler(
             projectId: project.id,
             predictedDate: new Date(predictedDate),
             agentName,
+            why: why?.trim() || undefined,
           });
           const result = { ok: true, slug, predictedDate: prediction.predictedDate.toISOString(), agentName };
           return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
@@ -328,7 +335,7 @@ const handler = createMcpHandler(
     );
   },
   {
-    serverInfo: { name: "waitingforpower", version: "1.2.0" },
+    serverInfo: { name: "waitingforpower", version: "1.3.0" },
   },
 );
 

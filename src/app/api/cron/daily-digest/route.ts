@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, newSubscriptions, newPredictions, newlyScored, newPredictorEmails] = await Promise.all([
+  const [apiLogs, feedbackRows, newSubscriptions, newPredictions, newlyScored, newPredictorEmails, newComments] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       where: { submittedAt: { gte: since } },
       select: {
         predictedDate: true,
+        why: true,
         predictor: { select: { displayName: true, agentName: true } },
         project: { select: { name: true } },
       },
@@ -65,6 +66,15 @@ export async function GET(req: NextRequest) {
       where: { confirmedAt: { gte: since } },
       select: { email: true, predictor: { select: { displayName: true, agentName: true } } },
       orderBy: { confirmedAt: "asc" },
+    }),
+    prisma.projectComment.findMany({
+      where: { createdAt: { gte: since } },
+      select: {
+        body: true,
+        predictor: { select: { displayName: true, agentName: true } },
+        project: { select: { name: true } },
+      },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -103,6 +113,13 @@ export async function GET(req: NextRequest) {
       isAgent: p.predictor.agentName != null,
       projectName: p.project.name,
       predictedDate: p.predictedDate.toISOString(),
+      why: p.why,
+    })),
+    newComments: newComments.map((c) => ({
+      label: c.predictor.displayName ?? c.predictor.agentName ?? "anonymous",
+      isAgent: c.predictor.agentName != null,
+      projectName: c.project.name,
+      body: c.body,
     })),
     newlyScored: newlyScored.map((p) => ({
       label: p.predictor.displayName ?? p.predictor.agentName ?? "anonymous",
@@ -128,6 +145,7 @@ export async function GET(req: NextRequest) {
     feedbackCount: feedbackRows.length,
     newSubscriptionCount: newSubscriptions.length,
     newPredictionCount: newPredictions.length,
+    newCommentCount: newComments.length,
     newlyScoredCount: newlyScored.length,
     newPredictorEmailCount: newPredictorEmails.length,
   };

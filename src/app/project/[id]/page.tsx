@@ -12,7 +12,7 @@ import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
-import { PredictCard } from "@/components/PredictCard";
+import { TakeActionSection } from "@/components/project/TakeActionSection";
 
 export const dynamic = "force-dynamic";
 
@@ -146,10 +146,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state) && (
-        <PredictCard projectId={p.id} />
-      )}
-
       <div className="flex flex-wrap gap-3">
         <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} accentColor={fuel?.color} />
         <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
@@ -169,6 +165,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
         <p className="text-xs text-[var(--muted)] -mt-2">* Approximate / developer-estimated date, not a firm commitment.</p>
       )}
+
+      <TakeActionSection
+        project={p}
+        nowMs={new Date().getTime()}
+        canPredict={!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state)}
+      />
 
       <div className={`grid grid-cols-1 gap-3 ${p.networkUpgradeCostUsd != null ? "md:grid-cols-2" : ""}`}>
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
@@ -247,50 +249,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           )}
         </section>
       )}
-
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-        <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Public Hearings</h2>
-        {p.hearings.length > 0 ? (
-          <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
-            {p.hearings.map((h, i) => (
-              <li key={i}>
-                <div>
-                  {new Date(h.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
-                  {h.endDate &&
-                    ` – ${new Date(h.endDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}`}
-                  {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
-                </div>
-                {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-[var(--text-secondary)]">Unknown</p>
-        )}
-        <p className="text-sm mt-3">
-          {p.hearingDetailsLink ? (
-            /^https?:\/\//.test(p.hearingDetailsLink) ? (
-              <a href={p.hearingDetailsLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
-                Hearing Details
-              </a>
-            ) : (
-              <>
-                <span className="text-[var(--muted)]">Hearing details: </span>
-                {p.hearingDetailsLink}
-              </>
-            )
-          ) : (
-            <>
-              <span className="text-[var(--muted)]">Hearing details: </span>Unknown
-            </>
-          )}
-        </p>
-        <p className="text-xs text-[var(--muted)] mt-3">
-          {p.hearings.length > 0 || p.hearingDetailsLink
-            ? "Pulled from this project’s own docket source. Check the sources below for the latest."
-            : "Not available from this project’s data source yet. Check the sources below directly."}
-        </p>
-      </section>
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
         <div className="flex items-center gap-2 flex-wrap mb-2">

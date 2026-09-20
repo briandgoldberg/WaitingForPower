@@ -2,20 +2,24 @@
 
 import { useState, type ReactNode } from "react";
 
-type Tab = "national" | "hearings";
+export type AdvocacyTab = "national" | "state" | "project" | "hearings";
 
 export function AdvocacyTabs({
   defaultTab,
   hearingCount,
   nationalAdvocacy,
+  stateAdvocacy,
+  projectAdvocacy,
   publicHearings,
 }: {
-  defaultTab: Tab;
+  defaultTab: AdvocacyTab;
   hearingCount: number;
   nationalAdvocacy: ReactNode;
+  stateAdvocacy: ReactNode;
+  projectAdvocacy: ReactNode;
   publicHearings: ReactNode;
 }) {
-  const [tab, setTab] = useState<Tab>(defaultTab);
+  const [tab, setTab] = useState<AdvocacyTab>(defaultTab);
 
   return (
     <div className="flex flex-col gap-5">
@@ -23,12 +27,20 @@ export function AdvocacyTabs({
         <TabButton active={tab === "national"} onClick={() => setTab("national")}>
           National Advocacy
         </TabButton>
+        <TabButton active={tab === "state"} onClick={() => setTab("state")}>
+          State Advocacy
+        </TabButton>
+        <TabButton active={tab === "project"} onClick={() => setTab("project")}>
+          Project Advocacy
+        </TabButton>
         <TabButton active={tab === "hearings"} onClick={() => setTab("hearings")}>
           Public Hearings{hearingCount > 0 && ` (${hearingCount})`}
         </TabButton>
       </div>
 
       <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
+      <div hidden={tab !== "state"}>{stateAdvocacy}</div>
+      <div hidden={tab !== "project"}>{projectAdvocacy}</div>
       <div hidden={tab !== "hearings"}>{publicHearings}</div>
     </div>
   );

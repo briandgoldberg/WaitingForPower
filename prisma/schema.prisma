@@ -237,6 +237,7 @@ model Project {
   hearings    ProjectHearing[]
   changes     ProjectChange[]
   predictions Prediction[]
+  comments    ProjectComment[]
 
   @@index([projectType])
   @@index([fuelType])
@@ -588,6 +589,7 @@ model Predictor {
   createdAt   DateTime @default(now())
 
   predictions         Prediction[]
+  comments            ProjectComment[]
   emailVerifications  PredictorEmailVerification[]
 
   @@index([email])
@@ -598,6 +600,24 @@ model Predictor {
 // Kept as its own table (not just fields on Predictor) so a predictor can
 // request a new verification email without losing the record of an earlier
 // attempt, and so an unconfirmed, abandoned request never blocks a retry.
+// A free-form comment on a project, by the same anonymous-or-saved identity
+// (Predictor) that makes predictions — see submitComment in
+// src/lib/community.ts. Predictions with a `why` show alongside these
+// without being copied here.
+model ProjectComment {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predictorId String
+  predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+  body        String
+  createdAt   DateTime  @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([createdAt])
+  @@index([predictorId, createdAt])
+}
+
 model PredictorEmailVerification {
   id          String    @id @default(cuid())
   predictorId String
@@ -626,6 +646,9 @@ model Prediction {
   predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
 
   predictedDate DateTime
+  // Optional reason (max 500 chars, enforced in the API). Shown in the
+  // project's Comments and the home "people" feed when present.
+  why           String?
   submittedAt   DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

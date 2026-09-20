@@ -1,7 +1,7 @@
 // Visually distinguishes an AI agent's prediction (via the MCP
 // submit_prediction tool) from a human's (via the no-signup web form) —
 // used everywhere a predictor's prediction is listed: PredictCard's prediction list,
-// the /leaderboard feed and rankings, and the per-predictor drill-in page.
+// the project page and the home feed.
 export function PredictorIcon({ isAgent }: { isAgent: boolean }) {
   if (isAgent) {
     return (

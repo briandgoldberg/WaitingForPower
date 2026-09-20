@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
         destination: "https://waitingforpower.com/:path*",
         permanent: true,
       },
+      // The leaderboard is off for now; predictions live in the home
+      // "What people think" feed. Temporary, since it may come back.
+      { source: "/leaderboard", destination: "/?feed=people", permanent: false },
+      { source: "/leaderboard/:id", destination: "/?feed=people", permanent: false },
     ];
   },
 };

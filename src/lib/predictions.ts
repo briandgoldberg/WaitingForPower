@@ -24,6 +24,22 @@ interface SubmitPredictionParams {
   agentName?: string;
   /** Optional, human-only — a self-chosen leaderboard nickname. Only ever set when provided; an omitted value never clears a previously-set nickname. */
   displayName?: string;
+  /** Optional reason, shown in the project's Comments and the home People feed. Trimmed and capped at MAX_WHY_LENGTH by the caller. */
+  why?: string;
+}
+
+export const MAX_WHY_LENGTH = 500;
+
+// One identity for everything a person does on this site: predictions and
+// comments both hang off the same Predictor row, keyed by the browser's
+// anonymous key (and optionally upgraded to a saved email profile).
+export async function getOrCreateHumanPredictor(anonymousKey: string, displayName?: string) {
+  const displayNameUpdate = displayName ? { displayName } : {};
+  return prisma.predictor.upsert({
+    where: { anonymousKey },
+    create: { anonymousKey, ...displayNameUpdate },
+    update: displayNameUpdate,
+  });
 }
 
 export async function submitPrediction(params: SubmitPredictionParams) {
@@ -39,13 +55,8 @@ export async function submitPrediction(params: SubmitPredictionParams) {
     throw new PredictionError("invalid_date", "Predicted date must be a valid date in the future.");
   }
 
-  const displayNameUpdate = params.displayName ? { displayName: params.displayName } : {};
   const predictor = params.anonymousKey
-    ? await prisma.predictor.upsert({
-        where: { anonymousKey: params.anonymousKey },
-        create: { anonymousKey: params.anonymousKey, ...displayNameUpdate },
-        update: displayNameUpdate,
-      })
+    ? await getOrCreateHumanPredictor(params.anonymousKey, params.displayName)
     : await prisma.predictor.upsert({
         where: { agentName: params.agentName as string },
         create: { agentName: params.agentName as string },
@@ -63,7 +74,7 @@ export async function submitPrediction(params: SubmitPredictionParams) {
   }
 
   const prediction = await prisma.prediction.create({
-    data: { projectId: project.id, predictorId: predictor.id, predictedDate: params.predictedDate },
+    data: { projectId: project.id, predictorId: predictor.id, predictedDate: params.predictedDate, why: params.why || null },
   });
 
   return { prediction, predictor };
@@ -121,115 +132,6 @@ export async function getLeaderboard(limit = 50) {
     })
     .sort((a, b) => a.avgDaysOff - b.avgDaysOff)
     .slice(0, limit);
-}
-
-// Live feed of current (unscored) predictions for the leaderboard page —
-// "what is everyone predicting right now." Leaderboard-ranked predictors'
-// predictions surface first (rank ascending); with real resolution volume
-// this low (~4/month, see MIN_SCORED_FOR_LEADERBOARD above), the
-// leaderboard itself stays empty for long stretches, so this falls back to
-// plain recency rather than going blank whenever nobody has qualified yet.
-// A predictor is capped to MAX_PER_PREDICTOR rows here — without it, one
-// prolific predictor (an agent that predicted on hundreds of projects in a
-// single run, say) would fill the entire feed and crowd out everyone
-// else's predictions. The overflow is surfaced as `moreCount` on that
-// predictor's last shown row, linking to their own /leaderboard/[id] page
-// for the rest instead of listing it all here.
-const MAX_PER_PREDICTOR_IN_FEED = 3;
-
-export async function getTopPredictions(limit = 12) {
-  const leaderboard = await getLeaderboard(50);
-  const rankById = new Map(leaderboard.map((l, i) => [l.id, i]));
-
-  // No `take` cap here (beyond this generous ceiling) — capping the raw
-  // query by recency would risk the fetch itself being dominated by one
-  // predictor's flood before per-predictor capping ever gets a chance to
-  // run, silently hiding everyone else's predictions.
-  const outstanding = await prisma.prediction.findMany({
-    where: { scoredAt: null },
-    include: {
-      predictor: { select: { id: true, displayName: true, agentName: true } },
-      project: { select: { slug: true, name: true } },
-    },
-    orderBy: { submittedAt: "desc" },
-    take: 5000,
-  });
-
-  const mapped = outstanding.map((p) => ({
-    predictorId: p.predictor.id,
-    label: predictorLabel(p.predictor),
-    isAgent: p.predictor.agentName != null,
-    rank: rankById.get(p.predictor.id),
-    projectSlug: p.project.slug,
-    projectName: p.project.name,
-    predictedDate: p.predictedDate.toISOString(),
-    submittedAt: p.submittedAt.toISOString(),
-  }));
-
-  mapped.sort((a, b) => {
-    const ar = a.rank ?? Infinity;
-    const br = b.rank ?? Infinity;
-    if (ar !== br) return ar - br;
-    return b.submittedAt.localeCompare(a.submittedAt);
-  });
-
-  const totalByPredictor = new Map<string, number>();
-  for (const g of mapped) totalByPredictor.set(g.predictorId, (totalByPredictor.get(g.predictorId) ?? 0) + 1);
-
-  const shownByPredictor = new Map<string, number>();
-  const capped: (typeof mapped[number] & { moreCount: number })[] = [];
-  for (const g of mapped) {
-    const shown = shownByPredictor.get(g.predictorId) ?? 0;
-    if (shown >= MAX_PER_PREDICTOR_IN_FEED) continue;
-    shownByPredictor.set(g.predictorId, shown + 1);
-    capped.push({ ...g, moreCount: 0 });
-  }
-
-  const lastIndexByPredictor = new Map<string, number>();
-  capped.forEach((g, i) => lastIndexByPredictor.set(g.predictorId, i));
-  for (const [predictorId, lastIndex] of lastIndexByPredictor) {
-    const total = totalByPredictor.get(predictorId) ?? 0;
-    const shown = shownByPredictor.get(predictorId) ?? 0;
-    if (total > shown) capped[lastIndex].moreCount = total - shown;
-  }
-
-  return capped.slice(0, limit);
-}
-
-// One predictor's full track record — every prediction they've made,
-// scored or still outstanding, with the project it was on. Backs the
-// leaderboard drill-in page (src/app/leaderboard/[id]/page.tsx).
-export async function getPredictorDetail(predictorId: string) {
-  const predictor = await prisma.predictor.findUnique({
-    where: { id: predictorId },
-    select: { id: true, displayName: true, agentName: true, createdAt: true },
-  });
-  if (!predictor) return null;
-
-  const predictions = await prisma.prediction.findMany({
-    where: { predictorId },
-    include: { project: { select: { slug: true, name: true, resolutionDate: true } } },
-    orderBy: { submittedAt: "desc" },
-  });
-
-  const scored = predictions.filter((p) => p.scoredAt != null);
-  const avgDaysOff = scored.length > 0 ? Math.round(scored.reduce((sum, p) => sum + (p.daysOff ?? 0), 0) / scored.length) : null;
-
-  return {
-    label: predictorLabel(predictor),
-    isAgent: predictor.agentName != null,
-    memberSince: predictor.createdAt.toISOString(),
-    scoredCount: scored.length,
-    avgDaysOff,
-    predictions: predictions.map((p) => ({
-      projectSlug: p.project.slug,
-      projectName: p.project.name,
-      predictedDate: p.predictedDate.toISOString(),
-      resolutionDate: p.project.resolutionDate?.toISOString() ?? null,
-      daysOff: p.daysOff,
-      scored: p.scoredAt != null,
-    })),
-  };
 }
 
 // Called once, right after upsertNormalizedProject (common.ts) sets a

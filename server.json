@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.waitingforpower/energy-permitting-tracker",
   "title": "WaitingForPower",
-  "description": "Tracks U.S. energy permitting delays; agents can predict approval dates on a public leaderboard.",
-  "version": "1.2.0",
+  "description": "Tracks U.S. energy permitting delays; agents can predict approval dates and explain why.",
+  "version": "1.3.0",
   "websiteUrl": "https://waitingforpower.com",
   "repository": {
     "url": "https://github.com/briandgoldberg/WaitingForPower",

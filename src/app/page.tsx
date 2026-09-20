@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getRecentChanges } from "@/lib/changes";
 import { ChangesFeed } from "@/components/ChangesFeed";
+import { CommunityFeed } from "@/components/CommunityFeed";
+import { getCommunityFeed } from "@/lib/community";
 import { StateFeedFilter } from "@/components/StateFeedFilter";
 import { FeedSubscribeBox } from "@/components/FeedSubscribeBox";
 import { STATE_NAMES, stateName } from "@/lib/data/usStates";
@@ -49,13 +51,15 @@ const ALERT_MESSAGES: Record<string, string> = {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string; alert?: string }>;
+  searchParams: Promise<{ state?: string; alert?: string; feed?: string }>;
 }) {
-  const { state: stateParam, alert } = await searchParams;
+  const { state: stateParam, alert, feed: feedParam } = await searchParams;
+  const feed = feedParam === "people" ? "people" : "changes";
   const state = stateParam && stateParam.toUpperCase() in STATE_NAMES ? stateParam.toUpperCase() : null;
   const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
 
-  const { changes, hasMore } = await getRecentChanges(50, 0, state);
+  const { changes, hasMore } = feed === "changes" ? await getRecentChanges(50, 0, state) : { changes: [], hasMore: false };
+  const community = feed === "people" ? await getCommunityFeed(0, 20) : { items: [], hasMore: false };
   // Passed down instead of letting ChangesFeed call `new Date()` itself —
   // see ChangesFeed's `now` prop comment for the hydration mismatch this
   // fixes.
@@ -107,25 +111,55 @@ export default async function HomePage({
 
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)] whitespace-nowrap">
-              Recent changes{state && ` in ${stateName(state)}`}
-            </h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              <StateFeedFilter state={state} />
-              <FeedSubscribeBox state={state} />
+            <div className="flex gap-1.5 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit">
+              <FeedTab href={state ? `/?state=${state}` : "/"} active={feed === "changes"}>
+                What&rsquo;s changing
+              </FeedTab>
+              <FeedTab href="/?feed=people" active={feed === "people"}>
+                What people think
+              </FeedTab>
             </div>
+            {feed === "changes" && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <StateFeedFilter state={state} />
+                <FeedSubscribeBox state={state} />
+              </div>
+            )}
           </div>
+          <p className="text-xs text-[var(--muted)]">
+            {feed === "changes"
+              ? `Recent project changes${state ? ` in ${stateName(state)}` : ""}`
+              : "Predictions and comments from people and AI agents"}
+          </p>
         </div>
 
-        {/* key={state}: ChangesFeed seeds its own state from initialChanges
-            via useState's lazy initializer, which only runs once on mount —
-            a client-side navigation to a new ?state= otherwise leaves the
-            old filtered list on screen even though this server component
-            re-rendered with fresh data (confirmed live: the "Recent changes
-            in New York" heading updated but the cards below didn't). Keying
-            by state forces a real remount when the filter changes. */}
-        <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
+        {feed === "changes" ? (
+          /* key={state}: ChangesFeed seeds its own state from initialChanges
+             via useState's lazy initializer, which only runs once on mount —
+             a client-side navigation to a new ?state= otherwise leaves the
+             old filtered list on screen even though this server component
+             re-rendered with fresh data. Keying by state forces a real
+             remount when the filter changes. */
+          <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
+        ) : (
+          <CommunityFeed initialItems={community.items} initialHasMore={community.hasMore} now={now} />
+        )}
       </div>
     </>
+  );
+}
+
+function FeedTab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+        active ? "bg-[var(--panel)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--text-secondary)]"
+      }`}
+      style={active ? { color: "var(--accent)" } : undefined}
+    >
+      {children}
+    </Link>
   );
 }

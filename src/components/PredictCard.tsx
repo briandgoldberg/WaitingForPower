@@ -1,23 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { PredictorIcon } from "./PredictorIcon";
+import { SaveProfilePrompt, shouldOfferSaveProfile } from "./SaveProfilePrompt";
+import {
+  DISCUSSION_CHANGED_EVENT,
+  IDENTITY_CHANGED_EVENT,
+  getOrCreatePredictorKey,
+  getStoredNickname,
+  storeNickname,
+} from "@/lib/clientIdentity";
 
-// Zero-friction identity, same pattern as this site's other no-login
-// features (the old GreenlightVote's voterKey): a random id the browser
-// generates once and keeps in localStorage. Never a login — only ever
-// upgraded to a real email if the person opts into "save my profile"
-// after they've already predicted (see the two-step flow below).
-function getOrCreatePredictorKey(): string {
-  const key = "wfp_predictor_key";
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
-  return id;
-}
+const MAX_WHY = 500;
 
 function predictionKey(projectId: string): string {
   return `wfp_prediction_${projectId}`;
@@ -35,34 +29,29 @@ function formatDate(iso: string): string {
 }
 
 // Collapsed-by-default so the page doesn't read as long, but the closed
-// state is a bold single CTA button rather than a quiet link — clicking it
-// reveals the compact name/date/submit row. Two-step flow beyond that,
-// deliberately in this order: (1) let someone predict immediately, no
-// barrier at all — the whole point is to get a real commitment locked in
-// before ever asking for anything; (2) only once that's done, offer to
-// save it under an email so it survives a device change instead of living
-// only in this browser's localStorage. Skipping step 2 costs nothing — the
-// prediction already counts either way.
+// state is a bold single CTA button rather than a quiet link. Two-step flow
+// beyond that, deliberately in this order: (1) let someone predict
+// immediately, no barrier at all; (2) only once that's done, offer to save
+// it under an email so it survives a device change. Skipping step 2 costs
+// nothing — the prediction already counts either way.
 export function PredictCard({ projectId }: { projectId: string }) {
   const [predictorKey, setPredictorKey] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [predictedDate, setPredictedDate] = useState("");
   const [nickname, setNickname] = useState("");
+  const [why, setWhy] = useState("");
   const [myPrediction, setMyPrediction] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<PredictionEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
-  const [saveEmail, setSaveEmail] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   // Deferred via setTimeout rather than called synchronously in the effect
-  // body, to avoid a cascading-render lint error — same pattern the old
-  // GreenlightVote widget used for the same reason.
+  // body, to avoid a cascading-render lint error.
   useEffect(() => {
     const t = setTimeout(() => {
       setPredictorKey(getOrCreatePredictorKey());
-      setNickname(localStorage.getItem("wfp_predictor_nickname") ?? "");
+      setNickname(getStoredNickname());
       const stored = localStorage.getItem(predictionKey(projectId));
       if (stored) setMyPrediction(stored);
     }, 0);
@@ -76,14 +65,20 @@ export function PredictCard({ projectId }: { projectId: string }) {
         // Non-critical — the predict form still works without the prediction list.
       });
 
-    return () => clearTimeout(t);
+    const syncName = () => setNickname((prev) => prev || getStoredNickname());
+    window.addEventListener(IDENTITY_CHANGED_EVENT, syncName);
+
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener(IDENTITY_CHANGED_EVENT, syncName);
+    };
   }, [projectId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!predictorKey) return;
     if (!nickname.trim()) {
-      setError("Enter a name — it's how you'll show up on the leaderboard.");
+      setError("Enter a name so people know who predicted.");
       return;
     }
     if (!predictedDate) {
@@ -101,6 +96,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
           predictedDate,
           anonymousKey: predictorKey,
           displayName: nickname.trim(),
+          why: why.trim(),
         }),
       });
       const data = await res.json();
@@ -109,40 +105,22 @@ export function PredictCard({ projectId }: { projectId: string }) {
         return;
       }
       localStorage.setItem(predictionKey(projectId), data.predictedDate);
-      localStorage.setItem("wfp_predictor_nickname", nickname.trim());
+      storeNickname(nickname.trim());
       setMyPrediction(data.predictedDate);
       // Only nag once, ever, per browser — not on every project someone
       // predicts on.
-      if (!data.hasSavedProfile && !localStorage.getItem("wfp_predictor_email_sent")) {
-        setShowSavePrompt(true);
-      }
+      if (shouldOfferSaveProfile(data.hasSavedProfile)) setShowSavePrompt(true);
       const label = nickname.trim();
-      setPredictions((prev) => [...prev.filter((p) => p.label !== label), { label, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) => a.predictedDate.localeCompare(b.predictedDate)));
+      setPredictions((prev) =>
+        [...prev.filter((p) => p.label !== label), { label, isAgent: false, predictedDate: data.predictedDate, submittedAt: new Date().toISOString() }].sort((a, b) =>
+          a.predictedDate.localeCompare(b.predictedDate),
+        ),
+      );
+      if (why.trim()) window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleSaveProfile(e: React.FormEvent) {
-    e.preventDefault();
-    if (!predictorKey || !saveEmail) return;
-    setSaveStatus("sending");
-    try {
-      const res = await fetch("/api/predictions/save-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anonymousKey: predictorKey, email: saveEmail }),
-      });
-      if (!res.ok) {
-        setSaveStatus("error");
-        return;
-      }
-      localStorage.setItem("wfp_predictor_email_sent", "1");
-      setSaveStatus("sent");
-    } catch {
-      setSaveStatus("error");
     }
   }
 
@@ -167,7 +145,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
       ) : (
         <>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="text-sm font-semibold">Predict when this project is approved</h2>
+            <h3 className="text-sm font-semibold">Predict when this project is approved</h3>
             <span className="text-[10px] text-[var(--muted)]">No sign-in needed</span>
           </div>
 
@@ -198,6 +176,17 @@ export function PredictCard({ projectId }: { projectId: string }) {
                   className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
                 />
               </div>
+              <div className="w-full">
+                <label className="text-[10px] text-[var(--muted)] block mb-0.5">Why? (optional)</label>
+                <textarea
+                  value={why}
+                  onChange={(e) => setWhy(e.target.value)}
+                  maxLength={MAX_WHY}
+                  rows={2}
+                  placeholder="What makes you think so?"
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm resize-none"
+                />
+              </div>
               <button
                 type="submit"
                 disabled={loading}
@@ -209,40 +198,13 @@ export function PredictCard({ projectId }: { projectId: string }) {
             </form>
           )}
 
-          {showSavePrompt && saveStatus !== "sent" && (
-            <form onSubmit={handleSaveProfile} className="mt-2 pt-2 border-t border-[var(--border)] flex items-end gap-2 flex-wrap">
-              <div className="flex-1 min-w-[160px]">
-                <label className="text-[10px] text-[var(--muted)] block mb-0.5">Save your streak to an email? (optional)</label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={saveEmail}
-                  onChange={(e) => setSaveEmail(e.target.value)}
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={saveStatus === "sending"}
-                className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-60"
-              >
-                {saveStatus === "sending" ? "Sending…" : "Send link"}
-              </button>
-              {saveStatus === "error" && <p className="text-xs text-red-600 dark:text-red-400 w-full">Couldn&rsquo;t send that — try again.</p>}
-            </form>
-          )}
-          {saveStatus === "sent" && (
-            <p className="text-xs text-[var(--muted)] mt-2 pt-2 border-t border-[var(--border)]">
-              Check your email for a link to confirm.
-            </p>
-          )}
+          {showSavePrompt && predictorKey && <SaveProfilePrompt anonymousKey={predictorKey} />}
 
           {predictions.length > 0 && (
             <div className="mt-2 pt-2 border-t border-[var(--border)]">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[10px] text-[var(--muted)]">{predictions.length} prediction{predictions.length === 1 ? "" : "s"} so far</p>
-                <Link href="/leaderboard" className="text-[10px] underline text-[var(--accent)]">leaderboard</Link>
-              </div>
+              <p className="text-[10px] text-[var(--muted)] mb-1">
+                {predictions.length} prediction{predictions.length === 1 ? "" : "s"} so far
+              </p>
               <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
                 {predictions.map((p, i) => (
                   <div key={`${p.label}-${i}`} className="flex items-center gap-1.5 text-xs">

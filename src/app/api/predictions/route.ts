@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { submitPrediction, getProjectPredictions, PredictionError } from "@/lib/predictions";
+import { submitPrediction, getProjectPredictions, PredictionError, MAX_WHY_LENGTH } from "@/lib/predictions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +20,18 @@ export async function POST(req: NextRequest) {
   const anonymousKey = String(body.anonymousKey ?? "").trim();
   const predictedDateRaw = String(body.predictedDate ?? "").trim();
   const displayName = String(body.displayName ?? "").trim();
+  const why = String(body.why ?? "").trim();
 
   if (!projectId || !anonymousKey || !predictedDateRaw) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
-  // A leaderboard entry needs a name to actually be one — unlike the old
-  // "optional nickname," this is required so "anonymous" never shows up
-  // as a leaderboard identity (email, kept separate, stays optional).
+  // A name is required so "anonymous" never shows up as an identity
+  // (email, kept separate, stays optional).
   if (displayName.length === 0 || displayName.length > 40) {
     return NextResponse.json({ error: "Enter a name (up to 40 characters)." }, { status: 400 });
+  }
+  if (why.length > MAX_WHY_LENGTH) {
+    return NextResponse.json({ error: `Keep your reason under ${MAX_WHY_LENGTH} characters.` }, { status: 400 });
   }
   // A random client-generated key, not a guessable id — same shape as this
   // site's other anonymous, no-login features (see GreenlightVote's old
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
   const predictedDate = new Date(predictedDateRaw);
 
   try {
-    const { prediction, predictor } = await submitPrediction({ projectId, predictedDate, anonymousKey, displayName });
+    const { prediction, predictor } = await submitPrediction({ projectId, predictedDate, anonymousKey, displayName, why: why || undefined });
     return NextResponse.json({
       ok: true,
       predictedDate: prediction.predictedDate.toISOString(),

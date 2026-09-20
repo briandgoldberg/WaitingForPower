@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ProjectDTO } from "@/lib/types";
 import { yearsBetween, type ProjectOutcome } from "@/lib/projectOutcome";
 
@@ -16,18 +17,24 @@ const TONES = {
     box: "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30",
     badge: "bg-emerald-600 text-white",
     title: "text-emerald-800 dark:text-emerald-300",
+    stat: "text-emerald-900 dark:text-emerald-200",
+    rule: "border-emerald-300/70 dark:border-emerald-800",
     icon: "✓",
   },
   cancelled: {
     box: "border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30",
     badge: "bg-rose-600 text-white",
     title: "text-rose-800 dark:text-rose-300",
+    stat: "text-rose-900 dark:text-rose-200",
+    rule: "border-rose-300/70 dark:border-rose-900",
     icon: "✕",
   },
   no_longer_reported: {
     box: "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30",
     badge: "bg-amber-500 text-white",
     title: "text-amber-800 dark:text-amber-300",
+    stat: "text-amber-900 dark:text-amber-200",
+    rule: "border-amber-300/70 dark:border-amber-800",
     icon: "!",
   },
 } as const;
@@ -39,12 +46,16 @@ export function OutcomeBanner({
   project: p,
   outcome,
   observedAt,
+  stats,
 }: {
   project: ProjectDTO;
   outcome: Exclude<ProjectOutcome, "pending">;
   // When we first saw this project resolved. Only used as an estimate, and
   // only when the source didn't publish a real resolution date.
   observedAt?: string | null;
+  // Headline numbers shown on the same row as the outcome, so an approved or
+  // cancelled project reads as one block instead of a banner plus cards.
+  stats?: { label: string; value: string; href?: string }[];
 }) {
   const tone = TONES[outcome];
   const waited = yearsBetween(p.applicationFiledDate, p.resolutionDate);
@@ -79,17 +90,40 @@ export function OutcomeBanner({
   }
 
   return (
-    <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${tone.box}`} role="status">
-      <span
-        aria-hidden
-        className={`shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-lg font-bold ${tone.badge}`}
-      >
-        {tone.icon}
-      </span>
-      <div className="min-w-0">
-        <div className={`text-xl font-bold leading-tight ${tone.title}`}>{title}</div>
-        {facts.length > 0 && <div className="text-sm text-[var(--text-secondary)] mt-0.5">{facts.join(" · ")}</div>}
+    <div
+      className={`rounded-xl border px-4 py-3 flex flex-col md:flex-row md:items-center gap-3 md:gap-6 ${tone.box}`}
+      role="status"
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <span
+          aria-hidden
+          className={`shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-lg font-bold ${tone.badge}`}
+        >
+          {tone.icon}
+        </span>
+        <div className="min-w-0">
+          <div className={`text-xl font-bold leading-tight ${tone.title}`}>{title}</div>
+          {facts.length > 0 && <div className="text-sm text-[var(--text-secondary)] mt-0.5">{facts.join(" · ")}</div>}
+        </div>
       </div>
+      {stats && stats.length > 0 && (
+        <div className={`flex flex-wrap gap-x-7 gap-y-2 pt-3 md:pt-0 md:pl-6 border-t md:border-t-0 md:border-l ${tone.rule}`}>
+          {stats.map((st) => (
+            <div key={st.label} className="min-w-0">
+              <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                {st.href ? (
+                  <Link href={st.href} className="hover:underline">
+                    {st.label}
+                  </Link>
+                ) : (
+                  st.label
+                )}
+              </div>
+              <div className={`text-xl font-bold tabular-nums leading-tight ${tone.stat}`}>{st.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

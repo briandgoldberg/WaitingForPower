@@ -218,8 +218,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         )}
     </>
   );
-  const timelineContent = (
-    <>
+  const timelineContent =
+    p.milestones.length > 0 ? (
+      <>
           <ul className="flex flex-col gap-3">
             {p.milestones.map((m, i) => (
               <li key={i} className="flex gap-3 text-sm">
@@ -237,11 +238,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           {p.milestones.some((m) => m.dateConfidence === "approximate") && (
             <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
           )}
-    </>
-  );
+      </>
+    ) : (
+      <p className="text-sm text-[var(--text-secondary)]">No milestones recorded yet.</p>
+    );
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
-    ...(p.milestones.length > 0 ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
+    ...(p.milestones.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Take action",
@@ -307,17 +310,24 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
 
       {outcome !== "pending" && (
-        <OutcomeBanner project={p} outcome={outcome} observedAt={observed ? observed.createdAt.toISOString() : null} />
+        <OutcomeBanner
+          project={p}
+          outcome={outcome}
+          observedAt={observed ? observed.createdAt.toISOString() : null}
+          stats={resolved ? primaryCards : undefined}
+        />
       )}
 
-      <div
-        className={`grid gap-2 sm:gap-3 ${primaryCards.length === 1 ? "sm:max-w-xs" : ""}`}
-        style={{ gridTemplateColumns: `repeat(${primaryCards.length}, minmax(0, 1fr))` }}
-      >
-        {primaryCards.map((c) => (
-          <PrimaryStat key={c.label} {...c} tone={outcome === "approved" ? "approved" : outcome === "cancelled" ? "cancelled" : "accent"} />
-        ))}
-      </div>
+      {!resolved && (
+        <div
+          className={`grid gap-2 sm:gap-3 ${primaryCards.length === 1 ? "sm:max-w-xs" : ""}`}
+          style={{ gridTemplateColumns: `repeat(${primaryCards.length}, minmax(0, 1fr))` }}
+        >
+          {primaryCards.map((c) => (
+            <PrimaryStat key={c.label} {...c} />
+          ))}
+        </div>
+      )}
 
       <SectionPills sections={sections} />
 
@@ -330,27 +340,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
 // The three headline numbers: filled and larger than the secondary Stat
 // cards so they read first.
-const PRIMARY_TONES = {
-  accent: "bg-[var(--accent)]",
-  approved: "bg-emerald-700 dark:bg-emerald-800",
-  cancelled: "bg-rose-800 dark:bg-rose-900",
-} as const;
-
 function PrimaryStat({
   label,
   value,
   href,
   note,
-  tone,
 }: {
   label: string;
   value: string;
   href?: string;
   note?: string;
-  tone: keyof typeof PRIMARY_TONES;
 }) {
   return (
-    <div className={`rounded-xl ${PRIMARY_TONES[tone]} text-white p-3 sm:p-4 flex flex-col justify-between min-w-0`}>
+    <div className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
       <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75">
         {href ? (
           <Link href={href} className="hover:underline">

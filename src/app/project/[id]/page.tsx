@@ -115,7 +115,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   // sense for a project still in permitting, so a resolved project shows what
   // it waited instead, and drops the investment card when it can't be
   // estimated.
-  const primaryCards: { label: string; value: string; href?: string; note?: string }[] = [
+  const primaryCards: { label: string; value: string; href?: string; note?: string; est?: boolean }[] = [
     { label: "Capacity", value: formatCapacity(p.capacityValue, p.capacityUnit) },
   ];
   if (resolved) {
@@ -131,7 +131,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       });
     }
     if (outcome === "approved" && p.investmentWaiting.applicable) {
-      primaryCards.push({ label: "Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
+      primaryCards.push({ label: "Investment", est: true, value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
     }
     const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
     if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", value: lastStage });
@@ -139,8 +139,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     primaryCards.push({ label: "Waiting", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
     primaryCards.push(
       p.investmentWaiting.applicable
-        ? { label: "Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
-        : { label: "Investment", value: "—", note: "Estimated only for MW capacity" },
+        ? { label: "Investment", est: true, value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
+        : { label: "Investment", est: true, value: "—", note: "Estimated only for MW capacity" },
     );
   }
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
@@ -345,11 +345,13 @@ function PrimaryStat({
   value,
   href,
   note,
+  est,
 }: {
   label: string;
   value: string;
   href?: string;
   note?: string;
+  est?: boolean;
 }) {
   return (
     <div className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
@@ -361,6 +363,7 @@ function PrimaryStat({
         ) : (
           label
         )}
+        {est && <span className="ml-1 normal-case tracking-normal whitespace-nowrap opacity-70">est.</span>}
       </div>
       {/* Longer text like "Not disclosed" is set smaller on phones so it wraps between words, not inside one. */}
       <div className={`${value.length > 9 ? "text-base" : "text-xl"} sm:text-3xl font-bold tabular-nums mt-1`}>{value}</div>

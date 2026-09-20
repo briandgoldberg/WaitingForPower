@@ -361,7 +361,7 @@ function PrimaryStat({
         )}
       </div>
       {/* Longer text like "Not disclosed" is set smaller on phones so it wraps between words, not inside one. */}
-      <div className={`${value.length > 9 ? "text-base" : "text-xl"} sm:text-3xl font-bold tabular-nums mt-1`}>{value}</div>
+      <div className={`${value.length > 9 ? "text-base" : value.length > 7 ? "text-lg whitespace-nowrap" : "text-xl"} sm:text-3xl font-bold tabular-nums mt-1`}>{value}</div>
       {note && (
         <div title={note} className="text-[10px] leading-snug text-white/75 mt-1 line-clamp-2">
           {note}

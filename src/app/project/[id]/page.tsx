@@ -122,7 +122,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     // then, for cancelled, the last stage reached. Each slot is dropped when
     // unknown. No investment figure once a project is resolved.
     if (waitedYears != null) {
-      primaryCards.push({ label: "Waited", value: `${waitedYears.toFixed(1)} yrs` });
+      primaryCards.push({ label: "Time Pending", value: `${waitedYears.toFixed(1)} yrs` });
     } else if (p.applicationFiledDate) {
       primaryCards.push({
         label: "Filed",
@@ -132,7 +132,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
     if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", value: lastStage });
   } else {
-    primaryCards.push({ label: "Waiting", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
+    primaryCards.push({ label: "Time Pending", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
     primaryCards.push(
       p.investmentWaiting.applicable
         ? { label: "Deferred Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }

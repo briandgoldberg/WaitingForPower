@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PredictorIcon } from "./PredictorIcon";
 import { SaveProfilePrompt, shouldOfferSaveProfile } from "./SaveProfilePrompt";
+import { SignInLink } from "./SignInLink";
 import {
   DISCUSSION_CHANGED_EVENT,
   IDENTITY_CHANGED_EVENT,
@@ -120,7 +121,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
           a.predictedDate.localeCompare(b.predictedDate),
         ),
       );
-      if (why.trim()) window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
+      window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {
@@ -128,7 +129,11 @@ export function PredictCard({ projectId }: { projectId: string }) {
     }
   }
 
-  const open = expanded || myPrediction != null;
+  // A signed-in profile on a new device has no local record of predicting, so
+  // also find it in the server's list by its (unique, locked) name.
+  const mineOnServer = lockedName ? predictions.find((p) => !p.isAgent && p.label === lockedName)?.predictedDate ?? null : null;
+  const shownPrediction = myPrediction ?? mineOnServer;
+  const open = expanded || shownPrediction != null;
   const countText = predictions.length > 0 ? `${predictions.length} prediction${predictions.length === 1 ? "" : "s"}` : null;
 
   return (
@@ -147,9 +152,9 @@ export function PredictCard({ projectId }: { projectId: string }) {
             Predict
           </button>
         </div>
-      ) : myPrediction ? (
+      ) : shownPrediction ? (
         <p className="text-sm">
-          🔮 Your prediction: <strong>{formatDate(myPrediction)}</strong>
+          🔮 Your prediction: <strong>{formatDate(shownPrediction)}</strong>
           {countText && <span className="text-xs text-[var(--muted)]"> · {countText}</span>}
         </p>
       ) : (
@@ -197,6 +202,7 @@ export function PredictCard({ projectId }: { projectId: string }) {
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm"
           />
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {!lockedName && <SignInLink />}
         </form>
       )}
 

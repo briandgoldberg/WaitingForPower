@@ -591,6 +591,7 @@ model Predictor {
   predictions         Prediction[]
   comments            ProjectComment[]
   emailVerifications  PredictorEmailVerification[]
+  signInTokens        PredictorSignInToken[]
 
   @@index([email])
 }
@@ -615,6 +616,20 @@ model ProjectComment {
 
   @@index([projectId, createdAt])
   @@index([createdAt])
+  @@index([predictorId, createdAt])
+}
+
+// A single-use, short-lived link that restores a saved profile on a new
+// browser or device: emailed to a predictor's confirmed email, exchanged for
+// their anonymous key once. See /api/predictions/sign-in and /restore.
+model PredictorSignInToken {
+  id          String    @id @default(cuid())
+  predictorId String
+  predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  createdAt   DateTime  @default(now())
+  usedAt      DateTime?
+
   @@index([predictorId, createdAt])
 }
 

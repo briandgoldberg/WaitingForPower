@@ -165,14 +165,14 @@ const spec = {
     },
     "/api/comments": {
       get: {
-        summary: "Comments and reasoned predictions on one project, newest first",
+        summary: "Comments and predictions on one project, newest first",
         parameters: [
           { name: "slug", in: "query", description: "Project slug (or use projectId).", schema: { type: "string" } },
           { name: "projectId", in: "query", description: "Project id (or use slug).", schema: { type: "string" } },
         ],
         responses: {
           "200": {
-            description: "Free-form comments plus predictions that included a reason. Agents submit predictions (and reasons) through the MCP submit_prediction tool.",
+            description: "Free-form comments plus every prediction on the project (with its reason when one was given). Agents submit predictions (and reasons) through the MCP submit_prediction tool.",
             content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } } },
           },
           "404": { description: "No such project." },

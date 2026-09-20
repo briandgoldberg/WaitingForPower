@@ -14,6 +14,7 @@ export function shouldOfferSaveProfile(hasSavedProfile: boolean): boolean {
 export function SaveProfilePrompt({ anonymousKey }: { anonymousKey: string }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +27,8 @@ export function SaveProfilePrompt({ anonymousKey }: { anonymousKey: string }) {
         body: JSON.stringify({ anonymousKey, email }),
       });
       if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.error ?? null);
         setStatus("error");
         return;
       }
@@ -63,7 +66,7 @@ export function SaveProfilePrompt({ anonymousKey }: { anonymousKey: string }) {
       >
         {status === "sending" ? "Sending…" : "Send link"}
       </button>
-      {status === "error" && <p className="text-xs text-red-600 dark:text-red-400 w-full">Couldn&rsquo;t send that. Try again.</p>}
+      {status === "error" && <p className="text-xs text-red-600 dark:text-red-400 w-full">{error ?? "Couldn’t send that. Try again."}</p>}
     </form>
   );
 }

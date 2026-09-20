@@ -147,15 +147,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Stat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} accentColor={fuel?.color} />
-        <Stat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
-        <Stat
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <PrimaryStat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} />
+        <PrimaryStat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
+        <PrimaryStat
           label="Est. investment waiting"
           value={p.investmentWaiting.applicable ? formatUsd(p.investmentWaiting.estimatedUsd!) : "—"}
-          sub={p.investmentWaiting.applicable ? undefined : ["Not estimated"]}
           href="/methodology"
         />
+      </div>
+
+      <div className="flex flex-wrap gap-3">
         <Stat
           label="Stage"
           value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
@@ -163,9 +165,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             (x): x is string => Boolean(x),
           )}
         />
-        {p.balancingAuthority && <Stat label="Grid region" value={p.balancingAuthority} />}
+        {(p.balancingAuthority || p.pointOfInterconnection) && (
+          <Stat
+            label={p.balancingAuthority ? "Grid region" : "Point of interconnection"}
+            value={(p.balancingAuthority ?? p.pointOfInterconnection)!}
+            sub={p.balancingAuthority && p.pointOfInterconnection ? [`Point of interconnection: ${p.pointOfInterconnection}`] : undefined}
+          />
+        )}
         {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
-        {p.pointOfInterconnection && <Stat label="Point of interconnection" value={p.pointOfInterconnection} />}
         {p.expectedOnlineDate && (
           <Stat
             label="Expected online"
@@ -225,11 +232,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </section>
       )}
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <h2 className="text-base font-semibold text-[var(--accent)]">Sources</h2>
+      <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
+        <ProjectDiscussion projectId={p.id} />
+      </section>
+
+      <section aria-label="Sources" className="px-1 text-[11px] leading-snug text-[var(--muted)]">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="font-semibold uppercase tracking-wide text-[10px]">Sources</span>
           <span
-            className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 ${
+            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] ${
               p.verificationStatus === "user_submitted_pending"
                 ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
                 : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
@@ -238,26 +249,37 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             {p.verificationStatus === "user_submitted_pending" ? "⏳" : "✓"}{" "}
             {VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")}
           </span>
-        </div>
-        <ul className="flex flex-col gap-1.5 text-sm">
-          {p.sources.map((s) => (
-            <li key={s.url}>
-              <a href={s.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
-                {s.label}
-              </a>
-            </li>
+          {p.sources.map((src) => (
+            <a key={src.url} href={src.url} target="_blank" rel="noreferrer" className="underline">
+              {src.label}
+            </a>
           ))}
-        </ul>
+        </div>
         {p.dataQualityNote && (
-          <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs text-[var(--muted)]">
+          <p className="mt-1">
             <strong>Data quality note:</strong> {p.dataQualityNote}
-          </div>
+          </p>
         )}
       </section>
+    </div>
+  );
+}
 
-      <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
-        <ProjectDiscussion projectId={p.id} />
-      </section>
+// The three headline numbers: filled and larger than the secondary Stat
+// cards so they read first.
+function PrimaryStat({ label, value, href }: { label: string; value: string; href?: string }) {
+  return (
+    <div className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
+      <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75">
+        {href ? (
+          <Link href={href} className="hover:underline">
+            {label}
+          </Link>
+        ) : (
+          label
+        )}
+      </div>
+      <div className="text-xl sm:text-3xl font-bold tabular-nums mt-1 break-words">{value}</div>
     </div>
   );
 }

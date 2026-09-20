@@ -46,6 +46,8 @@ const ALERT_MESSAGES: Record<string, string> = {
   confirmed: "You're subscribed — we'll email you weekly with updates.",
   unsubscribed: "You've been unsubscribed from weekly feed updates.",
   invalid: "That link has expired or was already used.",
+  "profile-saved": "Email confirmed. Your name and history are saved.",
+  "email-taken": "That email already has a saved profile. Sign in with it instead.",
 };
 
 export default async function HomePage({

@@ -34,12 +34,12 @@ export async function POST(req: NextRequest) {
   // which the UI shouldn't allow reaching this step for.
   const predictor = await prisma.predictor.findUnique({ where: { anonymousKey } });
   if (!predictor) {
-    return NextResponse.json({ error: "Submit a prediction first." }, { status: 400 });
+    return NextResponse.json({ error: "Post a prediction or comment first." }, { status: 400 });
   }
 
   const existingOwner = await prisma.predictor.findUnique({ where: { email } });
   if (existingOwner && existingOwner.id !== predictor.id) {
-    return NextResponse.json({ error: "That email is already saved to a different prediction history." }, { status: 409 });
+    return NextResponse.json({ error: "That email already has a saved profile. Sign in with it instead." }, { status: 409 });
   }
 
   const token = generateSubscriptionToken();

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PredictorIcon } from "./PredictorIcon";
 import { SaveProfilePrompt, shouldOfferSaveProfile } from "./SaveProfilePrompt";
+import { SignInLink } from "./SignInLink";
 import {
   DISCUSSION_CHANGED_EVENT,
   IDENTITY_CHANGED_EVENT,
@@ -29,8 +30,8 @@ function formatDate(iso: string): string {
 }
 
 // The comment thread at the bottom of a project page, like a news article:
-// predictions that came with a "why" appear here automatically, next to
-// free-form comments. Same identity as predicting: an anonymous browser key
+// every prediction appears here automatically (with its "why" when it has
+// one), next to free-form comments. Same identity as predicting: an anonymous browser key
 // plus a name that's asked for once and then locked, with an optional email
 // to save the profile.
 export function ProjectDiscussion({ projectId }: { projectId: string }) {
@@ -149,6 +150,7 @@ export function ProjectDiscussion({ projectId }: { projectId: string }) {
           </button>
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+        {!lockedName && <SignInLink />}
       </form>
 
       {showSavePrompt && key && <SaveProfilePrompt anonymousKey={key} />}

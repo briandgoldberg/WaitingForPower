@@ -38,3 +38,38 @@ export async function sendPredictorVerificationEmail(params: {
   }
   return { ok: true };
 }
+
+export async function sendPredictorSignInEmail(params: {
+  to: string;
+  token: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error("RESEND_API_KEY is not set, cannot send predictor sign-in email.");
+    return { ok: false, error: "not_configured" };
+  }
+  const resend = new Resend(apiKey);
+
+  const url = `https://waitingforpower.com/restore?token=${params.token}`;
+
+  const html = `
+    <p>Use this link to sign back in to your WaitingForPower name and history. It works once and expires in 30 minutes.</p>
+    <p><a href="${url}">Sign in</a></p>
+    <p style="color:#666;font-size:13px;">If you didn't ask for this, you can ignore this email.</p>
+  `;
+  const text = `Use this link to sign back in to your WaitingForPower name and history. It works once and expires in 30 minutes.\n\n${url}\n\nIf you didn't ask for this, you can ignore this email.`;
+
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: params.to,
+    subject: "Sign in to WaitingForPower",
+    text,
+    html,
+  });
+
+  if (error) {
+    console.error("Resend error (predictor sign-in):", error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}

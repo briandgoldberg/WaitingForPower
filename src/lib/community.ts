@@ -82,7 +82,8 @@ export async function submitComment(params: {
 }
 
 // Everything people have said on one project, newest first: free comments
-// plus predictions that included a "why".
+// plus every prediction, each shown as it would be if posted today (name,
+// when it was actually made, predicted date, and the "why" when there is one).
 export async function getProjectDiscussion(projectId: string, limit = 100): Promise<DiscussionItem[]> {
   const [comments, predictions] = await Promise.all([
     prisma.projectComment.findMany({
@@ -92,7 +93,7 @@ export async function getProjectDiscussion(projectId: string, limit = 100): Prom
       take: limit,
     }),
     prisma.prediction.findMany({
-      where: { projectId, why: { not: null } },
+      where: { projectId },
       include: { predictor: { select: { displayName: true, agentName: true } } },
       orderBy: { submittedAt: "desc" },
       take: limit,
@@ -124,7 +125,8 @@ export async function getProjectDiscussion(projectId: string, limit = 100): Prom
 }
 
 // The home "What people think" feed: every comment, every human prediction,
-// every prediction with a "why", and a few of each agent's own predictions.
+// every prediction with a "why", and a few of each agent's own predictions
+// (an agent can have thousands, so it is capped here but not on a project page).
 // Each source is fetched to offset+limit rows so the merged top-K is exact.
 export async function getCommunityFeed(offset = 0, limit = 20): Promise<{ items: CommunityFeedItem[]; hasMore: boolean }> {
   const need = offset + limit + 1;

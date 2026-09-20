@@ -14,6 +14,11 @@ export function getOrCreatePredictorKey(): string {
   return id;
 }
 
+// Used by the emailed sign-in link to restore a saved profile on this browser.
+export function setPredictorKey(key: string): void {
+  localStorage.setItem(KEY_STORAGE, key);
+}
+
 export function getStoredNickname(): string {
   return localStorage.getItem(NICKNAME_STORAGE) ?? "";
 }

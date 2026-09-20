@@ -159,28 +159,30 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         />
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Stat
+      <div
+        className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 grid gap-x-5 gap-y-4"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
+      >
+        <Detail
           label="Stage"
           value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
-          sub={[p.interconnectionQueueStage && `Queue stage: ${p.interconnectionQueueStage}`, p.queueCluster && `Queue cluster: ${p.queueCluster}`].filter(
-            (x): x is string => Boolean(x),
-          )}
+          rows={[
+            p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
+            p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
+          ]}
         />
-        {p.balancingAuthority && p.pointOfInterconnection ? (
-          <Stat
-            label="Grid region and point of interconnection"
+        {p.balancingAuthority ? (
+          <Detail
+            label="Grid region"
             value={p.balancingAuthority}
-            sub={[`Point of interconnection: ${p.pointOfInterconnection}`]}
+            rows={[p.pointOfInterconnection ? ["Point of interconnection", p.pointOfInterconnection] : null]}
           />
-        ) : p.balancingAuthority ? (
-          <Stat label="Grid region" value={p.balancingAuthority} />
         ) : p.pointOfInterconnection ? (
-          <Stat label="Point of interconnection" value={p.pointOfInterconnection} />
+          <Detail label="Point of interconnection" value={p.pointOfInterconnection} />
         ) : null}
-        {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
+        {p.primeMoverCode && <Detail label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
         {p.expectedOnlineDate && (
-          <Stat
+          <Detail
             label="Expected online"
             value={`${new Date(p.expectedOnlineDate).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" })}${p.expectedOnlineDateConfidence === "approximate" ? "*" : ""}`}
           />
@@ -291,37 +293,19 @@ function PrimaryStat({ label, value, href, note }: { label: string; value: strin
   );
 }
 
-function Stat({
-  label,
-  value,
-  accentColor,
-  sub,
-  href,
-}: {
-  label: string;
-  value: string;
-  accentColor?: string;
-  sub?: string[];
-  href?: string;
-}) {
+// One labeled item in the details panel. Extra facts about the same thing
+// (queue stage, point of interconnection) sit under it as label and value
+// pairs, so every item reads the same way.
+function Detail({ label, value, rows }: { label: string; value: string; rows?: ([string, string] | null)[] }) {
+  const pairs = (rows ?? []).filter((r): r is [string, string] => r != null);
   return (
-    <div
-      className="flex-1 min-w-[130px] rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 border-l-[3px]"
-      style={{ borderLeftColor: accentColor ?? "var(--accent)" }}
-    >
-      <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
-        {href ? (
-          <Link href={href} className="hover:underline">
-            {label}
-          </Link>
-        ) : (
-          label
-        )}
-      </div>
-      <div className="text-base font-bold mt-0.5">{value}</div>
-      {sub?.map((line) => (
-        <div key={line} className="text-xs text-[var(--muted)] mt-0.5">
-          {line}
+    <div className="border-l-2 border-[var(--accent)] pl-3 min-w-0">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="text-sm font-semibold mt-0.5 break-words">{value}</div>
+      {pairs.map(([k, v]) => (
+        <div key={k} className="text-xs mt-1 leading-snug break-words">
+          <span className="text-[var(--muted)]">{k}: </span>
+          <span className="font-medium text-[var(--text-secondary)]">{v}</span>
         </div>
       ))}
     </div>

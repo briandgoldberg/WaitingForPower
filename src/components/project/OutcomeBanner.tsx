@@ -55,7 +55,7 @@ export function OutcomeBanner({
   observedAt?: string | null;
   // Headline numbers shown on the same row as the outcome, so an approved or
   // cancelled project reads as one block instead of a banner plus cards.
-  stats?: { label: string; value: string; href?: string }[];
+  stats?: { label: string; value: string; href?: string; help?: string }[];
 }) {
   const tone = TONES[outcome];
   const waited = yearsBetween(p.applicationFiledDate, p.resolutionDate);
@@ -109,7 +109,7 @@ export function OutcomeBanner({
       {stats && stats.length > 0 && (
         <div className={`flex flex-wrap gap-x-7 gap-y-2 pt-3 md:pt-0 md:pl-6 border-t md:border-t-0 md:border-l ${tone.rule}`}>
           {stats.map((st) => (
-            <div key={st.label} className="min-w-0">
+            <div key={st.label} title={st.help} className="min-w-0">
               <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
                 {st.href ? (
                   <Link href={st.href} className="hover:underline">

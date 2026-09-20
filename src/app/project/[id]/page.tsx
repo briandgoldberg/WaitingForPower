@@ -114,15 +114,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   // The three headline numbers. "Waiting" and "investment waiting" only make
   // sense for a project still in permitting, so a resolved project shows what
   // it waited instead.
-  const primaryCards: { label: string; value: string; href?: string; note?: string }[] = [
-    { label: "Capacity", value: formatCapacity(p.capacityValue, p.capacityUnit) },
+  const primaryCards: { label: string; value: string; href?: string; note?: string; help?: string }[] = [
+    { label: "Project Capacity", help: "Size of the proposed project.", value: formatCapacity(p.capacityValue, p.capacityUnit) },
   ];
   if (resolved) {
     // Approved and cancelled share one skeleton: capacity, how long it took,
     // then, for cancelled, the last stage reached. Each slot is dropped when
     // unknown. No investment figure once a project is resolved.
     if (waitedYears != null) {
-      primaryCards.push({ label: "Time Pending", value: `${waitedYears.toFixed(1)} yrs` });
+      primaryCards.push({ label: "Time Pending", help: "Years from filing to the decision.", value: `${waitedYears.toFixed(1)} yrs` });
     } else if (p.applicationFiledDate) {
       primaryCards.push({
         label: "Filed",
@@ -130,13 +130,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       });
     }
     const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
-    if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", value: lastStage });
+    if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", help: "The stage it reached before it was cancelled.", value: lastStage });
   } else {
-    primaryCards.push({ label: "Time Pending", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
+    primaryCards.push({ label: "Time Pending", help: "Years since the application was filed with no final decision.", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
     primaryCards.push(
       p.investmentWaiting.applicable
-        ? { label: "Deferred Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
-        : { label: "Deferred Investment", value: "—", note: "Estimated only for MW capacity" },
+        ? { label: "Deferred Investment", help: "Estimated construction cost: capacity times typical cost per kW. Not spent yet, because it is waiting on approval.", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
+        : { label: "Deferred Investment", help: "Estimated construction cost, available only for MW capacity.", value: "—", note: "Estimated only for MW capacity" },
     );
   }
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
@@ -341,14 +341,16 @@ function PrimaryStat({
   value,
   href,
   note,
+  help,
 }: {
   label: string;
   value: string;
   href?: string;
   note?: string;
+  help?: string;
 }) {
   return (
-    <div className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
+    <div title={help} className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
       <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75">
         {href ? (
           <Link href={href} className="hover:underline">

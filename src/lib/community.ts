@@ -30,6 +30,8 @@ export interface ReplyItem {
   // A person with a confirmed email vs. an anonymous guest (agents are neither).
   confirmed: boolean;
   guest: boolean;
+  // Held: the author hasn't yet chosen how to appear, so only they can see it.
+  pending: boolean;
   body: string;
   createdAt: string;
   likeCount: number;
@@ -46,6 +48,7 @@ export interface DiscussionItem {
   isAgent: boolean;
   confirmed: boolean;
   guest: boolean;
+  pending: boolean;
   body: string | null;
   predictedDate: string | null;
   createdAt: string;
@@ -67,7 +70,7 @@ export interface Discussion {
   // The caller's own prediction on this project, when they made one.
   myPredictedDate: string | null;
   // Who the caller is on this site, when they have posted before.
-  me: { label: string; emailConfirmed: boolean; nameChosen: boolean } | null;
+  me: { label: string; emailConfirmed: boolean; nameChosen: boolean; decided: boolean } | null;
 }
 
 export interface CommunityFeedItem {
@@ -86,6 +89,10 @@ export interface CommunityFeedItem {
 
 function labelOf(p: { displayName: string | null; agentName: string | null }): string {
   return p.displayName ?? p.agentName ?? "anonymous";
+}
+
+function isHeld(p: { agentName: string | null; identityDecidedAt: Date | null }): boolean {
+  return p.agentName == null && p.identityDecidedAt == null;
 }
 
 function flagsOf(p: { agentName: string | null; email: string | null }): { confirmed: boolean; guest: boolean } {
@@ -206,19 +213,24 @@ function median(dates: Date[]): Date | null {
 // what they predicted.
 export async function getProjectDiscussion(projectId: string, anonymousKey?: string): Promise<Discussion> {
   const me = anonymousKey
-    ? await prisma.predictor.findUnique({ where: { anonymousKey }, select: { id: true, displayName: true, email: true, nameChosenAt: true } })
+    ? await prisma.predictor.findUnique({ where: { anonymousKey }, select: { id: true, displayName: true, email: true, nameChosenAt: true, identityDecidedAt: true } })
     : null;
 
-  const predictorSelect = { select: { displayName: true, agentName: true, email: true } } as const;
+  const predictorSelect = { select: { id: true, displayName: true, agentName: true, email: true, identityDecidedAt: true } } as const;
+  // Posts from someone who hasn't yet chosen how to appear are held: only
+  // they see them. AI agents' posts are always public.
+  const visible = {
+    OR: [{ agentName: { not: null } }, { identityDecidedAt: { not: null } }, ...(me ? [{ id: me.id }] : [])],
+  };
   const [comments, predictions] = await Promise.all([
     prisma.projectComment.findMany({
-      where: { projectId },
+      where: { projectId, predictor: visible },
       include: { predictor: predictorSelect },
       orderBy: { createdAt: "asc" },
       take: MAX_THREAD_ROWS,
     }),
     prisma.prediction.findMany({
-      where: { projectId },
+      where: { projectId, predictor: visible },
       include: { predictor: predictorSelect },
       orderBy: { submittedAt: "asc" },
       take: MAX_THREAD_ROWS,
@@ -248,6 +260,7 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
     label: labelOf(c.predictor),
     isAgent: c.predictor.agentName != null,
     ...flagsOf(c.predictor),
+    pending: isHeld(c.predictor),
     body: c.body,
     createdAt: c.createdAt.toISOString(),
     likeCount: commentLikes.get(c.id) ?? 0,
@@ -270,6 +283,7 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
         label: labelOf(c.predictor),
         isAgent: c.predictor.agentName != null,
         ...flagsOf(c.predictor),
+        pending: isHeld(c.predictor),
         body: c.body,
         predictedDate: null,
         createdAt: c.createdAt.toISOString(),
@@ -283,6 +297,7 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
       label: labelOf(p.predictor),
       isAgent: p.predictor.agentName != null,
       ...flagsOf(p.predictor),
+      pending: isHeld(p.predictor),
       body: p.why,
       predictedDate: p.predictedDate.toISOString(),
       createdAt: p.submittedAt.toISOString(),
@@ -307,7 +322,12 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
     },
     myPredictedDate: mine ? mine.predictedDate.toISOString() : null,
     me: me
-      ? { label: me.displayName ?? "Anonymous", emailConfirmed: me.email != null, nameChosen: me.nameChosenAt != null }
+      ? {
+          label: me.displayName ?? "Anonymous",
+          emailConfirmed: me.email != null,
+          nameChosen: me.nameChosenAt != null,
+          decided: me.identityDecidedAt != null,
+        }
       : null,
   };
 }
@@ -319,6 +339,8 @@ export async function getCommunityFeed(offset = 0, limit = 20): Promise<{ items:
   const need = offset + limit + 1;
   const projectSelect = { select: { slug: true, name: true } } as const;
   const predictorSelect = { select: { id: true, displayName: true, agentName: true, email: true } } as const;
+  // Held posts (author hasn't chosen how to appear) stay out of the feed.
+  const publicPoster = { OR: [{ agentName: { not: null } }, { identityDecidedAt: { not: null } }] };
 
   const agentTotals = await prisma.prediction.groupBy({
     by: ["predictorId"],
@@ -328,12 +350,13 @@ export async function getCommunityFeed(offset = 0, limit = 20): Promise<{ items:
 
   const [comments, peoplePredictions, agentPredictionSets] = await Promise.all([
     prisma.projectComment.findMany({
+      where: { predictor: publicPoster },
       include: { predictor: predictorSelect, project: projectSelect },
       orderBy: { createdAt: "desc" },
       take: need,
     }),
     prisma.prediction.findMany({
-      where: { OR: [{ why: { not: null } }, { predictor: { agentName: null } }] },
+      where: { AND: [{ OR: [{ why: { not: null } }, { predictor: { agentName: null } }] }, { predictor: publicPoster }] },
       include: { predictor: predictorSelect, project: projectSelect },
       orderBy: { submittedAt: "desc" },
       take: need,

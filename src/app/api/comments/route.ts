@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       displayName: predictor.displayName,
       hasSavedProfile: predictor.email != null,
       nameChosen: predictor.nameChosenAt != null,
+      identityDecided: predictor.identityDecidedAt != null,
     });
   } catch (err) {
     if (err instanceof CommentError) {

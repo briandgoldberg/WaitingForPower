@@ -46,7 +46,7 @@ export function SignInLink() {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="text-xs text-[var(--accent)] underline text-left">
-        Have a saved profile? Sign in
+        Sign in
       </button>
     );
   }

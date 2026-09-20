@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PredictorIcon } from "./PredictorIcon";
-import { SaveProfilePrompt, shouldOfferSaveProfile } from "./SaveProfilePrompt";
+import { SaveProfilePrompt } from "./SaveProfilePrompt";
+import { IdentityDecision } from "./IdentityDecision";
 import { SignInLink } from "./SignInLink";
 import { ChooseName } from "./ChooseName";
 import { PosterBadge } from "./PosterBadge";
@@ -143,7 +144,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
       setDate("");
       setPredictOn(false);
       setSort("new");
-      if (shouldOfferSaveProfile(result.hasSavedProfile)) setIdentityOpen(true);
       window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
     } catch {
       setError("Couldn't reach the server. Please try again.");
@@ -174,7 +174,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
       }
       setReplyText("");
       setReplyTo(null);
-      if (shouldOfferSaveProfile(result.hasSavedProfile)) setIdentityOpen(true);
       window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
     } catch {
       setReplyError("Couldn't reach the server. Please try again.");
@@ -254,8 +253,15 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
         </p>
       )}
 
-      <div>
-        <form onSubmit={handlePost} className="flex flex-col gap-2">
+      {me && !me.decided && key ? (
+        <IdentityDecision
+          anonymousKey={key}
+          label={me.label}
+          onDecided={() => window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT))}
+        />
+      ) : (
+        <div>
+          <form onSubmit={handlePost} className="flex flex-col gap-2">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -304,25 +310,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
               </span>
             )}
             <span className="flex-1" />
-            <span className="text-xs text-[var(--muted)]">
-              {me ? (
-                <>
-                  Posting as <strong className="text-[var(--foreground)]">{me.label}</strong>
-                  {!me.nameChosen && <span> (temporary name)</span>}
-                </>
-              ) : (
-                "Posting anonymously"
-              )}
-              {me && !me.nameChosen && (
-                <button
-                  type="button"
-                  onClick={() => setIdentityOpen((o) => !o)}
-                  className="ml-2 text-[var(--accent)] underline"
-                >
-                  {me.emailConfirmed ? "Choose your name" : "Choose a name"}
-                </button>
-              )}
-            </span>
+            {!me && <SignInLink />}
             <button
               type="submit"
               disabled={posting}
@@ -332,16 +320,23 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
             </button>
           </div>
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-          {!me?.emailConfirmed && <SignInLink />}
-        </form>
-      </div>
-
-      {identityOpen && key && me && !me.nameChosen && (
-        <div className="mt-1">
-          {me.emailConfirmed ? (
-            <ChooseName anonymousKey={key} onDone={() => setIdentityOpen(false)} />
-          ) : (
-            <SaveProfilePrompt anonymousKey={key} />
+          </form>
+          {me && !me.nameChosen && (
+            <p className="mt-2 text-[11px] text-[var(--muted)]">
+              Posting as {me.label} ·{" "}
+              <button type="button" onClick={() => setIdentityOpen((o) => !o)} className="text-[var(--accent)] underline">
+                Choose a name
+              </button>
+            </p>
+          )}
+          {identityOpen && key && me && !me.nameChosen && (
+            <div className="mt-1">
+              {me.emailConfirmed ? (
+                <ChooseName anonymousKey={key} onDone={() => setIdentityOpen(false)} />
+              ) : (
+                <SaveProfilePrompt anonymousKey={key} />
+              )}
+            </div>
           )}
         </div>
       )}
@@ -359,6 +354,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
                   isAgent={post.isAgent}
                   confirmed={post.confirmed}
                   guest={post.guest}
+                  pending={post.pending}
                   createdAt={post.createdAt}
                   nowMs={nowMs}
                   isMe={!!myLabel && post.label === myLabel}
@@ -465,6 +461,7 @@ function PostHeader({
   isAgent,
   confirmed,
   guest,
+  pending,
   createdAt,
   nowMs,
   isMe,
@@ -473,6 +470,7 @@ function PostHeader({
   isAgent: boolean;
   confirmed: boolean;
   guest: boolean;
+  pending: boolean;
   createdAt: string;
   nowMs: number | null;
   isMe: boolean;
@@ -483,6 +481,9 @@ function PostHeader({
       <span className="font-semibold truncate">{label}</span>
       <PosterBadge confirmed={confirmed} guest={guest} />
       {isMe && <span className="rounded bg-black/5 dark:bg-white/10 px-1 text-[10px] text-[var(--muted)]">You</span>}
+      {pending && (
+        <span className="rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 px-1 text-[10px]">Only you can see this</span>
+      )}
       {nowMs != null && <span className="text-[var(--muted)]">· {relativeTime(createdAt, nowMs)}</span>}
     </div>
   );
@@ -518,7 +519,7 @@ function ReplyRow({
 }) {
   return (
     <div className="text-sm">
-      <PostHeader label={reply.label} isAgent={reply.isAgent} confirmed={reply.confirmed} guest={reply.guest} createdAt={reply.createdAt} nowMs={nowMs} isMe={isMe} />
+      <PostHeader label={reply.label} isAgent={reply.isAgent} confirmed={reply.confirmed} guest={reply.guest} pending={reply.pending} createdAt={reply.createdAt} nowMs={nowMs} isMe={isMe} />
       <p className="mt-0.5 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{reply.body}</p>
       <div className="flex items-center gap-4 mt-1 text-xs">
         <LikeButton liked={reply.likedByMe} count={reply.likeCount} onClick={onLike} />

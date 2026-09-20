@@ -102,7 +102,18 @@ export async function chooseDisplayName(anonymousKey: string, rawName: string) {
   if (predictor.nameChosenAt) throw new PredictionError("already_chosen", "Your name is already set and can't be changed.");
   if (await nameTaken(name, predictor.id)) throw new PredictionError("name_taken", "That name is taken. Pick another.");
 
-  return prisma.predictor.update({ where: { id: predictor.id }, data: { displayName: name, nameChosenAt: new Date() } });
+  return prisma.predictor.update({ where: { id: predictor.id }, data: { displayName: name, nameChosenAt: new Date(), identityDecidedAt: predictor.identityDecidedAt ?? new Date() },
+  });
+}
+
+// A first-time poster's posts are held (visible only to them) until they
+// decide how to appear. Choosing to continue as their anonymous handle is
+// one way to decide; confirming an email or choosing a name are the others.
+export async function decideIdentity(anonymousKey: string) {
+  const predictor = await prisma.predictor.findUnique({ where: { anonymousKey } });
+  if (!predictor) throw new PredictionError("not_found", "Post something first.");
+  if (predictor.identityDecidedAt) return predictor;
+  return prisma.predictor.update({ where: { id: predictor.id }, data: { identityDecidedAt: new Date() } });
 }
 
 export async function submitPrediction(params: SubmitPredictionParams) {

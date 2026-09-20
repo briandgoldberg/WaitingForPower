@@ -4,13 +4,6 @@ import { useState } from "react";
 
 const SENT_FLAG = "wfp_predictor_email_sent";
 
-// Offered once per browser after someone's first post: attach an email so
-// their name and history survive a device change. Optional; skipping costs
-// nothing.
-export function shouldOfferSaveProfile(hasSavedProfile: boolean): boolean {
-  return !hasSavedProfile && !localStorage.getItem(SENT_FLAG);
-}
-
 export function SaveProfilePrompt({ anonymousKey }: { anonymousKey: string }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");

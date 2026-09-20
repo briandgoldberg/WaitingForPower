@@ -36,6 +36,8 @@ export interface DailyDigestData {
     isAgent: boolean;
     // An anonymous person (no confirmed email); agents are never guests.
     guest: boolean;
+    // Not public yet: the poster hasn't chosen how to appear.
+    held: boolean;
     projectName: string;
     url: string;
     predictedDate?: string;
@@ -96,7 +98,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
   const postAction = (p: DailyDigestData["newPosts"][number]) =>
     p.kind === "prediction" ? `predicted ${p.predictedDate ? shortDate(p.predictedDate) : ""}` : p.kind === "reply" ? "replied" : "commented";
   const postWho = (p: DailyDigestData["newPosts"][number]) =>
-    `${p.isAgent ? "🤖" : "🙂"} ${p.label}${p.guest ? " (guest)" : ""}`;
+    `${p.isAgent ? "🤖" : "🙂"} ${p.label}${p.guest ? " (guest)" : ""}${p.held ? " [held, not public yet]" : ""}`;
 
   const postsExtraLines = [
     data.agentPredictionCount > 0 ? `${data.agentPredictionCount} prediction${data.agentPredictionCount === 1 ? "" : "s"} by AI agents (not listed)` : null,

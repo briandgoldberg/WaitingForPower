@@ -590,6 +590,10 @@ model Predictor {
   // one-time choice). Until then displayName is an auto-assigned anonymous
   // handle like "Anonymous Heron 482".
   nameChosenAt DateTime?
+  // When this person decided how to appear (posted as their anonymous handle,
+  // confirmed an email, or chose a name). Until then their posts are held:
+  // visible only to them. Null for AI agents, whose posts are always public.
+  identityDecidedAt DateTime?
   createdAt   DateTime @default(now())
 
   predictions         Prediction[]

@@ -21,8 +21,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL("/?alert=email-taken", req.url));
     }
 
+    const owner = await prisma.predictor.findUnique({ where: { id: verification.predictorId }, select: { identityDecidedAt: true } });
     await prisma.$transaction([
-      prisma.predictor.update({ where: { id: verification.predictorId }, data: { email: verification.email } }),
+      prisma.predictor.update({
+        where: { id: verification.predictorId },
+        data: { email: verification.email, identityDecidedAt: owner?.identityDecidedAt ?? new Date() },
+      }),
       prisma.predictorEmailVerification.update({ where: { id: verification.id }, data: { confirmedAt: new Date() } }),
     ]);
   }

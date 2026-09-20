@@ -28,8 +28,21 @@ export interface DailyDigestData {
   // scope is already the human label ("California" or "All states") — see
   // src/app/api/cron/daily-digest/route.ts.
   newSubscriptions: { scope: string; email: string; confirmed: boolean }[];
-  newPredictions: { label: string; isAgent: boolean; projectName: string; predictedDate: string; why: string | null }[];
-  newComments: { label: string; isAgent: boolean; projectName: string; body: string }[];
+  // Everything people posted: predictions, comments, replies. AI agents' bulk
+  // predictions are only counted (agentPredictionCount), not listed.
+  newPosts: {
+    kind: "prediction" | "comment" | "reply";
+    label: string;
+    isAgent: boolean;
+    // An anonymous person (no confirmed email); agents are never guests.
+    guest: boolean;
+    projectName: string;
+    url: string;
+    predictedDate?: string;
+    body: string | null;
+  }[];
+  agentPredictionCount: number;
+  newLikeCount: number;
   newlyScored: { label: string; isAgent: boolean; projectName: string; daysOff: number }[];
   newPredictorEmails: { email: string; label: string }[];
 }
@@ -78,25 +91,31 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
           .map((s) => `<li>${escapeHtml(s.email)} — ${escapeHtml(s.scope)}${s.confirmed ? "" : " (unconfirmed)"}</li>`)
           .join("")}</ul>`;
 
-  const predictionsSectionHtml =
-    data.newPredictions.length === 0
-      ? "<p>None.</p>"
-      : `<ul>${data.newPredictions
-          .map(
-            (p) =>
-              `<li>${p.isAgent ? "🤖" : "🙂"} ${escapeHtml(p.label)} → <strong>${escapeHtml(p.projectName)}</strong>: ${new Date(p.predictedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}${p.why ? `<br><span style="color:#444;font-size:13px;">“${escapeHtml(p.why)}”</span>` : ""}</li>`,
-          )
-          .join("")}</ul>`;
+  const shortDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const postAction = (p: DailyDigestData["newPosts"][number]) =>
+    p.kind === "prediction" ? `predicted ${p.predictedDate ? shortDate(p.predictedDate) : ""}` : p.kind === "reply" ? "replied" : "commented";
+  const postWho = (p: DailyDigestData["newPosts"][number]) =>
+    `${p.isAgent ? "🤖" : "🙂"} ${p.label}${p.guest ? " (guest)" : ""}`;
 
-  const commentsSectionHtml =
-    data.newComments.length === 0
+  const postsExtraLines = [
+    data.agentPredictionCount > 0 ? `${data.agentPredictionCount} prediction${data.agentPredictionCount === 1 ? "" : "s"} by AI agents (not listed)` : null,
+    data.newLikeCount > 0 ? `${data.newLikeCount} new like${data.newLikeCount === 1 ? "" : "s"}` : null,
+  ].filter((x): x is string => x != null);
+
+  const postsSectionHtml =
+    data.newPosts.length === 0 && postsExtraLines.length === 0
       ? "<p>None.</p>"
-      : `<ul>${data.newComments
-          .map(
-            (c) =>
-              `<li>${c.isAgent ? "🤖" : "🙂"} ${escapeHtml(c.label)} on <strong>${escapeHtml(c.projectName)}</strong><br><span style="color:#444;font-size:13px;">${escapeHtml(c.body)}</span></li>`,
-          )
-          .join("")}</ul>`;
+      : `${
+          data.newPosts.length > 0
+            ? `<ul>${data.newPosts
+                .map(
+                  (p) =>
+                    `<li>${escapeHtml(postWho(p))} ${escapeHtml(postAction(p))} on <a href="${escapeHtml(p.url)}"><strong>${escapeHtml(p.projectName)}</strong></a>${p.body ? `<br><span style="color:#444;font-size:13px;">${escapeHtml(p.body)}</span>` : ""}</li>`,
+                )
+                .join("")}</ul>`
+            : ""
+        }${postsExtraLines.length > 0 ? `<p style="color:#666;font-size:13px;">${escapeHtml(postsExtraLines.join(" · "))}</p>` : ""}`;
 
   const scoredSectionHtml =
     data.newlyScored.length === 0
@@ -118,8 +137,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     ${section("Bot / MCP / API calls", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
     ${section("New feed subscriptions", subsSectionHtml)}
-    ${section("New predictions", predictionsSectionHtml)}
-    ${section("New comments", commentsSectionHtml)}
+    ${section(`New posts (${data.newPosts.length})`, postsSectionHtml)}
     ${section("Newly scored predictions", scoredSectionHtml)}
     ${section("Predictor profiles confirmed via magic link", predictorEmailsSectionHtml)}
   `;
@@ -145,20 +163,13 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
       ? "None."
       : data.newSubscriptions.map((s) => `- ${s.email} — ${s.scope}${s.confirmed ? "" : " (unconfirmed)"}`).join("\n"),
     "",
-    "NEW PREDICTIONS",
-    data.newPredictions.length === 0
+    `NEW POSTS (${data.newPosts.length})`,
+    data.newPosts.length === 0 && postsExtraLines.length === 0
       ? "None."
-      : data.newPredictions
-          .map(
-            (p) =>
-              `- [${p.isAgent ? "agent" : "human"}] ${p.label} -> ${p.projectName}: ${new Date(p.predictedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}${p.why ? `\n  "${p.why}"` : ""}`,
-          )
-          .join("\n"),
-    "",
-    "NEW COMMENTS",
-    data.newComments.length === 0
-      ? "None."
-      : data.newComments.map((c) => `- [${c.isAgent ? "agent" : "human"}] ${c.label} on ${c.projectName}\n  ${c.body}`).join("\n"),
+      : [
+          ...data.newPosts.map((p) => `- ${postWho(p)} ${postAction(p)} on ${p.projectName}\n  ${p.url}${p.body ? `\n  ${p.body}` : ""}`),
+          ...postsExtraLines.map((l) => `- ${l}`),
+        ].join("\n"),
     "",
     "NEWLY SCORED PREDICTIONS",
     data.newlyScored.length === 0

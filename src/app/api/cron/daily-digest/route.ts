@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, newSubscriptions, newPredictions, newlyScored, newPredictorEmails, newComments] = await Promise.all([
+  const [apiLogs, feedbackRows, newSubscriptions, newPredictions, newlyScored, newPredictorEmails, newComments, newLikeCount] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -48,8 +48,9 @@ export async function GET(req: NextRequest) {
       select: {
         predictedDate: true,
         why: true,
-        predictor: { select: { displayName: true, agentName: true } },
-        project: { select: { name: true } },
+        submittedAt: true,
+        predictor: { select: { displayName: true, agentName: true, email: true } },
+        project: { select: { name: true, slug: true } },
       },
       orderBy: { submittedAt: "asc" },
     }),
@@ -71,11 +72,15 @@ export async function GET(req: NextRequest) {
       where: { createdAt: { gte: since } },
       select: {
         body: true,
-        predictor: { select: { displayName: true, agentName: true } },
-        project: { select: { name: true } },
+        createdAt: true,
+        parentId: true,
+        predictionId: true,
+        predictor: { select: { displayName: true, agentName: true, email: true } },
+        project: { select: { name: true, slug: true } },
       },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.threadLike.count({ where: { createdAt: { gte: since } } }),
   ]);
 
   const apiCallsByEndpoint = new Map<string, number>();
@@ -95,6 +100,48 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Unified list of what people posted. An AI agent can predict hundreds of
+  // projects in one run, so agent predictions are only counted, not listed.
+  const projectUrl = (slug: string) => `https://waitingforpower.com/project/${slug}#comments`;
+  const labelOf = (p: { displayName: string | null; agentName: string | null }) => p.displayName ?? p.agentName ?? "anonymous";
+  const posts: { at: Date; post: Parameters<typeof sendDailyDigestEmail>[0]["newPosts"][number] }[] = [];
+  let agentPredictionCount = 0;
+  for (const p of newPredictions) {
+    if (p.predictor.agentName != null) {
+      agentPredictionCount++;
+      continue;
+    }
+    posts.push({
+      at: p.submittedAt,
+      post: {
+        kind: "prediction",
+        label: labelOf(p.predictor),
+        isAgent: false,
+        guest: p.predictor.email == null,
+        projectName: p.project.name,
+        url: projectUrl(p.project.slug),
+        predictedDate: p.predictedDate.toISOString(),
+        body: p.why,
+      },
+    });
+  }
+  for (const c of newComments) {
+    const isAgent = c.predictor.agentName != null;
+    posts.push({
+      at: c.createdAt,
+      post: {
+        kind: c.parentId || c.predictionId ? "reply" : "comment",
+        label: labelOf(c.predictor),
+        isAgent,
+        guest: !isAgent && c.predictor.email == null,
+        projectName: c.project.name,
+        url: projectUrl(c.project.slug),
+        body: c.body,
+      },
+    });
+  }
+  posts.sort((a, b) => a.at.getTime() - b.at.getTime());
+
   const result = await sendDailyDigestEmail({
     windowLabel,
     apiCalls: [...apiCallsByEndpoint.entries()].map(([endpoint, count]) => ({ endpoint, count })),
@@ -108,19 +155,9 @@ export async function GET(req: NextRequest) {
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
-    newPredictions: newPredictions.map((p) => ({
-      label: p.predictor.displayName ?? p.predictor.agentName ?? "anonymous",
-      isAgent: p.predictor.agentName != null,
-      projectName: p.project.name,
-      predictedDate: p.predictedDate.toISOString(),
-      why: p.why,
-    })),
-    newComments: newComments.map((c) => ({
-      label: c.predictor.displayName ?? c.predictor.agentName ?? "anonymous",
-      isAgent: c.predictor.agentName != null,
-      projectName: c.project.name,
-      body: c.body,
-    })),
+    newPosts: posts.slice(0, 50).map((x) => x.post),
+    agentPredictionCount,
+    newLikeCount,
     newlyScored: newlyScored.map((p) => ({
       label: p.predictor.displayName ?? p.predictor.agentName ?? "anonymous",
       isAgent: p.predictor.agentName != null,
@@ -144,8 +181,9 @@ export async function GET(req: NextRequest) {
     apiTrafficBreakdown: trafficBreakdown,
     feedbackCount: feedbackRows.length,
     newSubscriptionCount: newSubscriptions.length,
-    newPredictionCount: newPredictions.length,
-    newCommentCount: newComments.length,
+    newPostCount: posts.length,
+    agentPredictionCount,
+    newLikeCount,
     newlyScoredCount: newlyScored.length,
     newPredictorEmailCount: newPredictorEmails.length,
   };

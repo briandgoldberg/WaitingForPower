@@ -242,7 +242,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   );
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
-    ...(p.milestones.length > 0 ? [{ id: "timeline", label: "Timeline", badge: String(p.milestones.length), content: timelineContent }] : []),
+    ...(p.milestones.length > 0 ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Take action",

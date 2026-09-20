@@ -22,7 +22,7 @@ const Map = dynamic(() => import("@/components/Map").then((m) => m.Map), {
 export function Explorer({ projects }: { projects: ProjectDTO[] }) {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [view, setView] = useState<"map" | "list">("map");
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const filtered = useMemo(
     () => projects.filter((p) => matchesFilters(p, filters)),
@@ -63,7 +63,7 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
           onClick={() => setPanelOpen(!panelOpen)}
           className="lg:hidden text-sm px-3 py-1.5 rounded-md border border-[var(--border)]"
         >
-          {panelOpen ? "Hide filters" : "Show filters"}
+          {panelOpen ? "Hide filters" : chips.length > 0 ? `Filters (${chips.length})` : "Filters"}
         </button>
       </div>
 
@@ -90,12 +90,10 @@ export function Explorer({ projects }: { projects: ProjectDTO[] }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-2 flex-1">
-        {panelOpen && (
-          <div className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-            <FilterPanel filters={filters} onChange={setFilters} projects={projects} />
-          </div>
-        )}
-        <div className="h-[560px]">
+        <div className={`${panelOpen ? "" : "hidden"} lg:block lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto`}>
+          <FilterPanel filters={filters} onChange={setFilters} projects={projects} />
+        </div>
+        <div className="h-[65vh] min-h-[380px] lg:h-[560px]">
           {view === "map" && <Map projects={filtered} />}
           {/* Rendered (not conditionally mounted) regardless of the active
               view, just hidden via CSS when the map is showing — this is

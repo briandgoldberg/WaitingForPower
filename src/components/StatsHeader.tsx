@@ -148,7 +148,7 @@ export function StatsHeader({
             {item.label}
             <HelpTooltip label={item.label}>{item.help}</HelpTooltip>
           </div>
-          {item.note && <div className="text-[10px] text-[var(--muted)] mt-0.5">{item.note}</div>}
+          {item.note && <div className="hidden sm:block text-[10px] text-[var(--muted)] mt-0.5">{item.note}</div>}
         </div>
       ))}
       <div className="col-span-2 sm:col-span-4 text-[11px] text-[var(--muted)]">

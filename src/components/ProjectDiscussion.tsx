@@ -262,7 +262,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
             maxLength={predictOn ? MAX_PREDICTION_TEXT : MAX_COMMENT}
             rows={3}
             aria-label="Add to the discussion"
-            placeholder={predictOn ? "Why do you expect that date? (optional)" : "Share what you know or think"}
+            placeholder="Share what you think or know"
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm resize-none"
           />
           <div className="flex items-center gap-2 flex-wrap">

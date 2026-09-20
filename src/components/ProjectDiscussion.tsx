@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PredictorIcon } from "./PredictorIcon";
 import { SaveProfilePrompt, shouldOfferSaveProfile } from "./SaveProfilePrompt";
 import { SignInLink } from "./SignInLink";
@@ -8,7 +8,6 @@ import { ChooseName } from "./ChooseName";
 import { PosterBadge } from "./PosterBadge";
 import {
   DISCUSSION_CHANGED_EVENT,
-  OPEN_PREDICTION_EVENT,
   getOrCreatePredictorKey,
 } from "@/lib/clientIdentity";
 import { relativeTime } from "@/lib/feedTime";
@@ -59,9 +58,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
   const [replyPosting, setReplyPosting] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
-  const composerRef = useRef<HTMLDivElement>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
-
   const load = useCallback(
     (keyOverride?: string | null) => {
       const k = keyOverride ?? key;
@@ -92,17 +88,10 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
       load(k);
     }, 0);
     const onChanged = () => load();
-    const onOpenPrediction = () => {
-      setPredictOn(true);
-      composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      setTimeout(() => dateRef.current?.focus(), 350);
-    };
     window.addEventListener(DISCUSSION_CHANGED_EVENT, onChanged);
-    window.addEventListener(OPEN_PREDICTION_EVENT, onOpenPrediction);
     return () => {
       clearTimeout(t);
       window.removeEventListener(DISCUSSION_CHANGED_EVENT, onChanged);
-      window.removeEventListener(OPEN_PREDICTION_EVENT, onOpenPrediction);
     };
   }, [load]);
 
@@ -265,7 +254,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
         </p>
       )}
 
-      <div ref={composerRef}>
+      <div>
         <form onSubmit={handlePost} className="flex flex-col gap-2">
           <textarea
             value={text}
@@ -282,7 +271,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/5 pl-2.5 pr-1 py-0.5 text-xs">
                   🔮 Predict approval
                   <input
-                    ref={dateRef}
                     type="date"
                     aria-label="Predicted approval date"
                     value={date}

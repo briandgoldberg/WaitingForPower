@@ -6,7 +6,6 @@ import { getCommunityFeed } from "@/lib/community";
 import { StateFeedFilter } from "@/components/StateFeedFilter";
 import { FeedSubscribeBox } from "@/components/FeedSubscribeBox";
 import { STATE_NAMES } from "@/lib/data/usStates";
-import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -65,12 +64,6 @@ export default async function HomePage({
   // see ChangesFeed's `now` prop comment for the hydration mismatch this
   // fixes.
   const now = new Date().toISOString();
-  // Real live count, every status bucket — same isAggregateExample exclusion
-  // as computeAggregateStats' totalProjects (src/lib/stats.ts), so this
-  // number always matches what "Projects" itself shows. Powers the hero CTA
-  // below instead of a plain "View all projects" link competing with the
-  // state filter and subscribe button for space in that row.
-  const totalProjects = await prisma.project.count({ where: { isAggregateExample: false } });
 
   return (
     <>
@@ -89,15 +82,6 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/projects"
-              className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-              style={{ color: "var(--accent)" }}
-            >
-              {totalProjects.toLocaleString()} Projects Tracked →
-            </Link>
-          </div>
         </div>
 
         <div className="flex flex-col gap-2.5">

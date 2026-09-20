@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
-import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES, VERIFICATION_STATUS_BY_VALUE } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
@@ -14,7 +14,6 @@ import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
-import { DataQualityNote } from "@/components/project/DataQualityNote";
 
 export const dynamic = "force-dynamic";
 
@@ -196,7 +195,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <TakeActionSection
         project={p}
         nowMs={new Date().getTime()}
-        canPredict={canPredict}
       />
 
       {p.networkUpgradeCostUsd != null && (
@@ -243,28 +241,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
       <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
         <ProjectDiscussion projectId={p.id} canPredict={canPredict} />
-      </section>
-
-      <section aria-label="Sources" className="px-1 text-[11px] leading-snug text-[var(--muted)]">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="font-semibold uppercase tracking-wide text-[10px]">Sources</span>
-          <span
-            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] ${
-              p.verificationStatus === "user_submitted_pending"
-                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-            }`}
-          >
-            {p.verificationStatus === "user_submitted_pending" ? "⏳" : "✓"}{" "}
-            {VERIFICATION_STATUS_BY_VALUE[p.verificationStatus] ?? p.verificationStatus.replace(/_/g, " ")}
-          </span>
-          {p.sources.map((src) => (
-            <a key={src.url} href={src.url} target="_blank" rel="noreferrer" className="underline">
-              {src.label}
-            </a>
-          ))}
-        </div>
-        {p.dataQualityNote && <DataQualityNote note={p.dataQualityNote} />}
       </section>
     </div>
   );

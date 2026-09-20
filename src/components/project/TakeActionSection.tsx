@@ -1,7 +1,6 @@
 import type { ProjectDTO } from "@/lib/types";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
-import { PredictCard } from "@/components/PredictCard";
 
 const MAX_STATES_SHOWN = 4;
 
@@ -28,10 +27,10 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
-// Everything someone needs to act on a project in one place: the official
-// docket, who regulates it, upcoming hearings and comment windows, a
-// and a prediction. The comment thread lives at the bottom of the page.
-export function TakeActionSection({ project: p, canPredict, nowMs }: { project: ProjectDTO; canPredict: boolean; nowMs: number }) {
+// What someone needs to act on a project: the official docket, who
+// regulates it, and upcoming hearings and comment windows. The discussion,
+// including predictions, is at the bottom of the page.
+export function TakeActionSection({ project: p, nowMs }: { project: ProjectDTO; nowMs: number }) {
   const primarySource = p.sources[0];
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
@@ -114,8 +113,6 @@ export function TakeActionSection({ project: p, canPredict, nowMs }: { project: 
           </p>
         </Column>
       </div>
-
-      {canPredict && <PredictCard projectId={p.id} />}
     </section>
   );
 }

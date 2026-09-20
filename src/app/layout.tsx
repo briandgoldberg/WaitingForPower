@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.variable} min-h-screen flex flex-col`}>
         <header className="border-b border-[var(--border)] bg-[var(--panel)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-            <Link href="/" className="flex items-center gap-2 order-2 sm:order-1">
+            <Link href="/" className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.svg" alt="" width={28} height={28} className="rounded-full shrink-0" />
               <span className="flex items-baseline gap-2">
@@ -61,11 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </span>
               </span>
             </Link>
-            {/* Below sm, SiteNav renders only a hamburger + dropdown (see
-                that component) — ordered before the logo here so the
-                trigger sits on the left, matching the standard mobile
-                pattern. Desktop keeps its original horizontal row on the
-                right, unaffected by this order swap. */}
+            {/* Four tabs: one row beside the logo on wider screens, a full-width row under it on phones. */}
             <SiteNav />
           </div>
         </header>

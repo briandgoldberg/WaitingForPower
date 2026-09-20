@@ -5,7 +5,7 @@ import { submitPrediction, getProjectPredictions, PredictionError, MAX_WHY_LENGT
 export const dynamic = "force-dynamic";
 
 // Human-facing prediction submission — keyed by the anonymous browser-
-// generated key (see PredictCard.tsx), never a login. Bots submit through
+// generated key (see ProjectDiscussion.tsx), never a login. Bots submit through
 // the MCP submit_prediction tool instead (src/app/mcp/route.ts), which
 // calls the same shared submitPrediction() so both are scored identically.
 export async function POST(req: NextRequest) {

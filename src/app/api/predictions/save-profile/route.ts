@@ -5,7 +5,7 @@ import { sendPredictorVerificationEmail } from "@/lib/predictorEmail";
 
 export const dynamic = "force-dynamic";
 
-// Step 2 of the two-step predict flow (see PredictCard.tsx): the human has
+// Step 2 of the two-step predict flow (see ProjectDiscussion.tsx): the human has
 // already submitted a real prediction under their anonymousKey — this just
 // asks whether they want that history to survive a device change. Never
 // required to participate; only ever offered after a real prediction is

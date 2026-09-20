@@ -113,15 +113,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   // The three headline numbers. "Waiting" and "investment waiting" only make
   // sense for a project still in permitting, so a resolved project shows what
-  // it waited instead, and drops the investment card when it can't be
-  // estimated.
+  // it waited instead.
   const primaryCards: { label: string; value: string; href?: string; note?: string }[] = [
     { label: "Capacity", value: formatCapacity(p.capacityValue, p.capacityUnit) },
   ];
   if (resolved) {
     // Approved and cancelled share one skeleton: capacity, how long it took,
-    // then one outcome-specific number (investment for approved, the last
-    // stage reached for cancelled). Each slot is dropped when unknown.
+    // then, for cancelled, the last stage reached. Each slot is dropped when
+    // unknown. No investment figure once a project is resolved.
     if (waitedYears != null) {
       primaryCards.push({ label: "Waited", value: `${waitedYears.toFixed(1)} yrs` });
     } else if (p.applicationFiledDate) {
@@ -129,9 +128,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         label: "Filed",
         value: new Date(p.applicationFiledDate).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }),
       });
-    }
-    if (outcome === "approved" && p.investmentWaiting.applicable) {
-      primaryCards.push({ label: "Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
     }
     const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
     if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", value: lastStage });

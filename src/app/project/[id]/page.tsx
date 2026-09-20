@@ -131,7 +131,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       });
     }
     if (outcome === "approved" && p.investmentWaiting.applicable) {
-      primaryCards.push({ label: "Est. investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
+      primaryCards.push({ label: "Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
     }
     const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
     if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", value: lastStage });
@@ -139,8 +139,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     primaryCards.push({ label: "Waiting", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
     primaryCards.push(
       p.investmentWaiting.applicable
-        ? { label: "Est. investment waiting", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
-        : { label: "Est. investment waiting", value: "—", note: "Estimated only for MW capacity" },
+        ? { label: "Investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
+        : { label: "Investment", value: "—", note: "Estimated only for MW capacity" },
     );
   }
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));

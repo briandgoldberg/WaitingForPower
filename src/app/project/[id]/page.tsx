@@ -14,6 +14,7 @@ import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
+import { DataQualityNote } from "@/components/project/DataQualityNote";
 
 export const dynamic = "force-dynamic";
 
@@ -153,6 +154,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <PrimaryStat
           label="Est. investment waiting"
           value={p.investmentWaiting.applicable ? formatUsd(p.investmentWaiting.estimatedUsd!) : "—"}
+          note={p.investmentWaiting.applicable ? undefined : `Not estimated: ${p.investmentWaiting.reason}`}
           href="/methodology"
         />
       </div>
@@ -161,17 +163,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <Stat
           label="Stage"
           value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
-          sub={[p.interconnectionQueueStage && `Queue: ${p.interconnectionQueueStage}`, p.queueCluster && `Cluster: ${p.queueCluster}`].filter(
+          sub={[p.interconnectionQueueStage && `Queue stage: ${p.interconnectionQueueStage}`, p.queueCluster && `Queue cluster: ${p.queueCluster}`].filter(
             (x): x is string => Boolean(x),
           )}
         />
-        {(p.balancingAuthority || p.pointOfInterconnection) && (
+        {p.balancingAuthority && p.pointOfInterconnection ? (
           <Stat
-            label={p.balancingAuthority ? "Grid region" : "Point of interconnection"}
-            value={(p.balancingAuthority ?? p.pointOfInterconnection)!}
-            sub={p.balancingAuthority && p.pointOfInterconnection ? [`Point of interconnection: ${p.pointOfInterconnection}`] : undefined}
+            label="Grid region and point of interconnection"
+            value={p.balancingAuthority}
+            sub={[`Point of interconnection: ${p.pointOfInterconnection}`]}
           />
-        )}
+        ) : p.balancingAuthority ? (
+          <Stat label="Grid region" value={p.balancingAuthority} />
+        ) : p.pointOfInterconnection ? (
+          <Stat label="Point of interconnection" value={p.pointOfInterconnection} />
+        ) : null}
         {p.primeMoverCode && <Stat label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
         {p.expectedOnlineDate && (
           <Stat
@@ -255,11 +261,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </a>
           ))}
         </div>
-        {p.dataQualityNote && (
-          <p className="mt-1">
-            <strong>Data quality note:</strong> {p.dataQualityNote}
-          </p>
-        )}
+        {p.dataQualityNote && <DataQualityNote note={p.dataQualityNote} />}
       </section>
     </div>
   );
@@ -267,7 +269,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
 // The three headline numbers: filled and larger than the secondary Stat
 // cards so they read first.
-function PrimaryStat({ label, value, href }: { label: string; value: string; href?: string }) {
+function PrimaryStat({ label, value, href, note }: { label: string; value: string; href?: string; note?: string }) {
   return (
     <div className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
       <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75">
@@ -280,6 +282,11 @@ function PrimaryStat({ label, value, href }: { label: string; value: string; hre
         )}
       </div>
       <div className="text-xl sm:text-3xl font-bold tabular-nums mt-1 break-words">{value}</div>
+      {note && (
+        <div title={note} className="text-[10px] leading-snug text-white/75 mt-1 line-clamp-2">
+          {note}
+        </div>
+      )}
     </div>
   );
 }

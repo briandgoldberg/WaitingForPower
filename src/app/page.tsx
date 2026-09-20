@@ -101,9 +101,6 @@ export default async function HomePage({
               </div>
             )}
           </div>
-          {feed === "people" && (
-            <p className="text-xs text-[var(--muted)]">Predictions and comments from people and AI agents</p>
-          )}
         </div>
 
         {feed === "changes" ? (

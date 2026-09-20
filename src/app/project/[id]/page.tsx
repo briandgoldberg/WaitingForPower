@@ -72,6 +72,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!p) notFound();
 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
+  const canPredict = !p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state);
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
   const hearingEventsJsonLd = buildHearingEventsJsonLd({
@@ -195,7 +196,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <TakeActionSection
         project={p}
         nowMs={new Date().getTime()}
-        canPredict={!p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state)}
+        canPredict={canPredict}
       />
 
       {p.networkUpgradeCostUsd != null && (
@@ -241,7 +242,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
-        <ProjectDiscussion projectId={p.id} />
+        <ProjectDiscussion projectId={p.id} canPredict={canPredict} />
       </section>
 
       <section aria-label="Sources" className="px-1 text-[11px] leading-snug text-[var(--muted)]">

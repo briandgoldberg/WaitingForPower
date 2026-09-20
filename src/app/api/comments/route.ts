@@ -16,27 +16,32 @@ export async function POST(req: NextRequest) {
 
   const projectId = String(body.projectId ?? "").trim();
   const anonymousKey = String(body.anonymousKey ?? "").trim();
-  const displayName = String(body.displayName ?? "").trim();
   const text = String(body.body ?? "");
+  const parentCommentId = String(body.parentCommentId ?? "").trim() || undefined;
+  const replyToPredictionId = String(body.replyToPredictionId ?? "").trim() || undefined;
 
   if (!projectId || !anonymousKey || !text.trim()) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
-  }
-  if (displayName.length === 0 || displayName.length > 40) {
-    return NextResponse.json({ error: "Enter a name (up to 40 characters)." }, { status: 400 });
   }
   if (anonymousKey.length < 8 || anonymousKey.length > 200) {
     return NextResponse.json({ error: "Invalid anonymous key." }, { status: 400 });
   }
 
   try {
-    const { comment, predictor } = await submitComment({ projectId, anonymousKey, displayName, body: text });
+    const { comment, predictor } = await submitComment({
+      projectId,
+      anonymousKey,
+      body: text,
+      parentCommentId,
+      replyToPredictionId,
+    });
     return NextResponse.json({
       ok: true,
       id: comment.id,
       createdAt: comment.createdAt.toISOString(),
       displayName: predictor.displayName,
       hasSavedProfile: predictor.email != null,
+      nameChosen: predictor.nameChosenAt != null,
     });
   } catch (err) {
     if (err instanceof CommentError) {
@@ -60,6 +65,9 @@ export async function GET(req: NextRequest) {
   if (!project) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
-  const items = await getProjectDiscussion(project.id);
-  return NextResponse.json({ items });
+  // The optional header (not a query string, so it stays out of URLs and logs)
+  // lets the reply say which posts this visitor liked and what they predicted.
+  const anonymousKey = req.headers.get("x-anonymous-key") ?? undefined;
+  const discussion = await getProjectDiscussion(project.id, anonymousKey);
+  return NextResponse.json(discussion);
 }

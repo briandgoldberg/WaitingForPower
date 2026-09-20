@@ -9,6 +9,17 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+// One of the three equal sections in Take action, styled like the details
+// panel above it.
+function Column({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-l-2 border-[var(--accent)] pl-3 min-w-0">
+      <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-1">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
 function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a href={href} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
@@ -30,9 +41,8 @@ export function TakeActionSection({ project: p, canPredict, nowMs }: { project: 
     <section id="take-action" className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-5">
       <h2 className="text-lg font-bold text-[var(--accent)]">Take action</h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <h3 className="text-sm font-semibold mb-1.5">Official docket</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <Column title="Official docket">
           {primarySource ? (
             <p className="text-sm">
               <ExternalLink href={primarySource.url}>{primarySource.label}</ExternalLink>
@@ -41,10 +51,9 @@ export function TakeActionSection({ project: p, canPredict, nowMs }: { project: 
             <p className="text-sm text-[var(--text-secondary)]">Not available.</p>
           )}
           <p className="text-xs text-[var(--muted)] mt-1">Read the filings and file a public comment where the regulator allows it.</p>
-        </div>
+        </Column>
 
-        <div>
-          <h3 className="text-sm font-semibold mb-1.5">Who to contact</h3>
+        <Column title="Who to contact">
           {regulatorStates.length > 0 ? (
             <ul className="flex flex-col gap-2 text-sm">
               {regulatorStates.flatMap((code) =>
@@ -63,48 +72,47 @@ export function TakeActionSection({ project: p, canPredict, nowMs }: { project: 
           ) : (
             <p className="text-sm text-[var(--text-secondary)]">No state regulator on file for this project.</p>
           )}
-        </div>
-      </div>
+        </Column>
 
-      <div>
-        <h3 className="text-sm font-semibold mb-1.5">Hearings and comment deadlines</h3>
-        {p.hearings.length > 0 ? (
-          <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
-            {p.hearings.map((h, i) => {
-              const past = new Date(h.endDate ?? h.date).getTime() < nowMs;
-              return (
-                <li key={i} className={past ? "opacity-60" : undefined}>
-                  <div>
-                    {fmt(h.date)}
-                    {h.endDate && ` – ${fmt(h.endDate)}`}
-                    {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
-                    {past && <span className="text-[var(--muted)]"> · past</span>}
-                  </div>
-                  {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="text-sm text-[var(--text-secondary)]">None on file.</p>
-        )}
-        <p className="text-sm mt-2">
-          {p.hearingDetailsLink ? (
-            /^https?:\/\//.test(p.hearingDetailsLink) ? (
-              <ExternalLink href={p.hearingDetailsLink}>Hearing details</ExternalLink>
-            ) : (
-              <>
-                <span className="text-[var(--muted)]">Hearing details: </span>
-                {p.hearingDetailsLink}
-              </>
-            )
-          ) : null}
-        </p>
-        <p className="text-xs text-[var(--muted)] mt-1">
-          {p.hearings.length > 0 || p.hearingDetailsLink
-            ? "Pulled from this project’s own docket source. Check the docket for the latest."
-            : "Not available from this project’s data source yet. Check the docket directly."}
-        </p>
+        <Column title="Hearings and comment deadlines">
+          {p.hearings.length > 0 ? (
+            <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
+              {p.hearings.map((h, i) => {
+                const past = new Date(h.endDate ?? h.date).getTime() < nowMs;
+                return (
+                  <li key={i} className={past ? "opacity-60" : undefined}>
+                    <div>
+                      {fmt(h.date)}
+                      {h.endDate && ` – ${fmt(h.endDate)}`}
+                      {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
+                      {past && <span className="text-[var(--muted)]"> · past</span>}
+                    </div>
+                    {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-[var(--text-secondary)]">None on file.</p>
+          )}
+          {p.hearingDetailsLink && (
+            <p className="text-sm mt-2">
+              {/^https?:\/\//.test(p.hearingDetailsLink) ? (
+                <ExternalLink href={p.hearingDetailsLink}>Hearing details</ExternalLink>
+              ) : (
+                <>
+                  <span className="text-[var(--muted)]">Hearing details: </span>
+                  {p.hearingDetailsLink}
+                </>
+              )}
+            </p>
+          )}
+          <p className="text-xs text-[var(--muted)] mt-1">
+            {p.hearings.length > 0 || p.hearingDetailsLink
+              ? "Pulled from this project’s docket source."
+              : "Not available from this project’s data source yet. Check the docket directly."}
+          </p>
+        </Column>
       </div>
 
       {canPredict && <PredictCard projectId={p.id} />}

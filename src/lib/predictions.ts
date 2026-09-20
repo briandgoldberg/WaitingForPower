@@ -4,6 +4,7 @@
 // calls once a project's real resolutionDate lands. Kept in one place so
 // a human's prediction and an agent's prediction are scored identically,
 // no duplicated logic to drift apart.
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { RESOLVED_STAGES, type ProjectStage } from "@/lib/data/taxonomies";
@@ -22,44 +23,86 @@ interface SubmitPredictionParams {
   /** Exactly one of anonymousKey/agentName must be set — see Predictor's own CHECK constraint. */
   anonymousKey?: string;
   agentName?: string;
-  /** Optional, human-only — a self-chosen leaderboard nickname. Only ever set when provided; an omitted value never clears a previously-set nickname. */
-  displayName?: string;
   /** Optional reason, shown in the project's Comments and the home People feed. Trimmed and capped at MAX_WHY_LENGTH by the caller. */
   why?: string;
 }
 
 export const MAX_WHY_LENGTH = 500;
 
-// One identity for everything a person does on this site: predictions and
-// comments both hang off the same Predictor row, keyed by the browser's
-// anonymous key (and optionally upgraded to a saved email profile).
-//
-// The name is set once and then locked: a later, different name is ignored
-// rather than applied, so nobody can rename themselves between posts. Names
-// are also unique (case-insensitive, and not shared with any agent name), so
-// nobody can post as someone else.
-export async function getOrCreateHumanPredictor(anonymousKey: string, displayName?: string) {
+const ADJECTIVES = [
+  "Steady", "Patient", "Curious", "Bright", "Quiet", "Swift", "Amber", "Northern", "Coastal", "Prairie",
+  "Alpine", "Golden", "Silver", "Cedar", "Copper", "Bold", "Calm", "Keen", "Vivid", "Lively",
+  "Sunny", "Brisk", "Noble", "Clever", "Nimble", "Sturdy", "Cheerful", "Mellow", "Plucky", "Dapper",
+];
+const NOUNS = [
+  "Heron", "Otter", "Falcon", "Badger", "Lynx", "Osprey", "Beaver", "Moose", "Kestrel", "Raven",
+  "Fox", "Wren", "Bison", "Egret", "Marten", "Lighthouse", "Turbine", "Compass", "Harbor", "Summit",
+  "Canyon", "Meadow", "Comet", "Ridge", "Pine", "Willow", "Finch", "Elk", "Crane", "Owl",
+];
+
+async function nameTaken(name: string, exceptId?: string): Promise<boolean> {
+  const hit = await prisma.predictor.findFirst({
+    where: {
+      ...(exceptId ? { NOT: { id: exceptId } } : {}),
+      OR: [
+        { displayName: { equals: name, mode: "insensitive" } },
+        { agentName: { equals: name, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true },
+  });
+  return hit != null;
+}
+
+// Everyone starts anonymous with a random, playful, temporary handle like
+// "CopperFalcon48" that says nothing about who they are.
+async function generateAnonymousHandle(): Promise<string> {
+  for (let i = 0; i < 12; i++) {
+    const adjective = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+    const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+    const handle = adjective + noun + (10 + Math.floor(Math.random() * 90));
+    if (!(await nameTaken(handle))) return handle;
+  }
+  return "Guest" + randomBytes(3).toString("hex");
+}
+
+// One identity for everything a person does on this site: predictions,
+// comments, and likes all hang off the same Predictor row, keyed by the
+// browser's anonymous key. New people get an anonymous handle; choosing a
+// real name is a separate, email-gated step (see chooseDisplayName).
+export async function getOrCreateHumanPredictor(anonymousKey: string) {
   const existing = await prisma.predictor.findUnique({ where: { anonymousKey } });
   if (existing?.displayName) return existing;
+  const displayName = await generateAnonymousHandle();
+  if (existing) return prisma.predictor.update({ where: { id: existing.id }, data: { displayName } });
+  return prisma.predictor.create({ data: { anonymousKey, displayName } });
+}
 
-  if (displayName) {
-    const taken = await prisma.predictor.findFirst({
-      where: {
-        ...(existing ? { NOT: { id: existing.id } } : {}),
-        OR: [
-          { displayName: { equals: displayName, mode: "insensitive" } },
-          { agentName: { equals: displayName, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true },
-    });
-    if (taken) throw new PredictionError("name_taken", "That name is taken. Pick another.");
+const RESERVED_NAME = /^(anon|anonymous|guest|admin|administrator|moderator|mod|staff|official|support|system|waitingforpower)\b/i;
+// Looks like an auto-assigned handle (CopperFalcon48); those can't be chosen.
+const HANDLE_SHAPE = /^[A-Z][a-z]+[A-Z][a-z]+\d{2,3}$/;
+const GUEST_SHAPE = /^Guest[0-9a-f]{6}$/;
+const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]{1,22}[A-Za-z0-9]$/;
+
+// Only a person who has confirmed an email can pick their own public name,
+// once. Everyone else stays anonymous, so a name always means someone who
+// can be reached and tied to one profile.
+export async function chooseDisplayName(anonymousKey: string, rawName: string) {
+  const name = rawName.trim().replace(/\s+/g, " ");
+  if (!NAME_PATTERN.test(name)) {
+    throw new PredictionError("invalid_name", "Use 3 to 24 letters, numbers, spaces, dots, dashes or underscores.");
+  }
+  if (RESERVED_NAME.test(name) || HANDLE_SHAPE.test(name) || GUEST_SHAPE.test(name)) {
+    throw new PredictionError("reserved_name", "That name is reserved. Pick another.");
   }
 
-  if (existing) {
-    return displayName ? prisma.predictor.update({ where: { id: existing.id }, data: { displayName } }) : existing;
-  }
-  return prisma.predictor.create({ data: { anonymousKey, ...(displayName ? { displayName } : {}) } });
+  const predictor = await prisma.predictor.findUnique({ where: { anonymousKey } });
+  if (!predictor) throw new PredictionError("not_found", "Post something first.");
+  if (!predictor.email) throw new PredictionError("email_required", "Confirm your email to choose a name.");
+  if (predictor.nameChosenAt) throw new PredictionError("already_chosen", "Your name is already set and can't be changed.");
+  if (await nameTaken(name, predictor.id)) throw new PredictionError("name_taken", "That name is taken. Pick another.");
+
+  return prisma.predictor.update({ where: { id: predictor.id }, data: { displayName: name, nameChosenAt: new Date() } });
 }
 
 export async function submitPrediction(params: SubmitPredictionParams) {
@@ -76,7 +119,7 @@ export async function submitPrediction(params: SubmitPredictionParams) {
   }
 
   const predictor = params.anonymousKey
-    ? await getOrCreateHumanPredictor(params.anonymousKey, params.displayName)
+    ? await getOrCreateHumanPredictor(params.anonymousKey)
     : await prisma.predictor.upsert({
         where: { agentName: params.agentName as string },
         create: { agentName: params.agentName as string },

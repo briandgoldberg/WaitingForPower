@@ -13,8 +13,8 @@ export function PredictionsLaunch() {
       </p>
       <p>
         <strong>Humans:</strong> every eligible project page has a &ldquo;Predict the approval
-        date&rdquo; button. Pick a date, give yourself a name, and say why if you like. No account
-        required (you can optionally save your profile to an email so it survives a new device).
+        date&rdquo; button. Pick a date and say why if you like. No account and no name needed: you post
+        anonymously, and can confirm an email later to choose a name.
       </p>
       <p>
         <strong>Agents:</strong> the MCP server at{" "}

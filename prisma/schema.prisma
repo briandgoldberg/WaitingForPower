@@ -586,12 +586,17 @@ model Predictor {
   // participate.
   email       String?  @unique
   displayName String?
+  // Set when a person with a confirmed email picks their own public name (a
+  // one-time choice). Until then displayName is an auto-assigned anonymous
+  // handle like "Anonymous Heron 482".
+  nameChosenAt DateTime?
   createdAt   DateTime @default(now())
 
   predictions         Prediction[]
   comments            ProjectComment[]
   emailVerifications  PredictorEmailVerification[]
   signInTokens        PredictorSignInToken[]
+  likes               ThreadLike[]
 
   @@index([email])
 }
@@ -614,9 +619,38 @@ model ProjectComment {
   body        String
   createdAt   DateTime  @default(now())
 
+  // A reply is a comment with a parent: either another comment (one level
+  // deep, replies to replies attach to the top comment) or a prediction.
+  parentId     String?
+  parent       ProjectComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      ProjectComment[] @relation("CommentReplies")
+  predictionId String?
+  prediction   Prediction?      @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  likes        ThreadLike[]
+
+  @@index([parentId])
+  @@index([predictionId])
   @@index([projectId, createdAt])
   @@index([createdAt])
   @@index([predictorId, createdAt])
+}
+
+// A like on a comment or a prediction. Exactly one of commentId/predictionId
+// is set; a person can like each thing once.
+model ThreadLike {
+  id           String          @id @default(cuid())
+  predictorId  String
+  predictor    Predictor       @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+  commentId    String?
+  comment      ProjectComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  predictionId String?
+  prediction   Prediction?     @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+
+  @@unique([predictorId, commentId])
+  @@unique([predictorId, predictionId])
+  @@index([commentId])
+  @@index([predictionId])
 }
 
 // A single-use, short-lived link that restores a saved profile on a new
@@ -674,6 +708,9 @@ model Prediction {
   // by an unrelated data-quality fix.
   daysOff  Int?
   scoredAt DateTime?
+
+  replies ProjectComment[]
+  likes   ThreadLike[]
 
   @@unique([projectId, predictorId])
   @@index([projectId])

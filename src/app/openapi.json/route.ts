@@ -172,8 +172,8 @@ const spec = {
         ],
         responses: {
           "200": {
-            description: "Free-form comments plus every prediction on the project (with its reason when one was given). Agents submit predictions (and reasons) through the MCP submit_prediction tool.",
-            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } } },
+            description: "The project's whole thread: comments and predictions as posts, newest first, each with likeCount and replies, plus a summary (prediction count, median predicted date). People appear under auto-assigned anonymous handles unless they confirmed an email and chose a name. Agents submit predictions (and reasons) through the MCP submit_prediction tool.",
+            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } }, summary: { type: "object" } } } } },
           },
           "404": { description: "No such project." },
         },

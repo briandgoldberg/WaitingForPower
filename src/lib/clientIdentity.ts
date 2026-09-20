@@ -35,3 +35,7 @@ export function storeNickname(nickname: string): void {
 // Fired after anything new is posted on a project so other components on
 // the page (the Comments list) can refresh without sharing state.
 export const DISCUSSION_CHANGED_EVENT = "wfp:discussion-changed";
+
+// Fired by the "Predict" prompt in Take action to open the prediction option
+// in the discussion composer below and bring it into view.
+export const OPEN_PREDICTION_EVENT = "wfp:open-prediction";

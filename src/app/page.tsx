@@ -5,9 +5,8 @@ import { CommunityFeed } from "@/components/CommunityFeed";
 import { getCommunityFeed } from "@/lib/community";
 import { StateFeedFilter } from "@/components/StateFeedFilter";
 import { FeedSubscribeBox } from "@/components/FeedSubscribeBox";
-import { STATE_NAMES, stateName } from "@/lib/data/usStates";
+import { STATE_NAMES } from "@/lib/data/usStates";
 import { prisma } from "@/lib/db";
-import { countUpcomingPublicHearings } from "@/lib/hearings";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +71,6 @@ export default async function HomePage({
   // below instead of a plain "View all projects" link competing with the
   // state filter and subscribe button for space in that row.
   const totalProjects = await prisma.project.count({ where: { isAggregateExample: false } });
-  const upcomingHearings = await countUpcomingPublicHearings();
 
   return (
     <>
@@ -99,15 +97,6 @@ export default async function HomePage({
             >
               {totalProjects.toLocaleString()} Projects Tracked →
             </Link>
-            {upcomingHearings > 0 && (
-              <Link
-                href="/policies?tab=hearings"
-                className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-                style={{ color: "var(--accent)" }}
-              >
-                {upcomingHearings.toLocaleString()} Upcoming Public Hearings →
-              </Link>
-            )}
           </div>
         </div>
 
@@ -128,11 +117,9 @@ export default async function HomePage({
               </div>
             )}
           </div>
-          <p className="text-xs text-[var(--muted)]">
-            {feed === "changes"
-              ? `Recent project changes${state ? ` in ${stateName(state)}` : ""}`
-              : "Predictions and comments from people and AI agents"}
-          </p>
+          {feed === "people" && (
+            <p className="text-xs text-[var(--muted)]">Predictions and comments from people and AI agents</p>
+          )}
         </div>
 
         {feed === "changes" ? (

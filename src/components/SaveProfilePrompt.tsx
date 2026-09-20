@@ -50,7 +50,7 @@ export function SaveProfilePrompt({ anonymousKey }: { anonymousKey: string }) {
   return (
     <form onSubmit={handleSubmit} className="mt-2 pt-2 border-t border-[var(--border)] flex items-end gap-2 flex-wrap">
       <div className="flex-1 min-w-[160px]">
-        <label className="text-[10px] text-[var(--muted)] block mb-0.5">Confirm your email to save your name and history (optional)</label>
+        <label className="text-[10px] text-[var(--muted)] block mb-0.5">Confirm your email to choose your own name (optional)</label>
         <input
           type="email"
           placeholder="you@example.com"

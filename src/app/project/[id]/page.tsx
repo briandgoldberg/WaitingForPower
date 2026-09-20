@@ -146,7 +146,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
 
   const nowMs = new Date().getTime();
-  const upcomingHearings = p.hearings.filter((h) => new Date(h.endDate ?? h.date).getTime() >= nowMs).length;
   const detailsContent = (
     <>
         <div
@@ -246,7 +245,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     {
       id: "take-action",
       label: resolved ? "Official record" : "Take action",
-      badge: !resolved && upcomingHearings > 0 ? `${upcomingHearings} hearing${upcomingHearings === 1 ? "" : "s"}` : undefined,
       content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
     },
   ];

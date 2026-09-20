@@ -5,8 +5,6 @@ import { useEffect, useState, type ReactNode } from "react";
 export interface PillSection {
   id: string;
   label: string;
-  // A small count shown inside the pill, like the number of timeline events.
-  badge?: string;
   content: ReactNode;
 }
 
@@ -55,9 +53,6 @@ export function SectionPills({ sections }: { sections: PillSection[] }) {
               }`}
             >
               {s.label}
-              {s.badge && (
-                <span className={`rounded-full px-1.5 text-xs ${open ? "bg-white/20" : "bg-[var(--accent)]/10"}`}>{s.badge}</span>
-              )}
               <span aria-hidden className={`transition-transform ${open ? "rotate-90" : ""}`}>
                 ›
               </span>

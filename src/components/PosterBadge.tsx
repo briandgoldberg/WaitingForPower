@@ -9,12 +9,30 @@ export function PosterBadge({ confirmed, guest }: { confirmed: boolean; guest: b
       </span>
     );
   }
-  if (guest) {
-    return (
-      <span className="rounded border border-[var(--border)] px-1 text-[9px] uppercase tracking-wide text-[var(--muted)]" title="Anonymous guest">
-        Guest
-      </span>
-    );
-  }
+  if (guest) return <DeviceIcon />;
   return null;
+}
+
+// A tiny laptop: this name is an anonymous handle tied to the poster's browser.
+export function DeviceIcon({ className = "" }: { className?: string }) {
+  const tip = "Anonymous name tied to this device";
+  return (
+    <svg
+      role="img"
+      aria-label={tip}
+      viewBox="0 0 16 16"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 text-[var(--muted)] ${className}`}
+    >
+      <title>{tip}</title>
+      <rect x="3" y="3.5" width="10" height="7" rx="1" />
+      <path d="M1.5 13h13" />
+    </svg>
+  );
 }

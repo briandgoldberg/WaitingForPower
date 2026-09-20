@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DeviceIcon } from "./PosterBadge";
 import { SaveProfilePrompt } from "./SaveProfilePrompt";
 
 // Shown to a first-time poster instead of the composer. Their post is held
@@ -50,7 +51,14 @@ export function IdentityDecision({
           disabled={saving}
           className="rounded-md bg-[var(--accent)] text-white px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
         >
-          {saving ? "Posting…" : `Post as ${label}`}
+          {saving ? (
+            "Posting…"
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              Post as {label}
+              <DeviceIcon className="!text-white/80" />
+            </span>
+          )}
         </button>
         <button
           type="button"

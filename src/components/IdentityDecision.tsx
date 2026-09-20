@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { SaveProfilePrompt } from "./SaveProfilePrompt";
 
-// Shown to a first-time poster instead of the composer: their post is saved
-// but held (only they can see it) until they decide how to appear. Two clear
-// choices: keep the anonymous handle and go public, or confirm an email to
+// Shown to a first-time poster instead of the composer. Their post is held
+// (nobody sees it) until they choose: keep the handle, or confirm an email to
 // pick a name.
 export function IdentityDecision({
   anonymousKey,
@@ -43,11 +42,7 @@ export function IdentityDecision({
   }
 
   return (
-    <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4 flex flex-col gap-3">
-      <div>
-        <p className="text-sm font-semibold">Your post is saved</p>
-        <p className="text-xs text-[var(--text-secondary)] mt-0.5">Only you can see it until you choose how to appear.</p>
-      </div>
+    <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-3 flex flex-col gap-2">
       <div className="flex flex-col sm:flex-row gap-2">
         <button
           type="button"

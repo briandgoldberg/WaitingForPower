@@ -218,9 +218,9 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
 
   const predictorSelect = { select: { id: true, displayName: true, agentName: true, email: true, identityDecidedAt: true } } as const;
   // Posts from someone who hasn't yet chosen how to appear are held: only
-  // they see them. AI agents' posts are always public.
+  // nobody sees them, the author included, until they decide. AI agents' posts are always public.
   const visible = {
-    OR: [{ agentName: { not: null } }, { identityDecidedAt: { not: null } }, ...(me ? [{ id: me.id }] : [])],
+    OR: [{ agentName: { not: null } }, { identityDecidedAt: { not: null } }],
   };
   const [comments, predictions] = await Promise.all([
     prisma.projectComment.findMany({
@@ -310,7 +310,7 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
 
   const med = median(predictions.map((p) => p.predictedDate));
   const agentCount = predictions.filter((p) => p.predictor.agentName != null).length;
-  const mine = me ? await prisma.prediction.findFirst({ where: { projectId, predictorId: me.id }, select: { predictedDate: true } }) : null;
+  const mine = me && me.identityDecidedAt ? await prisma.prediction.findFirst({ where: { projectId, predictorId: me.id }, select: { predictedDate: true } }) : null;
 
   return {
     items,

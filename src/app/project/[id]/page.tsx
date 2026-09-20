@@ -243,7 +243,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     ...(p.milestones.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
     {
       id: "take-action",
-      label: resolved ? "Official record" : "Take action",
+      label: resolved ? "Official record" : "Advocate",
       content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
     },
   ];

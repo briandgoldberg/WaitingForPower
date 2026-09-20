@@ -27,9 +27,9 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
-// What someone needs to act on a project: the official docket, who
-// regulates it, and upcoming hearings and comment windows. The discussion,
-// including predictions, is at the bottom of the page.
+// The content of the Take action pill: the official docket, who regulates
+// it, and upcoming hearings and comment windows (or, for a project that
+// already has its answer, just the docket and regulators).
 export function TakeActionSection({ project: p, nowMs, resolved }: { project: ProjectDTO; nowMs: number; resolved: boolean }) {
   const primarySource = p.sources[0];
   const regulatorStates = splitStateCodes(p.state)
@@ -75,20 +75,14 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
   // to act on, so it gets a plain reference block instead of Take action.
   if (resolved) {
     return (
-      <section id="take-action" className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
-        <h2 className="text-lg font-bold text-[var(--accent)]">Official record</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {docketColumn}
-          {contactColumn}
-        </div>
-      </section>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {docketColumn}
+        {contactColumn}
+      </div>
     );
   }
 
   return (
-    <section id="take-action" className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-5">
-      <h2 className="text-lg font-bold text-[var(--accent)]">Take action</h2>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {docketColumn}
 
@@ -134,6 +128,5 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
           </p>
         </Column>
       </div>
-    </section>
   );
 }

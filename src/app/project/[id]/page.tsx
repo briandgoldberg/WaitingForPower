@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
-import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES, type ProjectStage } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
@@ -13,6 +13,7 @@ import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
+import { SectionPills, type PillSection } from "@/components/project/SectionPills";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
 import { OutcomeBanner } from "@/components/project/OutcomeBanner";
 import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
@@ -81,16 +82,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const canPredict = !p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state);
   const outcome = outcomeOf(p);
   const resolved = isResolved(outcome);
-  // When the source didn't publish a real resolution date, fall back to when
-  // we first saw the project resolved (shown as an estimate).
-  const observed =
-    resolved && !p.resolutionDate
-      ? await prisma.projectChange.findFirst({
-          where: { projectId: p.id, changeTypes: { has: "resolved" } },
-          orderBy: { createdAt: "asc" },
-          select: { createdAt: true },
-        })
-      : null;
+  // When we first saw the project resolved, and the stage it was in before.
+  // Used as an estimated date when the source didn't publish a real one, and
+  // to show a cancelled project's last stage.
+  const observed = resolved
+    ? await prisma.projectChange.findFirst({
+        where: { projectId: p.id, changeTypes: { has: "resolved" } },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true, previousStage: true },
+      })
+    : null;
   const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
@@ -118,10 +119,22 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     { label: "Capacity", value: formatCapacity(p.capacityValue, p.capacityUnit) },
   ];
   if (resolved) {
-    if (waitedYears != null) primaryCards.push({ label: "Waited", value: `${waitedYears.toFixed(1)} yrs` });
+    // Approved and cancelled share one skeleton: capacity, how long it took,
+    // then one outcome-specific number (investment for approved, the last
+    // stage reached for cancelled). Each slot is dropped when unknown.
+    if (waitedYears != null) {
+      primaryCards.push({ label: "Waited", value: `${waitedYears.toFixed(1)} yrs` });
+    } else if (p.applicationFiledDate) {
+      primaryCards.push({
+        label: "Filed",
+        value: new Date(p.applicationFiledDate).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }),
+      });
+    }
     if (outcome === "approved" && p.investmentWaiting.applicable) {
       primaryCards.push({ label: "Est. investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
     }
+    const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
+    if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", value: lastStage });
   } else {
     primaryCards.push({ label: "Waiting", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
     primaryCards.push(
@@ -131,6 +144,112 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     );
   }
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
+
+  const nowMs = new Date().getTime();
+  const upcomingHearings = p.hearings.filter((h) => new Date(h.endDate ?? h.date).getTime() >= nowMs).length;
+  const detailsContent = (
+    <>
+        <div
+          className="grid gap-x-5 gap-y-4"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
+        >
+          {!resolved && (
+            <Detail
+              label="Stage"
+              value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
+              rows={[
+                p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
+                p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
+              ]}
+            />
+          )}
+          {p.applicationFiledDate && (
+            <Detail
+              label="Filed"
+              value={`${new Date(p.applicationFiledDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}${p.dateConfidence === "approximate" ? " (estimated)" : ""}`}
+            />
+          )}
+          {p.balancingAuthority ? (
+            <Detail
+              label="Grid region"
+              value={p.balancingAuthority}
+              rows={[p.pointOfInterconnection ? ["Point of interconnection", p.pointOfInterconnection] : null]}
+            />
+          ) : p.pointOfInterconnection ? (
+            <Detail label="Point of interconnection" value={p.pointOfInterconnection} />
+          ) : null}
+          {(p.netSummerCapacityMw != null || p.netWinterCapacityMw != null) && (
+            <Detail
+              label="Net capacity"
+              value={p.netSummerCapacityMw != null ? `${p.netSummerCapacityMw.toLocaleString("en-US")} MW summer` : `${p.netWinterCapacityMw!.toLocaleString("en-US")} MW winter`}
+              rows={[p.netSummerCapacityMw != null && p.netWinterCapacityMw != null ? ["Winter", `${p.netWinterCapacityMw.toLocaleString("en-US")} MW`] : null]}
+            />
+          )}
+          {p.primeMoverCode && <Detail label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
+          {p.expectedOnlineDate && (
+            <Detail
+              label="Expected online"
+              value={`${new Date(p.expectedOnlineDate).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" })}${p.expectedOnlineDateConfidence === "approximate" ? "*" : ""}`}
+            />
+          )}
+          {p.currentStatus && <Detail wide label="Current status" value={withoutDashes(p.currentStatus)} />}
+          {!resolved && p.causeDetail && (
+            <Detail
+              wide
+              label={causeLabels.length > 0 ? `Why it's waiting: ${causeLabels.join(", ")}` : "Why it's waiting"}
+              value={withoutDashes(p.causeDetail)}
+            />
+          )}
+          {p.networkUpgradeCostUsd != null && (
+            <Detail
+              wide
+              label="Estimated interconnection cost"
+              value={formatUsd((p.poiCostUsd ?? 0) + p.networkUpgradeCostUsd)}
+              rows={[
+                p.poiCostUsd != null
+                  ? ["Breakdown", `${formatUsd(p.poiCostUsd)} point of interconnection + ${formatUsd(p.networkUpgradeCostUsd)} network upgrade`]
+                  : null,
+                ["Source", "LBNL interconnection cost research. LBNL calls these estimates preliminary."],
+              ]}
+            />
+          )}
+        </div>
+        {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
+          <p className="mt-2 text-xs text-[var(--muted)]">* Approximate / developer-estimated date, not a firm commitment.</p>
+        )}
+    </>
+  );
+  const timelineContent = (
+    <>
+          <ul className="flex flex-col gap-3">
+            {p.milestones.map((m, i) => (
+              <li key={i} className="flex gap-3 text-sm">
+                <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
+                  {new Date(m.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                  {m.dateConfidence === "approximate" && <span className="text-xs">*</span>}
+                </div>
+                <div>
+                  <span className="font-medium">{m.description}</span>
+                  <span className="text-[var(--muted)]"> · {m.stage}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {p.milestones.some((m) => m.dateConfidence === "approximate") && (
+            <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
+          )}
+    </>
+  );
+  const sections: PillSection[] = [
+    { id: "details", label: "Details", content: detailsContent },
+    ...(p.milestones.length > 0 ? [{ id: "timeline", label: "Timeline", badge: String(p.milestones.length), content: timelineContent }] : []),
+    {
+      id: "take-action",
+      label: resolved ? "Official record" : "Take action",
+      badge: !resolved && upcomingHearings > 0 ? `${upcomingHearings} hearing${upcomingHearings === 1 ? "" : "s"}` : undefined,
+      content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
+    },
+  ];
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-4 flex flex-col gap-4">
@@ -198,117 +317,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         style={{ gridTemplateColumns: `repeat(${primaryCards.length}, minmax(0, 1fr))` }}
       >
         {primaryCards.map((c) => (
-          <PrimaryStat key={c.label} {...c} tone={outcome === "approved" ? "approved" : resolved ? "muted" : "accent"} />
+          <PrimaryStat key={c.label} {...c} tone={outcome === "approved" ? "approved" : outcome === "cancelled" ? "cancelled" : "accent"} />
         ))}
       </div>
 
-      <details className="group">
-        <summary className="inline-flex items-center gap-1.5 cursor-pointer list-none rounded-full border border-[var(--border)] bg-[var(--panel)] px-3.5 py-1.5 text-sm font-medium text-[var(--accent)] hover:border-[var(--accent)] [&::-webkit-details-marker]:hidden">
-          Details
-          <span aria-hidden className="transition-transform group-open:rotate-90">
-            ›
-          </span>
-        </summary>
-        <div
-          className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 grid gap-x-5 gap-y-4"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
-        >
-          {!resolved && (
-            <Detail
-              label="Stage"
-              value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
-              rows={[
-                p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
-                p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
-              ]}
-            />
-          )}
-          {p.applicationFiledDate && (
-            <Detail
-              label="Filed"
-              value={`${new Date(p.applicationFiledDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}${p.dateConfidence === "approximate" ? " (estimated)" : ""}`}
-            />
-          )}
-          {p.balancingAuthority ? (
-            <Detail
-              label="Grid region"
-              value={p.balancingAuthority}
-              rows={[p.pointOfInterconnection ? ["Point of interconnection", p.pointOfInterconnection] : null]}
-            />
-          ) : p.pointOfInterconnection ? (
-            <Detail label="Point of interconnection" value={p.pointOfInterconnection} />
-          ) : null}
-          {(p.netSummerCapacityMw != null || p.netWinterCapacityMw != null) && (
-            <Detail
-              label="Net capacity"
-              value={p.netSummerCapacityMw != null ? `${p.netSummerCapacityMw.toLocaleString("en-US")} MW summer` : `${p.netWinterCapacityMw!.toLocaleString("en-US")} MW winter`}
-              rows={[p.netSummerCapacityMw != null && p.netWinterCapacityMw != null ? ["Winter", `${p.netWinterCapacityMw.toLocaleString("en-US")} MW`] : null]}
-            />
-          )}
-          {p.primeMoverCode && <Detail label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
-          {p.expectedOnlineDate && (
-            <Detail
-              label="Expected online"
-              value={`${new Date(p.expectedOnlineDate).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" })}${p.expectedOnlineDateConfidence === "approximate" ? "*" : ""}`}
-            />
-          )}
-          {p.currentStatus && <Detail wide label="Current status" value={withoutDashes(p.currentStatus)} />}
-          {!resolved && p.causeDetail && (
-            <Detail
-              wide
-              label={causeLabels.length > 0 ? `Why it's waiting: ${causeLabels.join(", ")}` : "Why it's waiting"}
-              value={withoutDashes(p.causeDetail)}
-            />
-          )}
-        </div>
-        {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
-          <p className="mt-2 text-xs text-[var(--muted)]">* Approximate / developer-estimated date, not a firm commitment.</p>
-        )}
-      </details>
-
-      <TakeActionSection project={p} nowMs={new Date().getTime()} resolved={resolved} />
-
-      {p.networkUpgradeCostUsd != null && (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <h2 className="text-base font-semibold text-[var(--accent)] mb-2">Estimated interconnection cost</h2>
-          <div className="text-3xl font-bold tabular-nums">
-            {formatUsd((p.poiCostUsd ?? 0) + p.networkUpgradeCostUsd)}
-          </div>
-          {p.poiCostUsd != null && (
-            <p className="text-xs text-[var(--text-secondary)] mt-1">
-              {formatUsd(p.poiCostUsd)} point-of-interconnection + {formatUsd(p.networkUpgradeCostUsd)} network upgrade
-            </p>
-          )}
-          <p className="text-xs text-[var(--text-secondary)] mt-2">
-            The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
-            interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
-            preliminary.
-          </p>
-        </section>
-      )}
-
-      {p.milestones.length > 0 && (
-        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <h2 className="text-base font-semibold text-[var(--accent)] mb-3">Timeline</h2>
-          <ul className="flex flex-col gap-3">
-            {p.milestones.map((m, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
-                  {new Date(m.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                  {m.dateConfidence === "approximate" && <span className="text-xs">*</span>}
-                </div>
-                <div>
-                  <span className="font-medium">{m.description}</span>
-                  <span className="text-[var(--muted)]"> — {m.stage}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {p.milestones.some((m) => m.dateConfidence === "approximate") && (
-            <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
-          )}
-        </section>
-      )}
+      <SectionPills sections={sections} />
 
       <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
         <ProjectDiscussion projectId={p.id} canPredict={canPredict} />
@@ -322,7 +335,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 const PRIMARY_TONES = {
   accent: "bg-[var(--accent)]",
   approved: "bg-emerald-700 dark:bg-emerald-800",
-  muted: "bg-slate-600 dark:bg-slate-700",
+  cancelled: "bg-rose-800 dark:bg-rose-900",
 } as const;
 
 function PrimaryStat({
@@ -349,7 +362,8 @@ function PrimaryStat({
           label
         )}
       </div>
-      <div className="text-xl sm:text-3xl font-bold tabular-nums mt-1 break-words">{value}</div>
+      {/* Longer text like "Not disclosed" is set smaller on phones so it wraps between words, not inside one. */}
+      <div className={`${value.length > 9 ? "text-base" : "text-xl"} sm:text-3xl font-bold tabular-nums mt-1`}>{value}</div>
       {note && (
         <div title={note} className="text-[10px] leading-snug text-white/75 mt-1 line-clamp-2">
           {note}

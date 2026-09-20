@@ -30,48 +30,69 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 // What someone needs to act on a project: the official docket, who
 // regulates it, and upcoming hearings and comment windows. The discussion,
 // including predictions, is at the bottom of the page.
-export function TakeActionSection({ project: p, nowMs }: { project: ProjectDTO; nowMs: number }) {
+export function TakeActionSection({ project: p, nowMs, resolved }: { project: ProjectDTO; nowMs: number; resolved: boolean }) {
   const primarySource = p.sources[0];
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
     .slice(0, MAX_STATES_SHOWN);
+
+  const docketColumn = (
+    <Column title="Official docket">
+      {primarySource ? (
+        <p className="text-sm">
+          <ExternalLink href={primarySource.url}>{primarySource.label}</ExternalLink>
+        </p>
+      ) : (
+        <p className="text-sm text-[var(--text-secondary)]">Not available.</p>
+      )}
+      <p className="text-xs text-[var(--muted)] mt-1">{resolved ? "The official filings for this project." : "Read the filings and file a public comment where the regulator allows it."}</p>
+    </Column>
+  );
+  const contactColumn = (
+    <Column title="Who to contact">
+      {regulatorStates.length > 0 ? (
+        <ul className="flex flex-col gap-2 text-sm">
+          {regulatorStates.flatMap((code) =>
+            STATE_REGULATORS[code].map((r) => (
+              <li key={`${code}-${r.name}`}>
+                <span className="font-medium">{r.name}</span>
+                {regulatorStates.length > 1 && <span className="text-[var(--muted)]"> ({stateName(code)})</span>}
+                <div className="text-xs flex gap-3 mt-0.5">
+                  <ExternalLink href={r.website}>Website</ExternalLink>
+                  {r.contactUrl && <ExternalLink href={r.contactUrl}>Contact</ExternalLink>}
+                </div>
+              </li>
+            )),
+          )}
+        </ul>
+      ) : (
+        <p className="text-sm text-[var(--text-secondary)]">No state regulator on file for this project.</p>
+      )}
+    </Column>
+  );
+
+  // A project that already has its answer has no hearings or comment window
+  // to act on, so it gets a plain reference block instead of Take action.
+  if (resolved) {
+    return (
+      <section id="take-action" className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
+        <h2 className="text-lg font-bold text-[var(--accent)]">Official record</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {docketColumn}
+          {contactColumn}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="take-action" className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-5">
       <h2 className="text-lg font-bold text-[var(--accent)]">Take action</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Column title="Official docket">
-          {primarySource ? (
-            <p className="text-sm">
-              <ExternalLink href={primarySource.url}>{primarySource.label}</ExternalLink>
-            </p>
-          ) : (
-            <p className="text-sm text-[var(--text-secondary)]">Not available.</p>
-          )}
-          <p className="text-xs text-[var(--muted)] mt-1">Read the filings and file a public comment where the regulator allows it.</p>
-        </Column>
+        {docketColumn}
 
-        <Column title="Who to contact">
-          {regulatorStates.length > 0 ? (
-            <ul className="flex flex-col gap-2 text-sm">
-              {regulatorStates.flatMap((code) =>
-                STATE_REGULATORS[code].map((r) => (
-                  <li key={`${code}-${r.name}`}>
-                    <span className="font-medium">{r.name}</span>
-                    {regulatorStates.length > 1 && <span className="text-[var(--muted)]"> ({stateName(code)})</span>}
-                    <div className="text-xs flex gap-3 mt-0.5">
-                      <ExternalLink href={r.website}>Website</ExternalLink>
-                      {r.contactUrl && <ExternalLink href={r.contactUrl}>Contact</ExternalLink>}
-                    </div>
-                  </li>
-                )),
-              )}
-            </ul>
-          ) : (
-            <p className="text-sm text-[var(--text-secondary)]">No state regulator on file for this project.</p>
-          )}
-        </Column>
+        {contactColumn}
 
         <Column title="Hearings and comment deadlines">
           {p.hearings.length > 0 ? (

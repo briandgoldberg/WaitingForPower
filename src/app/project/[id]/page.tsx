@@ -14,6 +14,10 @@ import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
+import { OutcomeBanner } from "@/components/project/OutcomeBanner";
+import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
+import { withoutDashes } from "@/lib/text";
+import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +37,9 @@ const getProject = cache(async (slug: string) => {
 // Kept as one function so the share-button text and the OG text can't
 // drift apart.
 function shareText(p: ProjectDTO): string {
+  const outcome = outcomeOf(p);
+  if (outcome === "approved") return `${p.name} has been approved. Tracked on WaitingForPower.`;
+  if (outcome === "cancelled") return `${p.name} was cancelled. Tracked on WaitingForPower.`;
   return `${p.name} has been waiting${p.yearsWaiting != null ? ` ${p.yearsWaiting.toFixed(1)} years` : ""} for approval. Tracked on WaitingForPower.`;
 }
 
@@ -72,6 +79,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
   const canPredict = !p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state);
+  const outcome = outcomeOf(p);
+  const resolved = isResolved(outcome);
+  // When the source didn't publish a real resolution date, fall back to when
+  // we first saw the project resolved (shown as an estimate).
+  const observed =
+    resolved && !p.resolutionDate
+      ? await prisma.projectChange.findFirst({
+          where: { projectId: p.id, changeTypes: { has: "resolved" } },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        })
+      : null;
+  const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
   const hearingEventsJsonLd = buildHearingEventsJsonLd({
@@ -89,6 +109,28 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       : []),
     { name: p.name },
   ]);
+
+  // The three headline numbers. "Waiting" and "investment waiting" only make
+  // sense for a project still in permitting, so a resolved project shows what
+  // it waited instead, and drops the investment card when it can't be
+  // estimated.
+  const primaryCards: { label: string; value: string; href?: string; note?: string }[] = [
+    { label: "Capacity", value: formatCapacity(p.capacityValue, p.capacityUnit) },
+  ];
+  if (resolved) {
+    if (waitedYears != null) primaryCards.push({ label: "Waited", value: `${waitedYears.toFixed(1)} yrs` });
+    if (outcome === "approved" && p.investmentWaiting.applicable) {
+      primaryCards.push({ label: "Est. investment", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" });
+    }
+  } else {
+    primaryCards.push({ label: "Waiting", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
+    primaryCards.push(
+      p.investmentWaiting.applicable
+        ? { label: "Est. investment waiting", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
+        : { label: "Est. investment waiting", value: "—", note: "Estimated only for MW capacity" },
+    );
+  }
+  const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
 
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-4 flex flex-col gap-4">
@@ -108,8 +150,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <div className="rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm">
           <strong>This is a regional aggregate, not a single physical project.</strong> It&rsquo;s
           included to illustrate the interconnection-queue-backlog category with real, cited
-          numbers and is excluded from this site&rsquo;s aggregate headline stats. See
-          &ldquo;Data quality notes&rdquo; below.
+          numbers and is excluded from this site&rsquo;s aggregate headline stats.
         </div>
       )}
 
@@ -148,54 +189,84 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <PrimaryStat label="Capacity" value={formatCapacity(p.capacityValue, p.capacityUnit)} />
-        <PrimaryStat label="Waiting" value={p.yearsWaiting != null ? `${p.yearsWaiting.toFixed(1)} yrs` : "—"} />
-        <PrimaryStat
-          label="Est. investment waiting"
-          value={p.investmentWaiting.applicable ? formatUsd(p.investmentWaiting.estimatedUsd!) : "—"}
-          note={p.investmentWaiting.applicable ? undefined : `Not estimated: ${p.investmentWaiting.reason}`}
-          href="/methodology"
-        />
-      </div>
-
-      <div
-        className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 grid gap-x-5 gap-y-4"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
-      >
-        <Detail
-          label="Stage"
-          value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
-          rows={[
-            p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
-            p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
-          ]}
-        />
-        {p.balancingAuthority ? (
-          <Detail
-            label="Grid region"
-            value={p.balancingAuthority}
-            rows={[p.pointOfInterconnection ? ["Point of interconnection", p.pointOfInterconnection] : null]}
-          />
-        ) : p.pointOfInterconnection ? (
-          <Detail label="Point of interconnection" value={p.pointOfInterconnection} />
-        ) : null}
-        {p.primeMoverCode && <Detail label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
-        {p.expectedOnlineDate && (
-          <Detail
-            label="Expected online"
-            value={`${new Date(p.expectedOnlineDate).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" })}${p.expectedOnlineDateConfidence === "approximate" ? "*" : ""}`}
-          />
-        )}
-      </div>
-      {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
-        <p className="text-xs text-[var(--muted)] -mt-2">* Approximate / developer-estimated date, not a firm commitment.</p>
+      {outcome !== "pending" && (
+        <OutcomeBanner project={p} outcome={outcome} observedAt={observed ? observed.createdAt.toISOString() : null} />
       )}
 
-      <TakeActionSection
-        project={p}
-        nowMs={new Date().getTime()}
-      />
+      <div
+        className={`grid gap-2 sm:gap-3 ${primaryCards.length === 1 ? "sm:max-w-xs" : ""}`}
+        style={{ gridTemplateColumns: `repeat(${primaryCards.length}, minmax(0, 1fr))` }}
+      >
+        {primaryCards.map((c) => (
+          <PrimaryStat key={c.label} {...c} tone={outcome === "approved" ? "approved" : resolved ? "muted" : "accent"} />
+        ))}
+      </div>
+
+      <details className="group">
+        <summary className="inline-flex items-center gap-1.5 cursor-pointer list-none rounded-full border border-[var(--border)] bg-[var(--panel)] px-3.5 py-1.5 text-sm font-medium text-[var(--accent)] hover:border-[var(--accent)] [&::-webkit-details-marker]:hidden">
+          Details
+          <span aria-hidden className="transition-transform group-open:rotate-90">
+            ›
+          </span>
+        </summary>
+        <div
+          className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 grid gap-x-5 gap-y-4"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
+        >
+          {!resolved && (
+            <Detail
+              label="Stage"
+              value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
+              rows={[
+                p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
+                p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
+              ]}
+            />
+          )}
+          {p.applicationFiledDate && (
+            <Detail
+              label="Filed"
+              value={`${new Date(p.applicationFiledDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}${p.dateConfidence === "approximate" ? " (estimated)" : ""}`}
+            />
+          )}
+          {p.balancingAuthority ? (
+            <Detail
+              label="Grid region"
+              value={p.balancingAuthority}
+              rows={[p.pointOfInterconnection ? ["Point of interconnection", p.pointOfInterconnection] : null]}
+            />
+          ) : p.pointOfInterconnection ? (
+            <Detail label="Point of interconnection" value={p.pointOfInterconnection} />
+          ) : null}
+          {(p.netSummerCapacityMw != null || p.netWinterCapacityMw != null) && (
+            <Detail
+              label="Net capacity"
+              value={p.netSummerCapacityMw != null ? `${p.netSummerCapacityMw.toLocaleString("en-US")} MW summer` : `${p.netWinterCapacityMw!.toLocaleString("en-US")} MW winter`}
+              rows={[p.netSummerCapacityMw != null && p.netWinterCapacityMw != null ? ["Winter", `${p.netWinterCapacityMw.toLocaleString("en-US")} MW`] : null]}
+            />
+          )}
+          {p.primeMoverCode && <Detail label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
+          {p.expectedOnlineDate && (
+            <Detail
+              label="Expected online"
+              value={`${new Date(p.expectedOnlineDate).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" })}${p.expectedOnlineDateConfidence === "approximate" ? "*" : ""}`}
+            />
+          )}
+          {p.currentStatus && <Detail wide label="Current status" value={withoutDashes(p.currentStatus)} />}
+          {!resolved && p.causeDetail && (
+            <Detail
+              wide
+              label={causeLabels.length > 0 ? `Why it's waiting: ${causeLabels.join(", ")}` : "Why it's waiting"}
+              value={withoutDashes(p.causeDetail)}
+            />
+          )}
+        </div>
+        {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
+          <p className="mt-2 text-xs text-[var(--muted)]">* Approximate / developer-estimated date, not a firm commitment.</p>
+        )}
+      </details>
+
+      <TakeActionSection project={p} nowMs={new Date().getTime()} resolved={resolved} />
 
       {p.networkUpgradeCostUsd != null && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
@@ -211,7 +282,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <p className="text-xs text-[var(--text-secondary)] mt-2">
             The cost of grid upgrades needed to connect this project, from LBNL&rsquo;s
             interconnection cost-analysis research. LBNL&rsquo;s own docs call these estimates
-            preliminary — see the data quality note below.
+            preliminary.
           </p>
         </section>
       )}
@@ -248,9 +319,27 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
 // The three headline numbers: filled and larger than the secondary Stat
 // cards so they read first.
-function PrimaryStat({ label, value, href, note }: { label: string; value: string; href?: string; note?: string }) {
+const PRIMARY_TONES = {
+  accent: "bg-[var(--accent)]",
+  approved: "bg-emerald-700 dark:bg-emerald-800",
+  muted: "bg-slate-600 dark:bg-slate-700",
+} as const;
+
+function PrimaryStat({
+  label,
+  value,
+  href,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  href?: string;
+  note?: string;
+  tone: keyof typeof PRIMARY_TONES;
+}) {
   return (
-    <div className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
+    <div className={`rounded-xl ${PRIMARY_TONES[tone]} text-white p-3 sm:p-4 flex flex-col justify-between min-w-0`}>
       <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75">
         {href ? (
           <Link href={href} className="hover:underline">
@@ -273,12 +362,12 @@ function PrimaryStat({ label, value, href, note }: { label: string; value: strin
 // One labeled item in the details panel. Extra facts about the same thing
 // (queue stage, point of interconnection) sit under it as label and value
 // pairs, so every item reads the same way.
-function Detail({ label, value, rows }: { label: string; value: string; rows?: ([string, string] | null)[] }) {
+function Detail({ label, value, rows, wide }: { label: string; value: string; rows?: ([string, string] | null)[]; wide?: boolean }) {
   const pairs = (rows ?? []).filter((r): r is [string, string] => r != null);
   return (
-    <div className="border-l-2 border-[var(--accent)] pl-3 min-w-0">
+    <div className={`border-l-2 border-[var(--accent)] pl-3 min-w-0 ${wide ? "col-span-full" : ""}`}>
       <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      <div className="text-sm font-semibold mt-0.5 break-words">{value}</div>
+      <div className={`text-sm mt-0.5 break-words ${wide ? "text-[var(--text-secondary)] leading-snug" : "font-semibold"}`}>{value}</div>
       {pairs.map(([k, v]) => (
         <div key={k} className="text-xs mt-1 leading-snug break-words">
           <span className="text-[var(--muted)]">{k}: </span>

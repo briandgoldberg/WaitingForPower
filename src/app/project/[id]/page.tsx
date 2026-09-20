@@ -132,7 +132,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     const lastStage = observed?.previousStage ? PROJECT_STAGE_BY_VALUE[observed.previousStage as ProjectStage] : undefined;
     if (outcome === "cancelled" && lastStage) primaryCards.push({ label: "Last stage", help: "The stage it reached before it was cancelled.", value: lastStage });
   } else {
-    primaryCards.push({ label: "Time Pending", help: "Years since the application was filed with no final decision.", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
+    primaryCards.push({ label: "Time\nPending", help: "Years since the application was filed with no final decision.", value: waitedYears != null ? `${waitedYears.toFixed(1)} yrs` : "—" });
     primaryCards.push(
       p.investmentWaiting.applicable
         ? { label: "Deferred Investment", help: "Estimated construction cost: capacity times typical cost per kW. Not spent yet, because it is waiting on approval.", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
@@ -351,7 +351,7 @@ function PrimaryStat({
 }) {
   return (
     <div title={help} className="rounded-xl bg-[var(--accent)] text-white p-3 sm:p-4 flex flex-col justify-between min-w-0">
-      <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75">
+      <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wide text-white/75 whitespace-pre-line sm:whitespace-normal">
         {href ? (
           <Link href={href} className="hover:underline">
             {label}

@@ -116,7 +116,7 @@ export function StatsHeader({
       ),
     },
     {
-      label: "Investment",
+      label: "Deferred Investment",
       value: formatUsd(stats.totalInvestmentWaitingUsd),
       note: `${stats.investmentWaitingCoverageCount}/${stats.totalProjects} projects have an applicable estimate`,
       help: (

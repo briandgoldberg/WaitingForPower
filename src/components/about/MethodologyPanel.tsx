@@ -24,13 +24,13 @@ export function MethodologyPanel() {
       </section>
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-        <h2 className="text-lg font-semibold mb-2">Estimated investment waiting</h2>
+        <h2 className="text-lg font-semibold mb-2">Deferred investment (estimated)</h2>
         <p className="text-sm mb-3">
           For generation and storage projects with capacity measured in MW and a fuel type with a
           published typical construction cost:
         </p>
         <pre className="text-xs bg-black/5 dark:bg-white/10 rounded-md p-3 overflow-x-auto">
-{`estimated investment waiting
+{`deferred investment
   = capacity (MW) × 1,000 (kW/MW)
   × typical overnight construction cost for that technology ($/kW)`}
         </pre>
@@ -97,7 +97,7 @@ export function MethodologyPanel() {
       <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
         <h2 className="text-lg font-semibold mb-2">Aggregate headline stats</h2>
         <p className="text-sm">
-          Total capacity, total clean energy capacity, and total investment waiting sum only over
+          Total capacity, total clean energy capacity, and total deferred investment sum only over
           projects in the <em>current filtered set</em> — they update live as you filter. Entries
           flagged <code>isAggregateExample</code> are always excluded from these totals, since
           they&rsquo;d represent a regional statistic (e.g. an entire ISO interconnection queue)

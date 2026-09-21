@@ -40,6 +40,8 @@ function adviceFor(ph: Phase, howToComment: string | null, rule: string | null, 
   return "No hearing is scheduled that we know of. Many commissions accept comments while a case is open." + (how || " Check the docket.");
 }
 
+const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
 const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
@@ -186,7 +188,6 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
           const publicNext = p.hearings.find(isPublicHearing);
           const next = ph === "comment" ? publicNext : p.hearings[0];
-          const others = p.hearings.filter((h) => h !== next);
           const rule = codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
           return (
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
@@ -212,14 +213,22 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${PILL[ph]}`}>
                     {ph === "comment" ? (p.commentDeadline ? `Comments due ${fmtDay(p.commentDeadline)}` : publicNext ? `Speak ${fmtDay(publicNext.date)}` : "Comments open") : ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
                   </span>
-                  {next?.label && <span className="text-[var(--muted)]">{next.label}</span>}
-                  {ph === "hearing" && next?.label && !isPublicHearing(next) && <span className="text-[var(--muted)]">(parties only)</span>}
-                  {others.length > 0 && (
-                    <span className="text-[var(--muted)]">+{others.length} more date{others.length > 1 ? "s" : ""}</span>
-                  )}
                   {ph === "decision" && p.reviewStepAt && <span className="text-[var(--muted)]">since {fmtDay(p.reviewStepAt)}</span>}
                 </div>
-                {(ph === "hearing" || ph === "comment") && next?.location && <p className="text-xs text-[var(--muted)]">Where: {next.location}</p>}
+                {(ph === "hearing" || ph === "comment") && p.hearings.length > 0 && (
+                  <ul className="flex flex-col gap-1 text-xs">
+                    {p.hearings.map((h, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span className="w-16 shrink-0 font-medium">{fmtShort(h.date)}</span>
+                        <span className="min-w-0 text-[var(--text-secondary)]">
+                          {h.label ?? "Hearing"}
+                          {h.label && /^hearing$/i.test(h.label) ? null : <span className="text-[var(--muted)]">{isPublicHearing(h) ? " · public can speak" : " · parties only"}</span>}
+                          {h.location && <span className="block text-[var(--muted)]">{h.location}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <p className="text-xs text-[var(--text-secondary)]">{adviceFor(ph, rule?.howToComment || null, rule && rule.recordRule !== "unknown" ? rule.recordRule : null, !!p.commentDeadline && !publicNext)}</p>
               </div>
 

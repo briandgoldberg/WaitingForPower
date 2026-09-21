@@ -10,14 +10,14 @@ import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateComm
 
 const PAGE_SIZE = 20;
 
-type Phase = "comment" | "hearing" | "decision" | "waiting";
+type Filter = "comment" | "hearing" | "open";
 
-const PHASES: { value: Phase | "all"; label: string }[] = [
-  { value: "all", label: "All" },
+// A project shows under every filter it qualifies for: one that is taking
+// comments and has a public hearing appears under both.
+const FILTERS: { value: Filter; label: string }[] = [
   { value: "comment", label: "Comments open" },
   { value: "hearing", label: "Hearing coming up" },
-  { value: "decision", label: "Decision next" },
-  { value: "waiting", label: "Case open" },
+  { value: "open", label: "Case still open" },
 ];
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -74,29 +74,41 @@ const PUBLIC_HEARING_RE = /public|comment|input|listening|town hall/i;
 const PARTIES_ONLY_RE = /evidentiary|party session|siting committee|contested|prehearing|technical|settlement/i;
 const isPublicHearing = (h: { label: string | null }) => !!h.label && PUBLIC_HEARING_RE.test(h.label) && !PARTIES_ONLY_RE.test(h.label);
 
-function phaseOf(p: AdvocacyProject): Phase {
-  if (p.commentDeadline || p.hearings.some(isPublicHearing)) return "comment";
-  if (p.hearings.length > 0 || p.reviewStep === "Hearing scheduled") return "hearing";
-  if (p.reviewStep === "Awaiting commission order") return "decision";
-  return "waiting";
+const ruleFor = (p: AdvocacyProject): StateCommentRule | undefined => {
+  const codes = splitStateCodes(p.state);
+  return codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
+};
+
+// How worth acting on a case is: a confirmed comment window is worth most, then
+// a public hearing, then a "maybe". Closed or not-yet-open cases rank last.
+function likelihood(acts: { attend: ActionRow; comment: ActionRow }): number {
+  const c = acts.comment.ok === true ? 4 : acts.comment.ok === null ? (acts.comment.label.startsWith("Maybe") ? 2 : 1) : 0;
+  const a = acts.attend.ok === true ? 3 : 0;
+  return c + a;
 }
 
-const ORDER: Record<Phase, number> = { comment: 0, hearing: 1, decision: 2, waiting: 3 };
-
-// The date that makes a project urgent: the comment deadline or the next hearing, whichever is first.
+// The date that makes a project urgent: the comment deadline or the next public hearing, whichever is first.
 const soonestDate = (p: AdvocacyProject): string =>
   [p.commentDeadline, p.hearings.find(isPublicHearing)?.date ?? p.hearings[0]?.date].filter(Boolean).sort()[0] ?? "9999";
 
-type Sort = "soonest" | "largest" | "longest";
+type Sort = "best" | "soonest" | "largest" | "longest";
 
 export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
-  const [phase, setPhase] = useState<Phase | "all">("all");
-  const [sort, setSort] = useState<Sort>("soonest");
+  const [filter, setFilter] = useState<Filter>("open");
+  const [sort, setSort] = useState<Sort>("best");
   const [visible, setVisible] = useState(PAGE_SIZE);
 
-  const rows = useMemo(() => projects.map((p) => ({ p, phase: phaseOf(p) })), [projects]);
+  const rows = useMemo(
+    () =>
+      projects.map((p) => {
+        const rule = ruleFor(p);
+        const acts = actionsFor(p, rule);
+        return { p, rule, acts, score: likelihood(acts) };
+      }),
+    [projects],
+  );
 
   const stateOptions = useMemo(() => {
     const codes = new Set<string>();
@@ -114,52 +126,52 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [rows, query, state]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: inScope.length, comment: 0, hearing: 0, decision: 0, waiting: 0 };
-    for (const r of inScope) c[r.phase]++;
+    const c: Record<Filter, number> = { comment: 0, hearing: 0, open: inScope.length };
+    for (const r of inScope) {
+      if (r.acts.comment.ok === true) c.comment++;
+      if (r.acts.attend.ok === true) c.hearing++;
+    }
     return c;
   }, [inScope]);
 
   const filtered = useMemo(() => {
-    const list = inScope.filter((r) => phase === "all" || r.phase === phase);
+    const list = inScope.filter((r) => filter === "open" || (filter === "comment" ? r.acts.comment.ok === true : r.acts.attend.ok === true));
     return [...list].sort((a, b) => {
       if (sort === "largest") return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
       if (sort === "longest") return (b.p.yearsWaiting ?? -1) - (a.p.yearsWaiting ?? -1);
-      if (a.phase !== b.phase) return ORDER[a.phase] - ORDER[b.phase];
-      if (a.phase === "comment" || a.phase === "hearing") {
-        // Dated items first, soonest at the top; a hearing with no date yet goes after them.
-        const da = soonestDate(a.p);
-        const db = soonestDate(b.p);
-        if (da !== db) return da.localeCompare(db);
-      }
+      if (sort === "best" && a.score !== b.score) return b.score - a.score;
+      const da = soonestDate(a.p);
+      const db = soonestDate(b.p);
+      if (da !== db) return da.localeCompare(db);
       return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
     });
-  }, [inScope, phase, sort]);
+  }, [inScope, filter, sort]);
 
   const reset = () => setVisible(PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Pick a project, see when to act, and go straight to the docket or the regulator. Hearings and decisions coming up are listed first. We cannot always see comment deadlines, so check the docket.
+        Pick a project and see what you can do: attend a hearing, send a comment, or both. Cases most likely to be taking comments are listed first.
       </p>
 
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
-        {PHASES.map((o) => (
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
+        {FILTERS.map((o) => (
           <button
             key={o.value}
             type="button"
             onClick={() => {
-              setPhase(o.value);
+              setFilter(o.value);
               reset();
             }}
-            aria-pressed={phase === o.value}
+            aria-pressed={filter === o.value}
             className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              phase === o.value
+              filter === o.value
                 ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                 : "border-[var(--border)] bg-[var(--panel)] text-[var(--text-secondary)] hover:border-[var(--accent)]"
             }`}
           >
-            {o.label} ({counts[o.value] ?? 0})
+            {o.label} ({counts[o.value]})
           </button>
         ))}
       </div>
@@ -198,19 +210,18 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           aria-label="Sort"
           className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
         >
-          <option value="soonest">Soonest first</option>
+          <option value="best">Best to act on</option>
+          <option value="soonest">Soonest date</option>
           <option value="largest">Largest first</option>
           <option value="longest">Waiting longest</option>
         </select>
       </div>
 
       <div className="flex flex-col gap-3">
-        {filtered.slice(0, visible).map(({ p }) => {
+        {filtered.slice(0, visible).map(({ p, rule, acts }) => {
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
-          const rule = codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
-          const acts = actionsFor(p, rule);
           return (
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
               <div className="flex items-start justify-between gap-3">

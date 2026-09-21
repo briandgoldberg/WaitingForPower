@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PredictorIcon } from "./PredictorIcon";
 import { PosterBadge } from "./PosterBadge";
 import { relativeTime, groupByDate } from "@/lib/feedTime";
 import type { CommunityFeedItem } from "@/lib/community";
@@ -16,9 +15,8 @@ function CommunityCard({ item, nowMs }: { item: CommunityFeedItem; nowMs: number
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors">
       <Link href={`/project/${item.projectSlug}#${item.body ? "comments" : "take-action"}`} className="block">
         <div className="flex items-center gap-1.5 text-xs">
-          <PredictorIcon isAgent={item.isAgent} />
           <span className="font-semibold truncate">{item.label}</span>
-          <PosterBadge confirmed={item.confirmed} guest={item.guest} />
+          <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
           <span className="text-[var(--muted)] shrink-0">{item.kind === "prediction" ? "predicted" : "commented"}</span>
           <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(item.createdAt, nowMs)}</span>
         </div>

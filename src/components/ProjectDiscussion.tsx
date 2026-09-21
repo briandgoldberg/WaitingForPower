@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PredictorIcon } from "./PredictorIcon";
 import { SaveProfilePrompt } from "./SaveProfilePrompt";
 import { IdentityDecision } from "./IdentityDecision";
 import { SignInLink } from "./SignInLink";
@@ -477,9 +476,8 @@ function PostHeader({
 }) {
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <PredictorIcon isAgent={isAgent} />
       <span className="font-semibold truncate">{label}</span>
-      <PosterBadge confirmed={confirmed} guest={guest} />
+      <PosterBadge isAgent={isAgent} confirmed={confirmed} guest={guest} />
       {isMe && <span className="rounded bg-black/5 dark:bg-white/10 px-1 text-[10px] text-[var(--muted)]">You</span>}
       {pending && (
         <span className="rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 px-1 text-[10px]">Only you can see this</span>

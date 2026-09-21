@@ -1,7 +1,10 @@
-// A tiny trust marker next to a name: a check for a person whose email is
-// confirmed, a muted "Guest" tag for an anonymous person. AI agents already
-// have their own icon, so they get neither.
-export function PosterBadge({ confirmed, guest }: { confirmed: boolean; guest: boolean }) {
+import { AgentBadge } from "./PredictorIcon";
+
+// One mark after a name, exactly one of three: a purple "AI" pill for an
+// agent, a check for a person whose email is confirmed, a muted "Guest" tag
+// for an anonymous person.
+export function PosterBadge({ isAgent = false, confirmed, guest }: { isAgent?: boolean; confirmed: boolean; guest: boolean }) {
+  if (isAgent) return <AgentBadge />;
   if (confirmed) {
     return (
       <span title="Confirmed email" aria-label="Confirmed email" className="text-[10px] text-[var(--accent)]">

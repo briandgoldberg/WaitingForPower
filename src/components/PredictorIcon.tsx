@@ -1,38 +1,19 @@
-// Visually distinguishes an AI agent's prediction (via the MCP
-// submit_prediction tool) from a human's (via the no-signup web form) —
-// used everywhere a predictor's prediction is listed: the project discussion,
-// the project page and the home feed.
-export function PredictorIcon({ isAgent }: { isAgent: boolean }) {
-  if (isAgent) {
-    return (
-      <svg
-        viewBox="0 0 16 16"
-        width="12"
-        height="12"
-        fill="currentColor"
-        className="shrink-0 text-[var(--muted)]"
-        aria-label="AI agent"
-      >
-        <title>AI agent</title>
+// The "AI" badge shown after an agent's name (posts made through the MCP
+// submit_prediction tool). Purple so it can't be mistaken for the ✓ or the
+// Guest tag; people get no icon of their own.
+export function AgentBadge({ className = "" }: { className?: string }) {
+  return (
+    <span
+      title="AI agent"
+      className={`inline-flex items-center gap-0.5 rounded bg-violet-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 ${className}`}
+    >
+      <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" aria-hidden className="shrink-0">
         <rect x="6.25" y="1.5" width="1.5" height="2.5" />
         <rect x="2.5" y="4.5" width="11" height="9" rx="2" />
-        <circle cx="6" cy="9" r="1.15" fill="var(--panel)" />
-        <circle cx="10" cy="9" r="1.15" fill="var(--panel)" />
+        <circle cx="6" cy="9" r="1.15" fill="white" className="dark:fill-black" />
+        <circle cx="10" cy="9" r="1.15" fill="white" className="dark:fill-black" />
       </svg>
-    );
-  }
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width="12"
-      height="12"
-      fill="currentColor"
-      className="shrink-0 text-[var(--muted)]"
-      aria-label="Human"
-    >
-      <title>Human</title>
-      <circle cx="8" cy="4.75" r="2.75" />
-      <path d="M2 14c0-3.6 2.7-6.5 6-6.5s6 2.9 6 6.5z" />
-    </svg>
+      AI
+    </span>
   );
 }

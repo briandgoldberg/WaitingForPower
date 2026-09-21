@@ -1,23 +1,27 @@
-import { PredictorIcon } from "@/components/PredictorIcon";
+import { PosterBadge } from "@/components/PosterBadge";
 
-// Simple flat "agent vs human" mark for the /blog index card — no live data
-// to chart here, so a static thumbnail rather than the computed-chart
-// pattern other preview components use.
+// Flat "who posted this" mark for the /blog index card: the three badges
+// (AI, confirmed person, guest). Static thumbnail, no live data.
 export function PredictionsLaunchPreview() {
   return (
-    <div className="h-32 w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--panel)] flex items-center justify-center gap-4">
-      <div className="flex flex-col items-center gap-1">
-        <div className="scale-[2.5]">
-          <PredictorIcon isAgent={true} />
+    <div className="h-32 w-full overflow-hidden rounded-md border border-[var(--border)] bg-[var(--panel)] flex items-center justify-center gap-5">
+      <div className="flex flex-col items-center gap-2">
+        <div className="scale-[2]">
+          <PosterBadge isAgent confirmed={false} guest={false} />
         </div>
         <span className="text-[10px] text-[var(--muted)] mt-2">Agent</span>
       </div>
-      <span className="text-xs font-semibold text-[var(--muted)]">vs</span>
-      <div className="flex flex-col items-center gap-1">
-        <div className="scale-[2.5]">
-          <PredictorIcon isAgent={false} />
+      <div className="flex flex-col items-center gap-2">
+        <div className="scale-[2]">
+          <PosterBadge confirmed guest={false} />
         </div>
-        <span className="text-[10px] text-[var(--muted)] mt-2">Human</span>
+        <span className="text-[10px] text-[var(--muted)] mt-2">Confirmed</span>
+      </div>
+      <div className="flex flex-col items-center gap-2">
+        <div className="scale-[2]">
+          <PosterBadge confirmed={false} guest />
+        </div>
+        <span className="text-[10px] text-[var(--muted)] mt-2">Guest</span>
       </div>
     </div>
   );

@@ -14,14 +14,14 @@ type Phase = "hearing" | "decision" | "waiting";
 const PHASES: { value: Phase | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "hearing", label: "Hearing coming up" },
-  { value: "decision", label: "Decision pending" },
-  { value: "waiting", label: "Waiting" },
+  { value: "decision", label: "Decision next" },
+  { value: "waiting", label: "Case open" },
 ];
 
 const ADVICE: Record<Phase, string> = {
-  hearing: "Attend or send a comment before the hearing. Check the docket for the date and how to speak.",
-  decision: "The hearing is over. Check the docket to see if comments are still accepted, or write to the commission.",
-  waiting: "Open the docket to follow it, and comment where the regulator allows it.",
+  hearing: "You can usually speak at the hearing or send a comment for the record. The docket has the date and how.",
+  decision: "The hearing is over, so the formal comment period has usually closed. You can still write to the commission and your legislators.",
+  waiting: "No hearing is scheduled that we know of. Many commissions accept comments while a case is open. Check the docket.",
 };
 
 const PILL: Record<Phase, string> = {
@@ -94,7 +94,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Pick a project, see when to act, and go straight to the docket or the regulator. Hearings and decisions coming up are listed first.
+        Pick a project, see when to act, and go straight to the docket or the regulator. Hearings and decisions coming up are listed first. We cannot always see comment deadlines, so check the docket.
       </p>
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
@@ -186,7 +186,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${PILL[ph]}`}>
-                    {ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision pending" : "Waiting"}
+                    {ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
                   </span>
                   {ph === "hearing" && next?.label && <span className="text-[var(--muted)]">{next.label}</span>}
                   {ph === "hearing" && p.hearings.length > 1 && (

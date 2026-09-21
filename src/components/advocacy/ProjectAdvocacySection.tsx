@@ -6,7 +6,7 @@ import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
-import { STATE_COMMENT_RULES } from "@/lib/data/stateCommentRules";
+import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateCommentRules";
 
 const PAGE_SIZE = 20;
 
@@ -20,30 +20,53 @@ const PHASES: { value: Phase | "all"; label: string }[] = [
   { value: "waiting", label: "Case open" },
 ];
 
-const PILL: Record<Phase, string> = {
-  comment: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-  hearing: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  decision: "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
-  waiting: "bg-black/5 text-[var(--text-secondary)] dark:bg-white/10",
-};
-
-function adviceFor(ph: Phase, howToComment: string | null, rule: string | null, deadlineOnly = false): string {
-  const how = howToComment ? " " + howToComment : "";
-  if (ph === "comment") return (deadlineOnly ? "Send your comment by the deadline." : "Speak at the public hearing, or send a comment before it.") + how;
-  if (ph === "hearing") return "This hearing is for the parties, so the public usually cannot testify. You can still send a comment for the record." + how;
-  if (ph === "decision") {
-    if (rule === "closes_at_hearing") return "The hearing is over and this state closes the record at the hearing, so formal comments are closed. You can still write to the commission and your legislators.";
-    if (rule === "open_until_decision") return "This state accepts public comments until the commission decides." + how;
-    return "The hearing is over, so the formal comment period has usually closed. You can still write to the commission and your legislators.";
-  }
-  if (rule === "closes_at_hearing") return "No hearing is scheduled that we know of. This state closes the record at the hearing, so comment before it is held." + how;
-  return "No hearing is scheduled that we know of. Many commissions accept comments while a case is open." + (how || " Check the docket.");
-}
-
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-const fmtDay = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+interface ActionRow {
+  ok: boolean | null;
+  label: string;
+  lines: string[];
+}
+
+// What a resident can do on this project, stated as actions: whether they can
+// attend and speak, and whether they can send a comment. `ok: null` means we
+// cannot tell (shown as "maybe").
+function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow; comment: ActionRow } {
+  const pub = p.hearings.filter(isPublicHearing);
+  const closedRule = rule?.recordRule === "closes_at_hearing";
+  const openRule = rule?.recordRule === "open_until_decision";
+  const decisionNext = p.reviewStep === "Awaiting commission order";
+
+  let attend: ActionRow;
+  if (pub.length > 0) {
+    attend = { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) };
+  } else if (p.hearings.length > 0) {
+    attend = { ok: false, label: "Hearing is not open to the public", lines: [`${fmtShort(p.hearings[0].date)} · ${p.hearings[0].label ?? "Hearing"}, parties only`] };
+  } else if (p.reviewStep === "Hearing scheduled") {
+    attend = { ok: null, label: "A hearing is set, date not published", lines: [] };
+  } else {
+    attend = { ok: false, label: "No hearing to attend yet", lines: [] };
+  }
+
+  let comment: ActionRow;
+  const how = rule?.howToComment ? [rule.howToComment] : [];
+  if (p.commentDeadline) {
+    comment = { ok: true, label: `Send a comment by ${fmtShort(p.commentDeadline)}`, lines: how };
+  } else if (decisionNext && closedRule) {
+    comment = { ok: false, label: "Comments are closed", lines: ["This state closes the record at the hearing. You can still write to the commission."] };
+  } else if (decisionNext && openRule) {
+    comment = { ok: true, label: "Send a comment before the decision", lines: how };
+  } else if (decisionNext) {
+    comment = { ok: null, label: "Comments have probably closed", lines: ["The hearing is over. You can still write to the commission."] };
+  } else if (openRule) {
+    comment = { ok: true, label: "Send a comment before the decision", lines: how };
+  } else if (closedRule && p.hearings.length > 0) {
+    comment = { ok: true, label: "Send a comment before the hearing", lines: how };
+  } else {
+    comment = { ok: null, label: "Maybe accepting comments", lines: ["Check the docket for how and when."] };
+  }
+  return { attend, comment };
+}
 
 // A hearing the public can speak at, as opposed to an evidentiary hearing where
 // the parties present testimony. Judged from the label the source gives.
@@ -182,15 +205,12 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
       </div>
 
       <div className="flex flex-col gap-3">
-        {filtered.slice(0, visible).map(({ p, phase: ph }) => {
+        {filtered.slice(0, visible).map(({ p }) => {
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
-          const publicNext = p.hearings.find(isPublicHearing);
-          const next = ph === "comment" ? publicNext : p.hearings[0];
-          // Only public hearings matter to a resident; for a parties-only case show just the next date.
-          const shownHearings = ph === "comment" ? p.hearings.filter(isPublicHearing) : p.hearings.slice(0, 1);
           const rule = codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
+          const acts = actionsFor(p, rule);
           return (
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
               <div className="flex items-start justify-between gap-3">
@@ -210,28 +230,30 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
                 )}
               </div>
 
-              <div className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                  <span className={`rounded-full px-2 py-0.5 font-semibold ${PILL[ph]}`}>
-                    {ph === "comment" ? (p.commentDeadline ? `Comments due ${fmtDay(p.commentDeadline)}` : publicNext ? `Speak ${fmtDay(publicNext.date)}` : "Comments open") : ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
-                  </span>
-                  {ph === "decision" && p.reviewStepAt && <span className="text-[var(--muted)]">since {fmtDay(p.reviewStepAt)}</span>}
-                </div>
-                {(ph === "hearing" || ph === "comment") && shownHearings.length > 0 && (
-                  <ul className="flex flex-col gap-1 text-xs">
-                    {shownHearings.map((h, i) => (
-                      <li key={i} className="flex gap-3">
-                        <span className="w-16 shrink-0 font-medium">{fmtShort(h.date)}</span>
-                        <span className="min-w-0 text-[var(--text-secondary)]">
-                          {h.label ?? "Hearing"}
-                          {h.label && /^hearing$/i.test(h.label) ? null : <span className="text-[var(--muted)]">{isPublicHearing(h) ? " · public can speak" : " · parties only"}</span>}
-                          {h.location && <span className="block text-[var(--muted)]">{h.location}</span>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="text-xs text-[var(--text-secondary)]">{adviceFor(ph, rule?.howToComment || null, rule && rule.recordRule !== "unknown" ? rule.recordRule : null, !!p.commentDeadline && !publicNext)}</p>
+              <div className="rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-3 py-2.5 flex flex-col gap-2.5 text-xs">
+                {(
+                  [
+                    ["Attend", acts.attend],
+                    ["Comment", acts.comment],
+                  ] as const
+                ).map(([title, row]) => (
+                  <div key={title} className="flex gap-2.5">
+                    <span
+                      aria-hidden
+                      className={`w-4 shrink-0 text-center font-bold ${row.ok ? "text-emerald-600 dark:text-emerald-400" : row.ok === false ? "text-[var(--muted)]" : "text-amber-600 dark:text-amber-400"}`}
+                    >
+                      {row.ok ? "✓" : row.ok === false ? "✕" : "?"}
+                    </span>
+                    <div className="min-w-0">
+                      <div className={row.ok === false ? "text-[var(--muted)]" : "font-semibold"}>{row.label}</div>
+                      {row.lines.map((l, i) => (
+                        <div key={i} className="text-[var(--muted)]">
+                          {l}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">

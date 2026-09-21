@@ -15,9 +15,9 @@ type Filter = "comment" | "hearing" | "open";
 // A project shows under every filter it qualifies for: one that is taking
 // comments and has a public hearing appears under both.
 const FILTERS: { value: Filter; label: string }[] = [
-  { value: "comment", label: "Comments open" },
-  { value: "hearing", label: "Hearing coming up" },
-  { value: "open", label: "Case still open" },
+  { value: "open", label: "Case Open" },
+  { value: "comment", label: "Comments Open" },
+  { value: "hearing", label: "Hearing Coming Up" },
 ];
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import type { StatusBucket } from "@/lib/data/taxonomies";
 import { prisma } from "@/lib/db";
+import { hashIp, srcTag } from "@/lib/requestLog";
 
 // Public, read-only, no key required — CORS is wide open on purpose so
 // external tools/agents can call this directly from the browser or a server.
@@ -50,6 +51,8 @@ export async function GET(request: Request) {
         method: "GET",
         userAgent: request.headers.get("user-agent"),
         query: searchParams.toString() || null,
+        ipHash: hashIp(request),
+        src: srcTag(request),
       },
     })
     .catch((err) => console.error("Failed to log /api/projects request:", err));

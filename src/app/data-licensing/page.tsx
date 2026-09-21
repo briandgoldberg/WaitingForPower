@@ -23,17 +23,26 @@ export default function DataLicensingPage() {
         </div>
 
         <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
-          <h2 className="text-lg font-semibold mb-2">The 40-state docket sources, EIA-860M, EIA&rsquo;s pipeline tracker, and the Federal Permitting Dashboard</h2>
+          <h2 className="text-lg font-semibold mb-2">EIA-860M, EIA&rsquo;s pipeline tracker, and the Federal Permitting Dashboard</h2>
           <p className="text-sm">
-            All public domain. Each is a work of the U.S. federal government or a state government
-            agency published in the ordinary course of its regulatory function — EIA and the
-            Permitting Dashboard (data.permits.performance.gov, a Socrata-hosted FAST-41 dataset
-            whose own license field is explicitly marked &ldquo;Public Domain&rdquo;) are federal works
-            under 17 U.S.C. §105; the state PUC/PSC/siting-board docket systems are public
-            regulatory records published by state agencies for public consumption. EIA-860M and the
-            pipeline tracker are fetched here as EIA&rsquo;s own published Excel workbooks (eia.gov),
-            not via EIA&rsquo;s separate keyed API — that API has its own Terms of Service (requiring
-            registration and attribution), but this project doesn&rsquo;t use it, so those terms don&rsquo;t apply here.
+            Public domain. Each is a work of the U.S. federal government, which 17 U.S.C. §105 places
+            in the public domain. The Permitting Dashboard (data.permits.performance.gov) is a
+            Socrata-hosted FAST-41 dataset whose own license field is explicitly marked
+            &ldquo;Public Domain.&rdquo; EIA-860M and the pipeline tracker are fetched here as EIA&rsquo;s own
+            published Excel workbooks (eia.gov), not via EIA&rsquo;s separate keyed API. That API has its
+            own Terms of Service (requiring registration and attribution), but this project doesn&rsquo;t
+            use it, so those terms don&rsquo;t apply here.
+          </p>
+        </section>
+
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5">
+          <h2 className="text-lg font-semibold mb-2">The roughly 40 state docket sources</h2>
+          <p className="text-sm">
+            Not covered by §105, which applies to federal works only. These are public regulatory
+            records published by state agencies, but each state sets its own terms and we have not
+            verified them one by one. Facts such as names, dates and statuses are not copyrightable,
+            and every record here links back to its source. Even so, a state&rsquo;s terms of use may
+            still apply, so check the source before redistributing any state&rsquo;s data in bulk.
           </p>
         </section>
 

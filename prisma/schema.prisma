@@ -31,9 +31,9 @@ datasource db {
 }
 
 model Project {
-  id     String @id @default(cuid())
-  name   String
-  slug   String @unique
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
 
   // Stable cross-source identity key from the ingestion pipeline (see
   // src/lib/ingest/common.ts and manualOverrides.ts) — `${source}:${sourceId}`
@@ -69,7 +69,7 @@ model Project {
   applicationFiledDate DateTime?
   // "exact" | "approximate" — many public dates are year-level or
   // milestone-level precision rather than a specific day; be honest about it.
-  dateConfidence String @default("exact")
+  dateConfidence       String    @default("exact")
 
   // The project's own developer/applicant/owner, where its source publishes
   // one as a distinct field (most state docket sources do — the applicant
@@ -106,7 +106,7 @@ model Project {
   // it — see keepExistingIfUnmanaged in common.ts. Null for every project
   // from a source that's never been wired for this, or that hasn't resolved
   // yet. See src/lib/ingest/README.md for current per-state coverage.
-  resolutionDate DateTime?
+  resolutionDate           DateTime?
   resolutionDateConfidence String? // "exact" | "approximate", same convention as dateConfidence above
 
   causeDetail String
@@ -275,7 +275,7 @@ model Project {
 // A predictable "yes, still watching" cadence is the point here; the email
 // itself says plainly when there's nothing new.
 model FeedSubscription {
-  id    String  @id @default(cuid())
+  id    String @id @default(cuid())
   email String
   // USPS code, e.g. "CA" — "" means every state (the unfiltered feed).
   state String @default("")
@@ -423,7 +423,7 @@ model Milestone {
 // but only for a source that actually passes a `hearings` array at all;
 // every other source's projects are left untouched.
 model ProjectHearing {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   projectId String
   date      DateTime
   endDate   DateTime?
@@ -444,8 +444,8 @@ model ProjectHearing {
 // (status flips to "approved" and a real Project row is created) — see
 // src/app/admin and src/app/api/admin/submissions.
 model Submission {
-  id     String @id @default(cuid())
-  name   String
+  id   String @id @default(cuid())
+  name String
 
   projectType String
   fuelType    String
@@ -511,19 +511,30 @@ model VisitorFeedback {
 // later, let alone feed a daily digest email. See those routes' own
 // `console.log`-replacing write for what's captured.
 model ApiRequestLog {
-  id        Int      @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   // "mcp" | "api_projects" | "api_export" | "api_snapshots"
-  endpoint  String
-  method    String
-  userAgent String?
+  endpoint   String
+  method     String
+  userAgent  String?
   // Raw query string for api_projects/api_export/api_snapshots; null for
   // mcp (its params are in the JSON-RPC body, not the URL, and not worth
   // parsing just for a log row).
-  query     String?
-  createdAt DateTime @default(now())
+  query      String?
+  // MCP only: JSON-RPC method(s), the tool called, and the client name sent
+  // with `initialize`. ipHash is a salted SHA-256 prefix (never the raw IP);
+  // src is an optional ?src= channel tag. All null on rows logged before
+  // 2026-09-25.
+  rpcMethod  String?
+  toolName   String?
+  clientName String?
+  ipHash     String?
+  src        String?
+  createdAt  DateTime @default(now())
 
   @@index([createdAt])
   @@index([endpoint])
+  @@index([toolName])
+  @@index([ipHash])
 }
 
 // One row per monthly point-in-time capture of the entire dataset — the
@@ -584,23 +595,23 @@ model Predictor {
   // history durable across devices instead of tied to one browser's
   // localStorage; null until they choose to do this, never required to
   // participate.
-  email       String?  @unique
-  displayName String?
+  email             String?   @unique
+  displayName       String?
   // Set when a person with a confirmed email picks their own public name (a
   // one-time choice). Until then displayName is an auto-assigned anonymous
   // handle like "Anonymous Heron 482".
-  nameChosenAt DateTime?
+  nameChosenAt      DateTime?
   // When this person decided how to appear (posted as their anonymous handle,
   // confirmed an email, or chose a name). Until then their posts are held:
   // visible only to them. Null for AI agents, whose posts are always public.
   identityDecidedAt DateTime?
-  createdAt   DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
-  predictions         Prediction[]
-  comments            ProjectComment[]
-  emailVerifications  PredictorEmailVerification[]
-  signInTokens        PredictorSignInToken[]
-  likes               ThreadLike[]
+  predictions        Prediction[]
+  comments           ProjectComment[]
+  emailVerifications PredictorEmailVerification[]
+  signInTokens       PredictorSignInToken[]
+  likes              ThreadLike[]
 
   @@index([email])
 }

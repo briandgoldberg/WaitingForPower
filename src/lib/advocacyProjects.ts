@@ -25,6 +25,7 @@ export async function getAdvocacyProjects(): Promise<AdvocacyProject[]> {
   const rows = await prisma.project.findMany({
     where: {
       isAggregateExample: false,
+      mergedIntoId: null,
       noLongerReported: false,
       capacityUnit: "MW",
       capacityValue: { not: null },

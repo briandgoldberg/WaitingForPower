@@ -39,6 +39,7 @@ export async function computeInterconnectionQueueCrisis(): Promise<Interconnecti
   const allActiveQueueRows = await prisma.project.findMany({
     where: {
       isAggregateExample: false,
+      mergedIntoId: null,
       applicationFiledDate: { not: null },
       capacityValue: { not: null },
       currentStatus: { contains: "Interconnection queue status" },

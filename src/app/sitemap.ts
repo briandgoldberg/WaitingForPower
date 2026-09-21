@@ -8,6 +8,7 @@ const BASE_URL = "https://waitingforpower.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const projects = await prisma.project.findMany({
+    where: { mergedIntoId: null },
     select: { slug: true, updatedAt: true, state: true },
   });
 
@@ -34,6 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // projects have already resolved would otherwise be a near-empty page
   // submitted to search engines.
   const statusRows = await prisma.project.findMany({
+    where: { mergedIntoId: null },
     select: { state: true, currentStage: true, noLongerReported: true },
   });
   const stateCodes = new Set<string>();

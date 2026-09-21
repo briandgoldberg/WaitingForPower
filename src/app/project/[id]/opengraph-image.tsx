@@ -8,7 +8,8 @@ export const contentType = "image/png";
 
 export default async function OgImage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const project = await prisma.project.findUnique({ where: { slug: id }, include: { causes: true, sources: true, milestones: true } });
+  const found = await prisma.project.findUnique({ where: { slug: id }, include: { causes: true, sources: true, milestones: true } });
+  const project = found?.mergedIntoId ? await prisma.project.findUnique({ where: { id: found.mergedIntoId }, include: { causes: true, sources: true, milestones: true } }) : found;
   const p = project ? serializeProject(project) : null;
 
   const fuel = p ? FUEL_TYPE_BY_VALUE[p.fuelType] : null;

@@ -215,6 +215,11 @@ model Project {
   // behavior, not a signal. Cleared automatically the next time that same
   // matchKey is seen again in a run.
   noLongerReported Boolean @default(false)
+  // Set when this row is the same physical project as another (see
+  // src/lib/dedupe.ts): points at the row that represents it. Merged rows are
+  // kept (ingest keeps updating them) but hidden from lists, totals and search;
+  // their sources and best fields show on the canonical row.
+  mergedIntoId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -244,6 +249,7 @@ model Project {
   @@index([currentStage])
   @@index([verificationStatus])
   @@index([noLongerReported])
+  @@index([mergedIntoId])
 }
 
 // A subscription to the homepage changes feed, optionally scoped to one

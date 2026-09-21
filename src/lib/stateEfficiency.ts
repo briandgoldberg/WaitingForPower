@@ -43,6 +43,7 @@ function yearsSince(date: Date): number {
 
 export async function computeStateEfficiencyRanking(): Promise<StateEfficiencyResult> {
   const projects = await prisma.project.findMany({
+    where: { mergedIntoId: null },
     select: {
       state: true,
       currentStage: true,

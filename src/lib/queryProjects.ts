@@ -4,6 +4,7 @@
 // call it.
 
 import { prisma } from "@/lib/db";
+import { mergedChildren, overlayMerged } from "@/lib/dedupe";
 import { serializeProject } from "@/lib/serialize";
 import { matchesFilters, DEFAULT_FILTERS, type FilterState } from "@/lib/filters";
 import type { StatusBucket } from "@/lib/data/taxonomies";
@@ -50,11 +51,12 @@ export function toFilterState(q: ProjectQuery): FilterState {
 const FETCH_PAGE_SIZE = 250;
 
 export async function queryProjects(filters: FilterState, opts: { allStatuses?: boolean } = {}): Promise<ProjectDTO[]> {
-  const total = await prisma.project.count();
+  const total = await prisma.project.count({ where: { mergedIntoId: null } });
   const pageCount = Math.max(1, Math.ceil(total / FETCH_PAGE_SIZE));
   const pages = await Promise.all(
     Array.from({ length: pageCount }, (_, i) =>
       prisma.project.findMany({
+        where: { mergedIntoId: null },
         include: { causes: true, sources: true, milestones: true },
         orderBy: { createdAt: "asc" },
         skip: i * FETCH_PAGE_SIZE,
@@ -62,14 +64,25 @@ export async function queryProjects(filters: FilterState, opts: { allStatuses?: 
       }),
     ),
   );
-  const projects = pages.flat();
+  const base = pages.flat();
+  // Duplicates merged into a row (see src/lib/dedupe.ts) contribute their
+  // sources and best facts to it.
+  const children = await prisma.project.findMany({ where: { mergedIntoId: { not: null } }, include: { causes: true, sources: true, milestones: true } });
+  const byParent = new Map<string, typeof children>();
+  for (const c of children) byParent.set(c.mergedIntoId as string, [...(byParent.get(c.mergedIntoId as string) ?? []), c]);
+  const projects = base.map((p) => overlayMerged(p, byParent.get(p.id) ?? []));
   return projects.map(serializeProject).filter((p) => matchesFilters(p, filters, { ignoreStatus: opts.allStatuses }));
 }
 
 export async function getProjectBySlug(slug: string): Promise<ProjectDTO | null> {
-  const project = await prisma.project.findUnique({
+  let project = await prisma.project.findUnique({
     where: { slug },
     include: { causes: true, sources: true, milestones: true },
   });
-  return project ? serializeProject(project) : null;
+  // A slug that was merged into another project resolves to that project.
+  if (project?.mergedIntoId) {
+    project = await prisma.project.findUnique({ where: { id: project.mergedIntoId }, include: { causes: true, sources: true, milestones: true } });
+  }
+  if (!project) return null;
+  return serializeProject(overlayMerged(project, await mergedChildren([project.id])));
 }

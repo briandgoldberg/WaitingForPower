@@ -1,7 +1,8 @@
 import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
+import { mergedChildren, overlayMerged } from "@/lib/dedupe";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
@@ -26,11 +27,13 @@ export const dynamic = "force-dynamic";
 // component (both invoked separately by Next.js for the same request)
 // don't double the DB round trip.
 const getProject = cache(async (slug: string) => {
-  const project = await prisma.project.findUnique({
-    where: { slug },
-    include: { causes: true, sources: true, milestones: true, hearings: true },
-  });
-  return project ? serializeProject(project) : null;
+  const include = { causes: true, sources: true, milestones: true, hearings: true } as const;
+  let project = await prisma.project.findUnique({ where: { slug }, include });
+  // A duplicate merged into another project (see src/lib/dedupe.ts) shows that
+  // project instead; the page redirects to its slug.
+  if (project?.mergedIntoId) project = await prisma.project.findUnique({ where: { id: project.mergedIntoId }, include });
+  if (!project) return null;
+  return serializeProject(overlayMerged(project, await mergedChildren([project.id])));
 });
 
 // Facebook's share dialog scrapes these Open Graph tags for its post text
@@ -77,6 +80,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const p = await getProject(id);
 
   if (!p) notFound();
+  if (p.slug !== id) permanentRedirect(`/project/${p.slug}`);
 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
   const canPredict = !p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state);

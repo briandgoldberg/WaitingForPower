@@ -26,6 +26,7 @@ export async function computeGasFilingShareByYear(): Promise<GasFilingShareResul
   const projects = await prisma.project.findMany({
     where: {
       isAggregateExample: false,
+      mergedIntoId: null,
       applicationFiledDate: { not: null },
       capacityValue: { not: null },
       capacityUnit: "MW",

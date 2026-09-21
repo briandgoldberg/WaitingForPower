@@ -188,6 +188,8 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
           const publicNext = p.hearings.find(isPublicHearing);
           const next = ph === "comment" ? publicNext : p.hearings[0];
+          // Only public hearings matter to a resident; for a parties-only case show just the next date.
+          const shownHearings = ph === "comment" ? p.hearings.filter(isPublicHearing) : p.hearings.slice(0, 1);
           const rule = codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
           return (
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
@@ -215,9 +217,9 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
                   </span>
                   {ph === "decision" && p.reviewStepAt && <span className="text-[var(--muted)]">since {fmtDay(p.reviewStepAt)}</span>}
                 </div>
-                {(ph === "hearing" || ph === "comment") && p.hearings.length > 0 && (
+                {(ph === "hearing" || ph === "comment") && shownHearings.length > 0 && (
                   <ul className="flex flex-col gap-1 text-xs">
-                    {p.hearings.map((h, i) => (
+                    {shownHearings.map((h, i) => (
                       <li key={i} className="flex gap-3">
                         <span className="w-16 shrink-0 font-medium">{fmtShort(h.date)}</span>
                         <span className="min-w-0 text-[var(--text-secondary)]">

@@ -190,6 +190,22 @@
 // this series with a real structured end time (iurc_hearingenddate) for the
 // SAME hearing, not a separate window — surfaced as commentPeriodEnd.
 //
+// PROCEDURAL STEP: the same hearings rows (all of them, past and future) say
+// where a New/Pending docket stands, so no extra request is made. An
+// Evidentiary or Settlement Hearing whose date has passed means the record is
+// made and the Commission's order is next ("Awaiting commission order"); a
+// hearing still ahead, of any type (Field Hearings included), is "Hearing
+// scheduled"; a docket with no hearing on file yet is "Application filed".
+// Confirmed live 2026-09-21: Cause 46443 has two Evidentiary Hearings ahead
+// (11/20 and 12/1/2026), Cause 46389 one Evidentiary Hearing on 8/17/2026 that
+// has passed with no order yet. A row whose remarks say it was continued or
+// cancelled (real example on Cause 46193: "This hearing has been continued to
+// August 1, 2025 ...", the date it moved to being a separate row) never counts
+// as held or scheduled. A past Field Hearing alone is a public-comment
+// session, not the evidentiary record, so it does not make the docket
+// decision-ready. The Case Status rules in STATUS still decide closed
+// (Decided) and Appealed dockets, which get no step.
+//
 // RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-12, re-using the exact
 // /api/document/orders endpoint the module header's own STATUS section
 // already relied on (by hand) to calibrate trusting Case Status: POST
@@ -220,6 +236,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const SEARCH_API_URL =
   "https://zus1iurcprodd365companionappmaster-appservice.azurewebsites.net/api/search/advanced";
@@ -447,6 +464,9 @@ function buildHearingLocation(room: string | undefined, remarks: string | undefi
   return `IURC Hearing Room ${trimmedRoom}`;
 }
 
+// A row whose remarks say it moved or was called off (see PROCEDURAL STEP).
+const HEARING_OFF_REMARKS_RE = /\b(continued|cancel+ed|vacated|postponed|rescheduled)\b/i;
+
 // Every real future, non-excluded hearing on the docket is kept (not just
 // the earliest) — a case can genuinely have more than one on the books at
 // once (Cause 46443 had two live 2026-09-05, see module header). Deduped by
@@ -454,20 +474,24 @@ function buildHearingLocation(room: string | undefined, remarks: string | undefi
 // Real observed format: "11/20/2026 9:30 AM" — parseable directly by the
 // JS Date constructor (confirmed live), unlike this module's own parseMDY
 // (date-only, no time component).
-async function fetchUpcomingHearings(legalCaseId: string): Promise<UpcomingHearing[]> {
+// Null when the request fails, so the caller can leave stored values alone.
+async function fetchHearingRows(legalCaseId: string): Promise<HearingApiRow[] | null> {
   const res = await fetch(HEARINGS_API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ txtPageNumber: "1", Id: legalCaseId }),
   });
-  if (!res.ok) return [];
+  if (!res.ok) return null;
   const rows = (await res.json()) as HearingApiRow[];
-  if (!Array.isArray(rows)) return [];
+  return Array.isArray(rows) ? rows : null;
+}
 
+function upcomingHearings(rows: HearingApiRow[]): UpcomingHearing[] {
   const now = Date.now();
   const hearings: UpcomingHearing[] = [];
   for (const row of rows) {
     if (!row.iurc_hearingstartdate || EXCLUDED_HEARING_TYPES.has(row.iurc_hearingtype ?? "")) continue;
+    if (HEARING_OFF_REMARKS_RE.test(row.iurc_remarks ?? "")) continue;
     const d = new Date(row.iurc_hearingstartdate);
     if (Number.isNaN(d.getTime()) || d.getTime() <= now) continue;
     if (hearings.some((h) => h.date.getTime() === d.getTime())) continue;
@@ -480,6 +504,43 @@ async function fetchUpcomingHearings(legalCaseId: string): Promise<UpcomingHeari
     });
   }
   return hearings;
+}
+
+// See module header PROCEDURAL STEP. The hearing rows are turned into text
+// that already encodes past vs. future so the shared classifier can read it:
+// while any hearing is still ahead the earlier evidentiary ones are neutral,
+// otherwise a past Evidentiary/Settlement Hearing reads as "hearing held".
+const EVIDENTIARY_HEARING_RE = /^(evidentiary|settlement) hearing$/i;
+const NEVER_RE = /(?!)/;
+
+function classifyInReviewStep(rows: HearingApiRow[], petitionDate: Date | null): ReviewStep | null {
+  const now = Date.now();
+  const live = rows
+    .filter((r) => r.iurc_hearingstartdate && !EXCLUDED_HEARING_TYPES.has(r.iurc_hearingtype ?? "") && !HEARING_OFF_REMARKS_RE.test(r.iurc_remarks ?? ""))
+    .map((r) => ({ date: new Date(r.iurc_hearingstartdate as string), evidentiary: EVIDENTIARY_HEARING_RE.test(r.iurc_hearingtype ?? "") }))
+    .filter((r) => !Number.isNaN(r.date.getTime()));
+  const upcoming = live.filter((r) => r.date.getTime() > now);
+  const nextTime = upcoming.length > 0 ? Math.min(...upcoming.map((r) => r.date.getTime())) : null;
+
+  const events: DocketEvent[] = [{ date: petitionDate, text: "petition filed" }];
+  let nextUsed = false;
+  for (const r of live) {
+    if (r.date.getTime() > now) {
+      if (!nextUsed && r.date.getTime() === nextTime) {
+        nextUsed = true;
+        events.push({ date: r.date, text: "hearing scheduled" });
+      } else events.push({ date: r.date, text: "later hearing" });
+    } else if (r.evidentiary && upcoming.length === 0) {
+      events.push({ date: r.date, text: "hearing held" });
+    }
+  }
+  return classifyReviewStep(events, {
+    hearingSet: /^hearing scheduled$/,
+    hearingOff: NEVER_RE,
+    hearingHeld: /^hearing held$/,
+    decisionNext: NEVER_RE,
+    closed: NEVER_RE,
+  });
 }
 
 // Confirmed against real captions of both forms: "VERIFIED PETITION OF X
@@ -689,12 +750,18 @@ async function buildCleanupPlaceholder(row: SearchResultRow): Promise<Normalized
     ...(finalOrderDate ? { resolutionDate: finalOrderDate, resolutionDateConfidence: "exact" as const } : {}),
     hearingDetailsLink: null,
     hearings: [],
+    reviewStep: null,
+    reviewStepAt: null,
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };
 }
 
-function buildActiveProject(row: SearchResultRow, caption: string, hearings: UpcomingHearing[]): NormalizedProject {
+function buildActiveProject(row: SearchResultRow, caption: string, hearingRows: HearingApiRow[] | null): NormalizedProject {
+  // A failed hearings request leaves stored hearings and step alone (undefined).
+  const hearings = hearingRows ? upcomingHearings(hearingRows) : [];
+  const litigation = LITIGATION_STATUSES.has(row.caseStatus);
+  const review = hearingRows && !litigation ? classifyInReviewStep(hearingRows, row.petitionDate) : null;
   const matchKey = resolveMatchKey("in-iurc", row.docketNumber);
   const applicant = extractApplicant(caption, row.parties.split(",")[0]?.trim() || "Unknown Applicant");
   const projectType = inferProjectType(caption);
@@ -752,7 +819,9 @@ function buildActiveProject(row: SearchResultRow, caption: string, hearings: Upc
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Indiana Utility Regulatory Commission — Cause No. ${row.docketNumber}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? detailUrl(row.legalCaseId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label ?? null, location: h.location })),
+    hearings: hearingRows ? hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label ?? null, location: h.location })) : undefined,
+    reviewStep: hearingRows ? (review ? review.step : null) : undefined,
+    reviewStepAt: hearingRows ? (review ? review.at : null) : undefined,
     sources: [{ label: `IN IURC Cause No. ${row.docketNumber}`, url: detailUrl(row.legalCaseId) }],
     externalIds: { inIurc: row.docketNumber },
   };
@@ -798,8 +867,8 @@ export async function ingestInIurcDockets(maxCandidates = MAX_CANDIDATES): Promi
         // See module header HEARING SCHEDULE — a failure here shouldn't
         // block tracking the underlying application over this
         // supplementary feature.
-        const hearings = await fetchUpcomingHearings(row.legalCaseId).catch(() => []);
-        normalized = buildActiveProject(row, caption, hearings);
+        const hearingRows = await fetchHearingRows(row.legalCaseId).catch(() => null);
+        normalized = buildActiveProject(row, caption, hearingRows);
         realApplicationsTracked += 1;
       } else {
         normalized = await buildCleanupPlaceholder(row);

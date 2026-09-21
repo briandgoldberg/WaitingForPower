@@ -181,11 +181,32 @@
 // with candidates sorted most-recent-first before slicing so a future
 // larger population still prioritizes currently-relevant dockets first.
 // Also politeness-delayed between per-candidate resolution-check requests.
+//
+// PROCEDURAL STEP AND HEARINGS: each still-unresolved docket's detail page
+// also has an "Events" tab (the same detail.aspx URL, reached by POSTing the
+// page's own viewstate back with btn_event=x, exactly what clicking the tab
+// does), a server-rendered `<table id="gv_event">` of Date / Event /
+// Description rows covering the whole schedule, past AND future: "Hearing:
+// Party Session - 10:00 AM" (the evidentiary hearing), "Hearing: Public
+// Session - 6:00 PM" (public comment), "Hearing: Prehearing Conference",
+// "Brief" (initial and reply), "Offered Evidence ..." testimony deadlines and
+// "Docket Application Received". Confirmed live 2026-09-21 against
+// 9836-CE-100 (public and party sessions set for Nov 2026, briefs Dec 2026).
+// Dates are the scheduled dates, so a future row is upcoming and a past row
+// has happened. Only dockets on the newer scheduling system list events;
+// older ones show just the application row, so a docket with no events gets
+// no step. The Events tab has no "order issued" row, so a closing order still
+// comes only from the ERF Final Decision check above (only an unresolved
+// docket is classified). This is one extra GET plus one POST per unresolved
+// docket. apps.psc.wi.gov's robots.txt disallows everything, which the rest
+// of this module already ignores; the low request rate and weekly cron are
+// the mitigation.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedHearing, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const CMS_SEARCH_URL = "https://apps.psc.wi.gov/APPS/dockets/default.aspx";
 const ERF_SEARCH_URL = "https://apps.psc.wi.gov/ERF/ERFsearch/content/searchResult.aspx";
@@ -247,6 +268,7 @@ function decodeHtmlEntities(s: string): string {
 interface HiddenFields {
   viewState: string;
   viewStateGenerator: string;
+  eventValidation: string;
 }
 
 function extractHiddenFields(html: string): HiddenFields {
@@ -261,7 +283,7 @@ function extractHiddenFields(html: string): HiddenFields {
       "WI PSC CMS default.aspx response didn't contain __VIEWSTATE — the page structure likely changed. Check extractHiddenFields in src/lib/ingest/wiPscDockets.ts against a fresh response.",
     );
   }
-  return { viewState, viewStateGenerator: extract("__VIEWSTATEGENERATOR") };
+  return { viewState, viewStateGenerator: extract("__VIEWSTATEGENERATOR"), eventValidation: extract("__EVENTVALIDATION") };
 }
 
 async function fetchBootstrap(): Promise<HiddenFields> {
@@ -499,7 +521,136 @@ async function fetchDocketResolution(utilityId: string, seqNum: string): Promise
   return { resolution: DENY_RE.test(finalDecision.title) ? "denied" : "granted", date: finalDecision.date };
 }
 
-function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolution): NormalizedProject {
+interface DocketEventRow {
+  date: Date | null;
+  event: string;
+  description: string;
+}
+
+// One gv_event table row: a M/D/YYYY date cell, the event name, then a free-
+// text description (often Zoom/YouTube connection text with `<br />` and
+// links). Confirmed live 2026-09-21 against 9836-CE-100's Events tab.
+const EVENT_ROW_RE = /<td[^>]*>(\d{1,2}\/\d{1,2}\/\d{4})<\/td><td[^>]*>([^<]*)<\/td><td[^>]*>([\s\S]*?)<\/td>/g;
+
+async function fetchDocketEvents(utilityId: string, seqNum: string): Promise<DocketEventRow[]> {
+  const url = `${DETAIL_BASE_URL}?id=${utilityId}&case=CE&num=${seqNum}`;
+  const getRes = await fetch(url, { headers: { "User-Agent": CMS_USER_AGENT } });
+  if (!getRes.ok) throw new Error(`WI PSC docket detail request failed (${getRes.status}) for docket ${utilityId}-CE-${seqNum}`);
+  const hidden = extractHiddenFields(await getRes.text());
+
+  await sleep(REQUEST_DELAY_MS);
+  const params = new URLSearchParams();
+  params.set("__VIEWSTATE", hidden.viewState);
+  params.set("__VIEWSTATEGENERATOR", hidden.viewStateGenerator);
+  if (hidden.eventValidation) params.set("__EVENTVALIDATION", hidden.eventValidation);
+  params.set("btn_event", "x");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": CMS_USER_AGENT },
+    body: params.toString(),
+  });
+  if (!res.ok) throw new Error(`WI PSC docket Events tab postback failed (${res.status}) for docket ${utilityId}-CE-${seqNum}`);
+  const html = await res.text();
+
+  const tableStart = html.indexOf('id="gv_event"');
+  if (tableStart === -1) {
+    throw new Error(
+      `WI PSC docket detail Events tab response for docket ${utilityId}-CE-${seqNum} didn't contain the gv_event table, so the page structure likely changed. Check fetchDocketEvents in src/lib/ingest/wiPscDockets.ts against a fresh response.`,
+    );
+  }
+  const table = html.slice(tableStart, html.indexOf("</table>", tableStart));
+  return [...table.matchAll(EVENT_ROW_RE)].map((m) => ({
+    date: parseMDY(m[1]),
+    event: decodeHtmlEntities(m[2]),
+    description: decodeHtmlEntities(m[3].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")),
+  }));
+}
+
+// "Hearing: Party Session - 10:00 AM" is the evidentiary hearing and "Hearing:
+// Public Session - 6:00 PM" the public-comment hearing; a "Prehearing
+// Conference" is scheduling only, so it is neither a hearing nor a step.
+const HEARING_SESSION_RE = /^Hearing:\s*(Party Session|Public Session|Public and Party Sessions?)\s*-\s*(\d{1,2}):(\d{2})\s*([AP])M/i;
+const BRIEF_RE = /^Brief\b/i;
+const NEVER_RE = /(?!)/;
+
+// Wisconsin's hearing times are Central. The server runs in UTC, so build the
+// instant from the wall-clock time plus Chicago's offset on that date.
+function centralWallTime(date: Date, hour12: number, minute: number, meridiem: string): Date {
+  const hour = (hour12 % 12) + (meridiem.toUpperCase() === "P" ? 12 : 0);
+  const asUtc = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute);
+  const zone = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", timeZoneName: "shortOffset" })
+    .formatToParts(new Date(asUtc))
+    .find((p) => p.type === "timeZoneName")?.value;
+  const offsetHours = Number(/GMT([+-]\d+)/.exec(zone ?? "")?.[1] ?? -6);
+  return new Date(asUtc - offsetHours * 3600000);
+}
+
+function sessionLabel(kind: string): string {
+  const party = /party/i.test(kind);
+  const pub = /public/i.test(kind);
+  if (party && pub) return "Public and party session";
+  return party ? "Party session" : "Public hearing";
+}
+
+// Upcoming public and party sessions, as real dated hearings. Duplicate rows
+// (the same session listed twice) collapse to one.
+function extractUpcomingHearings(events: DocketEventRow[], now: Date): NormalizedHearing[] {
+  const hearings: NormalizedHearing[] = [];
+  const seen = new Set<string>();
+  for (const e of events) {
+    const m = HEARING_SESSION_RE.exec(e.event);
+    if (!m || !e.date) continue;
+    const date = centralWallTime(e.date, Number(m[2]), Number(m[3]), m[4]);
+    if (date.getTime() < now.getTime()) continue;
+    const label = sessionLabel(m[1]);
+    const key = `${date.getTime()}|${label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hearings.push({ date, endDate: null, label, location: null });
+  }
+  return hearings.sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+// Wisconsin's Events tab lists scheduled dates, not outcomes, so the shared
+// classifier is fed text that already encodes past vs. future: a session or
+// brief date that has passed reads as held/filed, one still ahead reads as
+// scheduled (only the earliest upcoming session, so the step date is the next
+// hearing). While any session is still ahead the case is "Hearing scheduled",
+// so earlier sessions and briefs are kept neutral rather than read as the
+// hearing being over.
+function classifyWiReviewStep(events: DocketEventRow[], now: Date): ReviewStep | null {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const isSession = (e: DocketEventRow) => HEARING_SESSION_RE.test(e.event);
+  const upcomingTimes = events.filter((e) => isSession(e) && e.date != null && e.date >= startOfToday).map((e) => e.date!.getTime());
+  const hasUpcomingSession = upcomingTimes.length > 0;
+  const nextSessionTime = hasUpcomingSession ? Math.min(...upcomingTimes) : null;
+  let nextUsed = false;
+
+  const docketEvents: DocketEvent[] = events.map((e) => {
+    const past = e.date != null && e.date < startOfToday;
+    let text = `${e.event} ${e.description}`;
+    if (isSession(e)) {
+      if (past) text = hasUpcomingSession ? "earlier session" : "hearing held";
+      else if (!nextUsed && e.date!.getTime() === nextSessionTime) {
+        nextUsed = true;
+        text = "hearing scheduled";
+      } else text = "later session";
+    } else if (BRIEF_RE.test(e.event)) {
+      text = past && !hasUpcomingSession ? "brief filed" : "brief pending";
+    }
+    return { date: e.date, text };
+  });
+
+  return classifyReviewStep(docketEvents, {
+    hearingSet: /^hearing scheduled$/,
+    hearingOff: NEVER_RE,
+    hearingHeld: /^hearing held$/,
+    decisionNext: /^brief filed$/,
+    closed: NEVER_RE,
+  });
+}
+
+function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolution, events: DocketEventRow[] | null): NormalizedProject {
   const matchKey = resolveMatchKey("wi-psc", candidate.docket);
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.title);
   const capacityMw = extractCapacityMw(candidate.title);
@@ -515,6 +666,13 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
   // RESOLUTION DATE — see module header. Undefined (not null) whenever
   // unresolved or the resolving document's own Received Date didn't parse.
   const resolutionDate = resolution.resolution !== null ? resolution.date : null;
+
+  // A resolved docket has no live step or hearings. Events is null when the
+  // Events tab couldn't be read this run, which leaves any stored value alone
+  // (undefined) instead of clearing it.
+  const now = new Date();
+  const review = resolution.resolution === null && events ? classifyWiReviewStep(events, now) : null;
+  const managed = resolution.resolution !== null || events !== null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -552,6 +710,9 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
     currentStage,
     resolutionDate: resolutionDate ?? undefined,
     resolutionDateConfidence: resolutionDate ? "exact" : undefined,
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
+    hearings: managed ? (resolution.resolution === null && events ? extractUpcomingHearings(events, now) : []) : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity / Certificate of Authority determination from the Public Service Commission of Wisconsin — Docket No. ${candidate.docket}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -599,7 +760,16 @@ export async function ingestWiPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   for (const candidate of realApplications) {
     try {
       const resolution = await fetchDocketResolution(candidate.utilityId, candidate.seqNum);
-      const normalized = normalizeDocket(candidate, resolution);
+      let events: DocketEventRow[] | null = null;
+      if (resolution.resolution === null) {
+        await sleep(REQUEST_DELAY_MS);
+        try {
+          events = await fetchDocketEvents(candidate.utilityId, candidate.seqNum);
+        } catch (err) {
+          errors.push({ matchKey: candidate.docket, message: String(err) });
+        }
+      }
+      const normalized = normalizeDocket(candidate, resolution, events);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

@@ -207,6 +207,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const PSCWEB_BASE = "https://pscweb.floridapsc.com";
 const PSC_BASE = "https://www.floridapsc.com";
@@ -499,7 +500,7 @@ function parseDateCertified(html: string): Date | null {
 // --- DOAH ("Division of Administrative Hearings") hearing lookup --------
 // See module header DOAH HEARING LOOKUP for the confirmed-live 3-request
 // chain and why this runs per-candidate rather than as a single upfront map.
-async function fetchDoahHearingDate(searchCaseNum: string): Promise<DoahHearing | null> {
+export async function fetchDoahDocketHtml(searchCaseNum: string): Promise<string> {
   const postRes = await fetch(DOAH_SEARCH_ACTION_URL, {
     method: "POST",
     redirect: "manual",
@@ -519,8 +520,12 @@ async function fetchDoahHearingDate(searchCaseNum: string): Promise<DoahHearing 
   await fetch(DOAH_CASE_INFO_URL, { headers: { Cookie: cookie } });
   const docketRes = await fetch(DOAH_DOCKET_URL, { headers: { Cookie: cookie } });
   if (!docketRes.ok) throw new Error(`DOAH docket request failed (${docketRes.status}) for case ${searchCaseNum}`);
-  const html = await docketRes.text();
+  return docketRes.text();
+}
 
+// The hearing half of the lookup, split out so the same fetched Docket tab can
+// also feed the procedural step below.
+function parseDoahHearing(html: string): DoahHearing | null {
   // Docket rows are newest-filing-first (confirmed live) — the first
   // "Notice of Hearing" line found is therefore the current, not-yet-
   // superseded schedule, not a stale/rescheduled one.
@@ -605,6 +610,63 @@ function inferFuelType(text: string, projectType: ProjectType): FuelType {
   return "other";
 }
 
+// PROCEDURAL STEP (added 2026-09-21): the same DOAH Docket tab fetched for the
+// hearing date lists every filing in the certification case as a dated row
+// (the last two cells of each row are the date and the "Proceedings" text),
+// so the step is read from it with no extra request. Confirmed live against
+// both candidates (JEA 26-002894EPP and FPL 26-002609TL): a "Notice of
+// Hearing (hearing set for ...)" row is present for each, with the hearing
+// date still ahead, so both read as "Hearing scheduled". The shared default
+// closing signal is replaced because it matches "Notice of Withdrawal", which
+// FPL filed on 9/14/2026 as a routine withdrawal of a witness or appearance,
+// not of the application; in a DOAH siting case the real closers are an order
+// closing the file / relinquishing jurisdiction, or a withdrawal or dismissal
+// of the application itself. A Recommended Order (or a proposed one, or a
+// hearing transcript) means the hearing is over and the Siting Board's final
+// order is next. A notice whose hearing date has already passed becomes a
+// synthetic "hearing held" event dated by the hearing itself, so a case whose
+// hearing is over but has no recommended order yet still reads as decision-ready.
+const DOAH_ROW_RE = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+const DOAH_CELL_RE = /<td[^>]*>([\s\S]*?)<\/td>/g;
+const FL_SIGNALS = {
+  closed: /\border (closing|relinquishing)\b|\bfinal order\b|\bwithdrawal of (the |its )?(application|petition)\b|\b(dismissal|dismissing|dismissed)\b[^.]{0,40}\b(case|application)\b/i,
+  decisionNext: /\b(proposed )?recommended order\b|\bproposed (final )?order\b|\bpost-?hearing\b/i,
+  hearingHeld: /\btranscript\b|\bhearing (held|date passed)\b/i,
+};
+
+export function parseDoahEvents(html: string): DocketEvent[] {
+  const events: DocketEvent[] = [];
+  for (const row of html.matchAll(DOAH_ROW_RE)) {
+    const cells = [...row[1].matchAll(DOAH_CELL_RE)].map((c) => stripTags(c[1]));
+    if (cells.length < 2) continue;
+    const date = parseUsDate(cells[cells.length - 2]);
+    const text = cells[cells.length - 1];
+    if (date && text) events.push({ date, text });
+  }
+  return events;
+}
+
+function parseUsDate(raw: string): Date | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const d = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function classifyFlStep(events: DocketEvent[]) {
+  const now = Date.now();
+  const adjusted = events.map((e) => {
+    const notice = NOTICE_OF_HEARING_RE.exec(e.text);
+    const dateMatch = notice ? HEARING_DATE_IN_TEXT_RE.exec(notice[1]) : null;
+    const hearingDate = dateMatch ? new Date(`${dateMatch[1]}, ${dateMatch[2]}`) : null;
+    if (hearingDate && !Number.isNaN(hearingDate.getTime()) && hearingDate.getTime() <= now) {
+      return { date: hearingDate, text: "hearing date passed" };
+    }
+    return e;
+  });
+  return classifyReviewStep(adjusted, FL_SIGNALS);
+}
+
 // --- Normalization --------------------------------------------------------
 
 interface Candidate {
@@ -616,6 +678,10 @@ interface Candidate {
   currentStage: ProjectStage;
   resolutionNote: string;
   doahHearing: DoahHearing | null;
+  // Every dated filing on the DOAH Docket tab, or null when the tab was not
+  // read (no DOAH case number, or the lookup failed): the step is then left
+  // unmanaged rather than guessed.
+  doahEvents: DocketEvent[] | null;
   // Real "Date Certified" pulled from the matched certified-facility's own
   // DEP detail page — see RESOLUTION-DATE EXTRACTION above. Only ever set
   // when currentStage is "approved_awaiting_construction" via the
@@ -693,6 +759,8 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
   const hearingDetailsLink = c.doahHearing ? (depDetailUrl ?? sources[0]?.url ?? null) : null;
   const hearings = c.doahHearing ? [{ date: c.doahHearing.date, endDate: null, label: null, location: c.doahHearing.location }] : [];
 
+  const review = c.doahEvents && c.doahEvents.length > 0 ? classifyFlStep(c.doahEvents) : undefined;
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
   const caseLabel = c.depDetail?.caseNumber ?? (c.pscDocket ? `PSC Docket ${c.pscDocket.docketnum}` : sourceId);
 
@@ -713,6 +781,8 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
     currentStatus: `Florida siting certification (${caseLabel}): ${c.currentStage === "agency_permitting" ? "application in process" : c.currentStage}`,
     currentStage: c.currentStage,
     causeSlugs,
+    reviewStep: review === undefined ? undefined : review ? review.step : null,
+    reviewStepAt: review === undefined ? undefined : review ? review.at : null,
     causeDetail: `Waiting on Power Plant Siting Act / Transmission Line Siting Act certification from the Florida DEP Siting Coordination Office (and, where applicable, a determination of need from the Florida PSC) — ${caseLabel}, "${c.name}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     // See RESOLUTION-DATE EXTRACTION above — undefined (not null) when this
@@ -766,6 +836,7 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       currentStage: "agency_permitting",
       resolutionNote: "Currently listed on DEP's Applications-in-Process page (fetched at ingestion time) as an active siting application.",
       doahHearing: null, // filled in below, alongside depDetail, after a politeness-delayed fetch
+      doahEvents: null, // filled in below, from the same DOAH Docket tab as doahHearing
       resolutionDate: null, // not resolved yet — see RESOLUTION-DATE EXTRACTION above
       certifiedHref: null,
     });
@@ -791,6 +862,7 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       resolutionNote: certifiedEntry
         ? "No longer listed on DEP's Applications-in-Process page and a name-matching entry was found on DEP's Certified-Facilities list — treated as certified/approved."
         : "No longer listed on DEP's Applications-in-Process page and no matching entry was found on DEP's Certified-Facilities list — treated as no longer active (withdrawn, dismissed, or otherwise resolved) rather than left as a stale 'still waiting' row.",
+      doahEvents: null,
       doahHearing: null, // no DEP detail page is fetched for this pass (see loop below) — no DOAH case number to look up, and an already-resolved/cancelled project has no upcoming hearing to show regardless.
       resolutionDate: null, // filled in below, from certifiedHref's own "Date Certified" field, if a certified match was found
       // No real date is published anywhere for the "cancelled" (not
@@ -821,7 +893,11 @@ export async function ingestFlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
           // over a feature this supplementary — degrades to "no hearing
           // data this run" for this one project, see module header DOAH
           // HEARING LOOKUP.
-          candidate.doahHearing = await fetchDoahHearingDate(candidate.depDetail.doahSearchCaseNum).catch(() => null);
+          const doahHtml = await fetchDoahDocketHtml(candidate.depDetail.doahSearchCaseNum).catch(() => null);
+          if (doahHtml) {
+            candidate.doahHearing = parseDoahHearing(doahHtml);
+            candidate.doahEvents = parseDoahEvents(doahHtml);
+          }
           await sleep(REQUEST_DELAY_MS);
         }
       }

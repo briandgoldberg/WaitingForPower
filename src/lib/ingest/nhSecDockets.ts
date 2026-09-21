@@ -264,6 +264,18 @@
 // "Petition of X for approval..." regex-extraction gymnastics are needed
 // here the way maEfsbDockets.ts/ctCscDockets.ts both require.
 //
+// PROCEDURAL STEP AND HEARINGS (added 2026-09-21): the filing titles already
+// fetched per candidate feed the shared classifier in reviewStep.ts (see
+// NH_STEP_SIGNALS and classifyNhReviewStep), with no extra request. Confirmed
+// live 2026-09-21 against SEC 25-072: its most recent hearing event is "Order
+// Rescheduling Final Adjudicative Hearing" (9/16/2026), and no final hearing
+// has been held, so it reads "Hearing scheduled" even though the calendar
+// feed above lists no SEC 25-072 event (the title carries no date, so there
+// is no upcoming hearing row to add). Past hearings are dated from filing
+// titles: "Transcript of Hearing Held 05/08/26" and "06/25/26 Public
+// Hearing". If the events feed cannot be read, hearings are left undefined for
+// the run so stored ones survive; the step still comes from the filings.
+//
 // Wired to Vercel Cron weekly, 07:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-nh-sec/route.ts). Real timing measured
 // 2026-08-24 against the live shared DB (2 DocketBook year-page fetches
@@ -273,7 +285,8 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedHearing } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://www.puc.nh.gov/VirtualFileRoom";
 
@@ -384,6 +397,81 @@ async function fetchUpcomingSecHearings(): Promise<Map<string, UpcomingHearing[]
     }
   }
   return map;
+}
+
+// Step signals for NH, run against each filing title. Confirmed against SEC
+// 25-072's real filing history:
+//   - hearingSet: a Commission-issued notice or order that names a hearing
+//     ("Notice of Hearing Pursuant to RSA 162-H:4, V ...", "Order Rescheduling
+//     Final Adjudicative Hearing"). Anchored at the start of the title so a
+//     party's own filing that merely mentions hearings ("... Notice of
+//     Non-Participation at County Hearings") is ignored.
+//   - hearingHeld: only a transcript of the final adjudicative hearing. The
+//     default would count "Transcript of Hearing Held 05/08/26", which is the
+//     prehearing conference, as the hearing being over. Unconfirmed against a
+//     real final-hearing transcript, since none has been filed yet.
+//   - decisionNext: post-hearing briefs or closing arguments.
+//   - hearingOff: an order cancelling, vacating or postponing a hearing. The
+//     "Motion to Postpone Pre-Hearing Conference" filings are not hearing
+//     events.
+//   - closed: resolution is decided by detectResolution, so the default is off.
+const NH_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^(?:notice of|commencement of adjudicative proceeding and notice of)\b.{0,60}\bhearings?\b|^order (?:setting|rescheduling|scheduling)\b.{0,40}\bhearings?\b/i,
+  hearingOff: /^order (?:cancel+ing|vacating|postponing)\b.{0,40}\bhearings?\b|^notice of (?:cancel+ation|postponement)\b/i,
+  hearingHeld: /\btranscript of (?:the )?(?:final )?adjudicative hearing\b/i,
+  decisionNext: /\bpost-?hearing (?:briefs?|memorand\w+)\b|\b(?:closing|final) (?:briefs?|arguments?)\b/i,
+  closed: /(?!)/,
+};
+
+function classifyNhReviewStep(filings: DocketFiling[], hasUpcomingHearing: boolean) {
+  const events: DocketEvent[] = filings.map((f) => ({ date: f.date, text: f.title }));
+  const result = classifyReviewStep(events, NH_STEP_SIGNALS);
+  // The events feed is the authority on what is still to come.
+  if (hasUpcomingHearing && result && result.step !== "Hearing scheduled") {
+    return { step: "Hearing scheduled" as const, at: result.at };
+  }
+  return result;
+}
+
+// Past hearings, dated from filing titles: "Transcript of Hearing Held
+// 05/08/26" and "06/25/26 Public Hearing" (confirmed live on SEC 25-072). Times
+// are not in these titles, so each is placed at noon Eastern; this runs on UTC
+// hosts, so the offset comes from the zone.
+const PAST_HEARING_TITLE_RES: [RegExp, string][] = [
+  [/^transcript of hearing held (\d{1,2})\/(\d{1,2})\/(\d{2})$/i, "Hearing"],
+  [/^(\d{1,2})\/(\d{1,2})\/(\d{2}) public hearing$/i, "Public hearing"],
+];
+
+function easternNoon(y: number, mo: number, d: number): Date {
+  const guess = Date.UTC(y, mo - 1, d, 12, 0);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date(guess));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asIfUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+  return new Date(guess - (asIfUtc - guess));
+}
+
+function parsePastHearings(filings: DocketFiling[]): NormalizedHearing[] {
+  const out: NormalizedHearing[] = [];
+  for (const f of filings) {
+    for (const [re, label] of PAST_HEARING_TITLE_RES) {
+      const m = re.exec(f.title.trim());
+      if (!m) continue;
+      const date = easternNoon(2000 + Number(m[3]), Number(m[1]), Number(m[2]));
+      if (Number.isNaN(date.getTime())) continue;
+      if (!out.some((h) => h.date.getTime() === date.getTime() && h.label === label)) {
+        out.push({ date, endDate: null, label, location: null });
+      }
+    }
+  }
+  return out;
 }
 
 interface DocketBookRow {
@@ -588,10 +676,10 @@ function extractCounties(text: string): string[] {
 function normalizeCandidate(
   row: DocketBookRow,
   filings: DocketFiling[],
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  upcomingHearings: Map<string, UpcomingHearing[]> | null,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("nh-sec", row.docketNumber);
-  const hearings = upcomingHearings.get(row.docketNumber) ?? [];
+  const hearings = upcomingHearings?.get(row.docketNumber) ?? [];
 
   const filingTitles = filings.map((f) => f.title).join(" ");
   const combinedText = `${row.description} ${filingTitles}`;
@@ -607,6 +695,9 @@ function normalizeCandidate(
 
   const { resolution, date: resolutionFilingDate } = detectResolution(filings);
   const currentStage: ProjectStage = resolution === "granted" ? "approved_awaiting_construction" : resolution === "denied" ? "cancelled" : "local_review";
+  // A closed docket gets null. Unlike the hearings, the step comes from the
+  // filings alone, so it is set even when the events feed could not be read.
+  const review = resolution ? null : classifyNhReviewStep(filings, hearings.length > 0);
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -656,7 +747,12 @@ function normalizeCandidate(
     causeDetail: `Waiting on a Certificate of Site and Facility (or related siting approval) from the New Hampshire Site Evaluation Committee — Docket ${row.docketNumber}, "${row.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Docket.aspx?DocketNumber=${encodeURIComponent(row.docketNumber)}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
+    // Undefined when the events feed could not be read, so stored hearings survive.
+    hearings: upcomingHearings
+      ? [...parsePastHearings(filings), ...hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location }))]
+      : undefined,
     sources: [
       {
         label: `NH Docket ${row.docketNumber}`,
@@ -694,8 +790,9 @@ export async function ingestNhSecDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
 
   // A failure here shouldn't block the whole ingestion run over a feature
-  // this supplementary -- degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingSecHearings().catch(() => new Map<string, UpcomingHearing[]>());
+  // this supplementary -- degrades to "no hearing data this run" (null, not an
+  // empty map, so hearings stored by an earlier run are kept).
+  const upcomingHearings = await fetchUpcomingSecHearings().catch(() => null);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];

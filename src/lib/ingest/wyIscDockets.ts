@@ -106,6 +106,15 @@
 // project here carries the same "not geocoded" dataQualityNote as several
 // other modules in this series.
 //
+// PROCEDURAL STEP (checked 2026-09-21, deliberately not populated): this source
+// cannot say where a pending case stands. A docket folder is a bare Google
+// Drive file list (filename only, no dates, no notices, no hearing schedule),
+// and the one energy docket with no grant document, "2026 25-05 Cheyenne
+// Prairie Generating Station Expansion Project", holds a single file, the
+// applicant's own filing. Nothing there distinguishes "Application filed" from
+// a set hearing or a decision-ready case, so reviewStep, reviewStepAt and
+// hearings are left undefined (stored values kept) rather than guessed.
+//
 // NOT WIRED TO CRON YET, same as every other new per-state module before
 // its first live-verified run. Politeness-delayed between per-candidate
 // subfolder requests.

@@ -247,6 +247,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://www.pscpublicaccess.alabama.gov/pscpublicaccess";
 const PORTAL_URL = `${BASE_URL}/page/psc-searches/portal.aspx`;
@@ -323,7 +324,7 @@ function parseMDY(raw: string): Date | null {
 // See module header FETCHING: ViewState is disabled site-wide (always a
 // literal empty string), but the search UI is still genuinely stateful via
 // the ASP.NET_SessionId cookie.
-async function mintSessionCookie(): Promise<string> {
+export async function mintSessionCookie(): Promise<string> {
   const res = await fetch(PORTAL_URL);
   if (!res.ok) throw new Error(`AL PSC portal GET failed (${res.status})`);
   const setCookie = res.headers.get("set-cookie") ?? "";
@@ -460,7 +461,7 @@ async function searchPhraseRange(cookie: string, after: Date, before: Date, dept
   return candidates;
 }
 
-async function discoverCandidates(cookie: string): Promise<PhraseCandidate[]> {
+export async function discoverCandidates(cookie: string): Promise<PhraseCandidate[]> {
   const now = new Date();
   const startYear = now.getFullYear() - LOOKBACK_YEARS;
   const seen = new Set<string>();
@@ -596,7 +597,7 @@ function extractLabelValue(html: string, labelId: string): string {
 // Confirmed live 2026-08-24 against real DocketDetailsPage.aspx responses
 // — see module header STATUS for why the page's own "Status:" field is
 // deliberately never read here.
-async function fetchDocketDetail(docketId: string): Promise<DocketDetail> {
+export async function fetchDocketDetail(docketId: string): Promise<DocketDetail> {
   const res = await fetch(DOCKET_DETAILS_URL(docketId));
   if (!res.ok) throw new Error(`AL PSC docket detail request failed (${res.status}) for DocketId ${docketId}`);
   const html = await res.text();
@@ -646,7 +647,7 @@ function parseDocRows(html: string): DocRow[] {
 // See module header FETCHING CONFIRMED WORKING PAGINATION — loops pages
 // defensively; real litigated CPCN cases (e.g. Docket 32953) can carry
 // hundreds of documents across many pages.
-async function fetchDocketDocuments(cookie: string, docketId: string): Promise<DocRow[]> {
+export async function fetchDocketDocuments(cookie: string, docketId: string): Promise<DocRow[]> {
   const firstHtml = await (await fetch(DOCKET_DOCS_URL(docketId), { headers: { Cookie: cookie } })).text();
   const all = [...parseDocRows(firstHtml)];
 
@@ -711,6 +712,30 @@ function detectResolution(docs: DocRow[]): ResolutionResult {
     if (d.docType === "Filing" && WITHDRAW_RE.test(d.description)) return { resolution: "withdrawn", date: d.dateFiled };
   }
   return { resolution: null, date: null };
+}
+
+// PROCEDURAL STEP (added 2026-09-21): the Documents tab already fetched above
+// carries each filing's title and Date Filed, so where a still-pending docket
+// stands is read from those titles via the shared classifier. A granted,
+// denied or withdrawn docket (see detectResolution) is finished, so it gets no
+// step at all (null), which is why the closing signal is left to that
+// function and disabled here. Confirmed live: titles are terse ("TRANSCRIPT
+// FOR HEARING HELD AUGUST 17, 2011 ...", "ORDER GRANTING ..."), and no
+// hearing-notice title with a future date has been seen, so hearings is left
+// undefined (the title carries no date to record) rather than guessed.
+const NEVER_RE = /(?!)/;
+const AL_SIGNALS = {
+  closed: NEVER_RE,
+  hearingHeld: /\btranscript\b|\bhearing held\b/i,
+  hearingSet: /\bnotice of (public |evidentiary )?hearing\b|\border setting (a )?(public )?hearing\b|\bhearing (is )?(scheduled|set)\b/i,
+};
+
+function classifyDocs(docs: DocRow[], resolution: ResolutionResult) {
+  if (resolution.resolution) return null;
+  return classifyReviewStep(
+    docs.map((d) => ({ date: d.dateFiled, text: d.description })),
+    AL_SIGNALS,
+  );
 }
 
 // REQUEST_RE: a real, live-confirmed false-positive class caught only by
@@ -841,7 +866,7 @@ function extractApplicant(description: string): string {
   return description.slice(0, 80);
 }
 
-function normalizeCandidate(detail: DocketDetail, resolution: ResolutionResult): NormalizedProject {
+function normalizeCandidate(detail: DocketDetail, resolution: ResolutionResult, docs: DocRow[]): NormalizedProject {
   const matchKey = resolveMatchKey("al-psc", detail.docketNumber);
   const combinedText = `${detail.description} ${detail.synopsis}`;
   const { projectType, fuelType } = inferProjectTypeAndFuel(combinedText);
@@ -863,6 +888,8 @@ function normalizeCandidate(detail: DocketDetail, resolution: ResolutionResult):
   const resolutionDate: Date | null | undefined =
     RESOLVED_STAGES.includes(currentStage) && resolution.date ? resolution.date : undefined;
   const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
+
+  const review = classifyDocs(docs, resolution);
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -901,6 +928,9 @@ function normalizeCandidate(detail: DocketDetail, resolution: ResolutionResult):
     currentStage,
     resolutionDate,
     resolutionDateConfidence,
+    // An empty documents list gives nothing to judge from: leave the step unmanaged.
+    reviewStep: docs.length === 0 ? undefined : review ? review.step : null,
+    reviewStepAt: docs.length === 0 ? undefined : review ? review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Alabama Public Service Commission — Docket No. ${detail.docketNumber}, "${detail.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -973,7 +1003,7 @@ export async function ingestAlPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       await sleep(REQUEST_DELAY_MS);
       const docs = await fetchDocketDocuments(cookie, candidate.docketId);
       const resolution = detectResolution(docs);
-      const normalized = normalizeCandidate(detail, resolution);
+      const normalized = normalizeCandidate(detail, resolution, docs);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

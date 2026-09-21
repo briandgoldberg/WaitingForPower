@@ -343,6 +343,23 @@
 // was confirmed live to return real hearings scheduled as far out as
 // 2027-02-23, comfortably inside that window.
 //
+// PROCEDURAL STEP: the same ReadScheduledEvents call also returns PAST events
+// (confirmed live 2026-09-21: a window starting in 2024 returns Hearing and
+// Status Conference rows back to 2024-01, e.g. Docket U-37425's Hearings on
+// 2025-03-25 and 2025-07-09..16), so the request's window now starts
+// HEARING_LOOKBACK_YEARS back instead of today, at no extra request. Only
+// events titled "Hearing" (SchedulerEventTypeId 1) drive the step, since a
+// Status Conference or Technical Conference is not the evidentiary hearing: a
+// Hearing still ahead is "Hearing scheduled" (Docket U-37882 had Hearings on
+// 7/8 and 7/29 already past and three more ahead in October, and correctly
+// reads as scheduled, dated to the next one); Hearings all in the past with no
+// order yet read "Awaiting commission order"; a docket with only Status
+// Conferences, or none, is "Application filed". LPSC's own procedural order
+// text (e.g. Docket U-37882's "requires the Administrative Hearings Division
+// to serve as hearing examiner ... and to establish a procedural schedule")
+// says nothing about where the case stands, so orders are not read for the
+// step, only for the closing order that detectResolution already finds.
+//
 // RESOLUTION-DATE EXTRACTION — confirmed live 2026-09-13: detectResolution
 // already reads each OrderRow's Synopsis/Description text to find a
 // dispositive verdict (see STATUS above); that same OrderRow also carries
@@ -363,6 +380,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://lpscpubvalence.lpsc.louisiana.gov";
 const DOCKET_SEARCH_URL = `${BASE_URL}/portal/PSC/DocketSearch`;
@@ -523,6 +541,9 @@ async function searchUDockets(startDate: Date, endDate: Date): Promise<DocketLis
 const OPEN_HEARING_EVENT_TYPE_IDS = new Set([1, 4, 5]);
 const HEARING_EVENT_TITLE_RE = /^(Hearing|Status Conference|Technical Conference):\s*([A-Z]-\d+)/;
 const HEARING_LOOKAHEAD_MONTHS = 12;
+// See module header PROCEDURAL STEP: how far back the same calendar request
+// reaches to find hearings that already happened.
+const HEARING_LOOKBACK_YEARS = 3;
 
 interface UpcomingHearing {
   date: Date;
@@ -545,18 +566,26 @@ interface ScheduledEventsResponse {
 // See module header HEARING CALENDAR for the `sort=Start-asc` flat-string
 // requirement (same server-side Kendo-sort gotcha as fetchDocketSearchPage/
 // fetchOrders above).
-async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, UpcomingHearing[]>> {
+interface HearingCalendar {
+  upcoming: Map<string, UpcomingHearing[]>;
+  // Dates of already-held events titled "Hearing" (not conferences), per docket.
+  pastHearings: Map<string, Date[]>;
+}
+
+async function fetchHearingCalendar(): Promise<HearingCalendar> {
   const now = new Date();
+  const start = new Date(now);
+  start.setFullYear(start.getFullYear() - HEARING_LOOKBACK_YEARS);
   const end = new Date(now);
   end.setMonth(end.getMonth() + HEARING_LOOKAHEAD_MONTHS);
 
   const params = new URLSearchParams();
-  params.set("startDate", formatDateParam(now));
+  params.set("startDate", formatDateParam(start));
   params.set("endDate", formatDateParam(end));
   params.set("page", "1");
-  params.set("pageSize", "1000");
+  params.set("pageSize", "3000");
   params.set("skip", "0");
-  params.set("take", "1000");
+  params.set("take", "3000");
   params.set("sort", "Start-asc");
 
   const res = await fetch(SCHEDULED_EVENTS_URL, {
@@ -574,18 +603,23 @@ async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, Upcomi
   const json = (await res.json()) as ScheduledEventsResponse;
   if (!Array.isArray(json.Data)) {
     throw new Error(
-      "LA PSC ReadScheduledEvents response didn't contain a recognizable Data array — the API shape likely changed. Check fetchUpcomingHearingsByDocketNumber in src/lib/ingest/laPscDockets.ts against a fresh response.",
+      "LA PSC ReadScheduledEvents response didn't contain a recognizable Data array — the API shape likely changed. Check fetchHearingCalendar in src/lib/ingest/laPscDockets.ts against a fresh response.",
     );
   }
 
   const nowMs = now.getTime();
   const map = new Map<string, UpcomingHearing[]>();
+  const pastHearings = new Map<string, Date[]>();
   for (const ev of json.Data) {
     if (!OPEN_HEARING_EVENT_TYPE_IDS.has(ev.SchedulerEventTypeId)) continue; // not a real open proceeding — see module header
     const m = HEARING_EVENT_TITLE_RE.exec(ev.Title ?? "");
     if (!m) continue;
     const date = parseMsDate(ev.Start);
-    if (!date || date.getTime() <= nowMs) continue;
+    if (!date) continue;
+    if (date.getTime() <= nowMs) {
+      if (m[1] === "Hearing") pastHearings.set(m[2], [...(pastHearings.get(m[2]) ?? []), date]);
+      continue;
+    }
     const label = m[1];
     const docketNumber = m[2];
     const endDate = parseMsDate(ev.End);
@@ -594,7 +628,25 @@ async function fetchUpcomingHearingsByDocketNumber(): Promise<Map<string, Upcomi
     if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, endDate, label, location });
     map.set(docketNumber, arr);
   }
-  return map;
+  return { upcoming: map, pastHearings };
+}
+
+// See module header PROCEDURAL STEP. Text already encodes past vs. future so
+// the shared classifier can read it; while a Hearing is still ahead the ones
+// already held are neutral, so a docket mid-schedule stays "Hearing scheduled".
+function classifyLaReviewStep(filed: Date | null, upcoming: UpcomingHearing[], past: Date[]): ReviewStep | null {
+  const ahead = upcoming.filter((h) => h.label === "Hearing").sort((a, b) => a.date.getTime() - b.date.getTime());
+  const events: DocketEvent[] = [{ date: filed, text: "application filed" }];
+  ahead.forEach((h, i) => events.push({ date: h.date, text: i === 0 ? "hearing scheduled" : "later hearing" }));
+  for (const d of past) events.push({ date: d, text: ahead.length === 0 ? "hearing held" : "earlier hearing" });
+  const never = /(?!)/;
+  return classifyReviewStep(events, {
+    hearingSet: /^hearing scheduled$/,
+    hearingOff: never,
+    hearingHeld: /^hearing held$/,
+    decisionNext: never,
+    closed: never,
+  });
 }
 
 interface DocketDetail {
@@ -839,11 +891,15 @@ function normalizeDocket(
   record: DocketListRecord,
   detail: DocketDetail,
   resolutionInfo: ResolutionInfo,
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  calendar: HearingCalendar | null,
 ): NormalizedProject {
   const { resolution, date: resolutionDate } = resolutionInfo;
   const matchKey = resolveMatchKey("la-psc", record.docketNumber);
-  const hearings = upcomingHearings.get(record.docketNumber) ?? [];
+  const hearings = calendar?.upcoming.get(record.docketNumber) ?? [];
+  // A resolved docket has no live step; a calendar that failed to load leaves
+  // stored hearings and step alone (undefined).
+  const review =
+    calendar && resolution === null ? classifyLaReviewStep(record.dateFiled, hearings, calendar.pastHearings.get(record.docketNumber) ?? []) : null;
   const synopsis = detail.synopsis ?? "";
   const description = detail.description ?? record.description;
   const combinedText = `${synopsis} ${description}`;
@@ -903,7 +959,9 @@ function normalizeDocket(
     // undefined-vs-null convention in common.ts.
     ...(currentStage !== "local_review" && resolutionDate ? { resolutionDate, resolutionDateConfidence: "exact" as const } : {}),
     hearingDetailsLink: hearings.length > 0 ? DOCKET_DETAILS_URL(record.matterId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label, location: h.location })),
+    hearings: calendar ? hearings.map((h) => ({ date: h.date, endDate: h.endDate ?? null, label: h.label, location: h.location })) : undefined,
+    reviewStep: calendar ? (review ? review.step : null) : undefined,
+    reviewStepAt: calendar ? (review ? review.at : null) : undefined,
     sources: [
       {
         label: `LA PSC Docket No. ${record.docketNumber}`,
@@ -940,7 +998,7 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocketNumber().catch(() => new Map<string, UpcomingHearing[]>());
+  const calendar = await fetchHearingCalendar().catch(() => null);
 
   for (const record of selected) {
     const matchKey = resolveMatchKey("la-psc", record.docketNumber);
@@ -961,7 +1019,7 @@ export async function ingestLaPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       const orders = await fetchOrders(record.docketNumber);
       await sleep(REQUEST_DELAY_MS);
       const resolutionInfo = detectResolution(orders);
-      const normalized = normalizeDocket(record, detail, resolutionInfo, upcomingHearings);
+      const normalized = normalizeDocket(record, detail, resolutionInfo, calendar);
       toUpsert.push(normalized);
     } catch (err) {
       errors.push({ matchKey, message: String(err) });

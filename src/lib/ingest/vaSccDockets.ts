@@ -130,6 +130,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const API_BASE = "https://www.scc.virginia.gov/docketsearchapi/breeze";
 const SEARCH_URL = `${API_BASE}/CASES_ESTABDATE/GetCasesEstDate`;
@@ -299,6 +300,44 @@ const STATUS_TO_RESOLVED_STAGE: Record<string, ProjectStage> = {
   dismissed: "cancelled",
 };
 
+// Step signals for VA. The Activities API only carries short generic names
+// ("Comments", "Staff Report", "Rebuttal Testimony", "Request for Hearing",
+// "Hearing", "Hearing Continued"), confirmed live 2026-09-21 across every
+// Energy CPCN case in the search (8 cases, 1 Active), so activities are first
+// mapped to a small vocabulary by mapActivityToEvent and these signals read
+// that vocabulary rather than the raw names.
+//   - A "Hearing" / "Hearing Continued" activity dated in the future is
+//     "hearing scheduled"; dated in the past it is "hearing held".
+//   - A "Staff Report" means the record is complete and the Commission rules
+//     next, unless someone asked for a hearing and none has been set (the
+//     Request for Hearing may still produce one), in which case the step
+//     stays at "Application filed" rather than guessing.
+//   - There is no closing activity; a closed case is decided by Status.
+const VA_STEP_SIGNALS: StepSignals = {
+  hearingSet: /^hearing scheduled$/,
+  hearingOff: /^\b$/,
+  hearingHeld: /^hearing held$/,
+  decisionNext: /^staff report$/,
+  closed: /^\b$/,
+};
+
+function classifyVaReviewStep(activities: CaseActivity[], now: Date) {
+  const hearingActivities = activities.filter((a) => /^hearing\b/i.test(a.Activity));
+  const hearingRequested = activities.some((a) => /request for hearing/i.test(a.Activity));
+  const events: DocketEvent[] = [];
+  for (const a of activities) {
+    const date = parseUsDate(a.Activity_Date);
+    if (/^hearing\b/i.test(a.Activity)) {
+      events.push({ date, text: date && date.getTime() > now.getTime() ? "hearing scheduled" : "hearing held" });
+    } else if (/^staff report$/i.test(a.Activity) && (!hearingRequested || hearingActivities.length > 0)) {
+      events.push({ date, text: "staff report" });
+    } else {
+      events.push({ date, text: "other" });
+    }
+  }
+  return classifyReviewStep(events, VA_STEP_SIGNALS);
+}
+
 function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities: CaseActivity[]): NormalizedProject {
   const matchKey = resolveMatchKey("va-scc", search.Case_Number);
   const caption = detail.Caption || search.Case_Caption;
@@ -337,6 +376,8 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     milestones.push({ date, dateConfidence: "exact", stage: a.Activity_Status, description: a.Activity });
   }
   const futureHearings = findFutureHearings(activities, new Date());
+  // A closed case gets null; an active one is classified from its activities.
+  const review = isActive ? classifyVaReviewStep(activities, new Date()) : null;
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Virginia State Corporation Commission's public docket search — an \"unofficial\" copy per the SCC's own disclaimer, provided for public convenience.",
@@ -369,6 +410,8 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     currentStage,
     resolutionDate: resolutionDate ?? undefined,
     resolutionDateConfidence: resolutionDate ? "exact" : undefined,
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Virginia State Corporation Commission — case ${search.Case_Number}, "${caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

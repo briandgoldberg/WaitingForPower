@@ -397,6 +397,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://apps.apsc.arkansas.gov/olsv2";
@@ -557,6 +558,8 @@ interface DocketDetail {
   companies: CompanyRow[];
   firstFiledDate: Date | null;
   orders: OrderEntry[];
+  // Every action-log entry (not just orders), for the procedural step.
+  events: DocketEvent[];
 }
 
 const STYLE_RE = /<strong>Style:<\/strong>\s*([\s\S]*?)<\/p>/i;
@@ -574,7 +577,7 @@ const LOG_ENTRY_RE =
 // alias, not silently corrected.
 const ORDER_ENTRY_RE = /^\d+\.\s*(?:ORDER|ORDR)\.?\s*NO\.?\s*\d/i;
 
-async function fetchDocketDetail(docket: string): Promise<DocketDetail> {
+export async function fetchDocketDetail(docket: string): Promise<DocketDetail> {
   const res = await fetch(DOCKET_DETAIL_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -598,15 +601,17 @@ async function fetchDocketDetail(docket: string): Promise<DocketDetail> {
 
   let firstFiledDate: Date | null = null;
   const orders: OrderEntry[] = [];
+  const events: DocketEvent[] = [];
   for (const m of html.matchAll(LOG_ENTRY_RE)) {
     const docNumVal = m[1];
     const date = parseMDY(decodeHtmlEntities(m[2]));
     const summary = stripTags(m[3]);
     if (firstFiledDate === null && date !== null) firstFiledDate = date;
+    events.push({ date, text: summary.replace(/^\d+\.\s*/, "") });
     if (ORDER_ENTRY_RE.test(summary)) orders.push({ docNumVal, date, summary });
   }
 
-  return { docket, style, companies, firstFiledDate, orders };
+  return { docket, style, companies, firstFiledDate, orders, events };
 }
 
 // See module header FETCHING PDF fallback — the intermediate page's own
@@ -909,6 +914,33 @@ function extractApplicant(detail: DocketDetail): string {
   return detail.style.slice(0, 80);
 }
 
+// PROCEDURAL STEP (added 2026-09-21): the action log already parsed in
+// fetchDocketDetail has every entry's date and summary, so the step is read
+// from it via the shared classifier. Confirmed live against Dockets 26-002-U
+// ("submits its Initial Brief" / "Reply Brief" after a Commission order
+// dispensing with further hearing procedures: decision next), 26-041-U (only
+// testimony and procedural orders so far: application filed) and 25-047-U
+// (hearing transcripts, then Order No. 8). A docket with a dispositive order
+// (see detectResolution) is finished, so the closing signal is left to that
+// function and disabled here. A hearing counts as scheduled only when the
+// APSC hearing calendar (see fetchUpcomingHearingsByDocket) lists a future
+// date for the docket; it enters as a synthetic undated event, since the
+// calendar carries no date for when the hearing was set, and reviewStepAt
+// then stays null rather than showing a misleading "since" date.
+const NEVER_RE = /(?!)/;
+const SCHEDULED_HEARING_RE = /^scheduled hearing$/;
+
+export function classifyArStep(detail: DocketDetail, resolution: ResolutionResult, hearings: UpcomingHearing[]) {
+  if (resolution.resolution) return null;
+  const events: DocketEvent[] = [...detail.events];
+  if (hearings.length > 0) events.push({ date: null, text: "scheduled hearing" });
+  return classifyReviewStep(events, {
+    hearingSet: SCHEDULED_HEARING_RE,
+    hearingOff: NEVER_RE,
+    closed: NEVER_RE,
+  });
+}
+
 function normalizeDocket(detail: DocketDetail, resolution: ResolutionResult, hearings: UpcomingHearing[]): NormalizedProject {
   const matchKey = resolveMatchKey("ar-psc", detail.docket);
   const { projectType, fuelType } = inferProjectTypeAndFuel(detail.style);
@@ -929,6 +961,8 @@ function normalizeDocket(detail: DocketDetail, resolution: ResolutionResult, hea
   const resolutionDate: Date | null | undefined =
     RESOLVED_STAGES.includes(currentStage) && resolution.date ? resolution.date : undefined;
   const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
+
+  const review = classifyArStep(detail, resolution, hearings);
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -969,6 +1003,8 @@ function normalizeDocket(detail: DocketDetail, resolution: ResolutionResult, hea
     currentStage,
     resolutionDate,
     resolutionDateConfidence,
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a construction certificate/authority from the Arkansas Public Service Commission — Docket No. ${detail.docket}, "${detail.style}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

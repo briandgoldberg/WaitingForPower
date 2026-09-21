@@ -202,6 +202,25 @@
 // is now roughly 70, not ~12) — still one cheap bulk list fetch, no new
 // per-candidate requests (see GOTCHA #2), so this costs nothing extra.
 //
+// PROCEDURAL STEP AND HEARING DATES (added 2026-09-21): the "Timeline" widget
+// on each facility page reads a second SharePoint list, "Facility Timelines"
+// (one row per published document: Title, Date, Link, and a lookup to the
+// facility). Same anonymous odata=verbose call as the facility list; one
+// request returns every row (771 on 2026-09-21). The lookup's Id equals the
+// facilities list Id (confirmed 2026-09-21: all 765 rows carrying a lookup
+// matched a facility by both Id and Title), so rows join on Id. Row Dates are
+// the publication/event date, and titles are staff-typed free text, so the
+// step is read from titles only. A non-draft "Proposed Order" with no site
+// certificate order after it means the Council decision is next ("Awaiting
+// commission order"); a future-dated meeting/hearing row is "Hearing
+// scheduled"; anything else is "Application filed". Amendment, transfer and
+// termination rows belong to a certificate that already exists, so they are
+// ignored. ASC public hearings are noticed by a row dated the notice date
+// (the hearing date lives only in the notice PDF), so those rows are not
+// hearing dates; only rows dated on the event itself (e.g. "NOI informational
+// Meeting") become hearings. The Phase column is null on 326 of 771 rows and
+// is not used.
+//
 // Wired to Vercel Cron weekly, 00:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-or-efsc/route.ts) — real run timing measured
 // 2026-08-23: the entire ingestion (one bulk list fetch, zero per-candidate
@@ -212,11 +231,13 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedHearing, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const SITE_BASE = "https://www.oregon.gov/energy/facilities";
 const API_BASE = `${SITE_BASE}/_api/web/lists/getbytitle('facilities')/items`;
-const PAGE_BASE = `${SITE_BASE}/Pages`;
+const TIMELINE_API_BASE = `${SITE_BASE}/_api/web/lists/getbytitle('Facility%20Timelines')/items`;
+const PAGE_BASE =`${SITE_BASE}/Pages`;
 
 // Comfortably above the entire 97-facility population — see module header
 // FETCHING for why no date-based lookback is needed (the whole list is one
@@ -358,6 +379,109 @@ async function fetchAllFacilities(): Promise<RawFacility[]> {
     );
   }
   return all;
+}
+
+interface RawTimelineRow {
+  Title: string | null;
+  Date: string | null;
+  Facility_x0020_CodeId: number | null;
+}
+
+// See module header PROCEDURAL STEP AND HEARING DATES. Returns rows grouped by
+// facility Id. `Facility_x0020_CodeId` is the lookup's Id (selected directly,
+// so no $expand is needed).
+async function fetchTimelinesByFacility(): Promise<Map<number, RawTimelineRow[]>> {
+  let url: string | null = `${TIMELINE_API_BASE}?$top=5000&$select=Id,Title,Date,Facility_x0020_CodeId`;
+  const byFacility = new Map<number, RawTimelineRow[]>();
+  while (url) {
+    const body = await fetchJson(url);
+    const d = body.d as { results?: unknown; __next?: string } | undefined;
+    if (!d || !Array.isArray(d.results)) {
+      throw new Error(
+        "OR EFSC timeline response's d.results wasn't an array (the endpoint shape likely changed). Check fetchTimelinesByFacility in src/lib/ingest/orEfscFacilities.ts.",
+      );
+    }
+    for (const row of d.results as RawTimelineRow[]) {
+      if (row.Facility_x0020_CodeId == null) continue;
+      const rows = byFacility.get(row.Facility_x0020_CodeId) ?? [];
+      rows.push(row);
+      byFacility.set(row.Facility_x0020_CodeId, rows);
+    }
+    url = typeof d.__next === "string" ? d.__next : null;
+  }
+  return byFacility;
+}
+
+// Amendments/transfers/terminations belong to a certificate that already
+// exists, not the original application under review.
+const TIMELINE_EXCLUDE_RE = /amendment|\bRFA\b|transfer|terminat/i;
+const TIMELINE_MEETING_RE = /public (informational )?meeting|informational meeting|public hearing/i;
+// A notice row is dated the notice date, not the event date, and a comment
+// row is not an event either.
+const TIMELINE_NOTICE_RE = /notice|comment/i;
+// "Draft Proposed Order" is the staff draft before the comment period; the
+// non-draft Proposed Order is what sends the case to the Council.
+const TIMELINE_DECISION_NEXT_RE = /^(?!.*\bdraft proposed\b).*\bproposed order\b|\bdraft final order\b/i;
+const TIMELINE_CLOSED_RE = /^final order on (application for )?site certificate|^final order$/i;
+const NEVER_RE = /(?!)/;
+
+function timelineDate(row: RawTimelineRow): Date | null {
+  if (!row.Date) return null;
+  const d = new Date(row.Date);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function originalFlowRows(rows: RawTimelineRow[]): RawTimelineRow[] {
+  return rows.filter((r) => r.Title && !TIMELINE_EXCLUDE_RE.test(r.Title));
+}
+
+// See module header PROCEDURAL STEP AND HEARING DATES. Past meeting/hearing
+// rows are dropped before classifying so only a future-dated one can read as
+// "Hearing scheduled".
+function classifyOrStep(rows: RawTimelineRow[]): { step: string; at: Date | null } | null {
+  const now = Date.now();
+  const events: DocketEvent[] = [];
+  for (const r of originalFlowRows(rows)) {
+    const date = timelineDate(r);
+    const title = r.Title as string;
+    if (TIMELINE_MEETING_RE.test(title) && (date == null || date.getTime() < now)) continue;
+    events.push({ date, text: title });
+  }
+  return classifyReviewStep(events, {
+    hearingSet: TIMELINE_MEETING_RE,
+    hearingOff: NEVER_RE,
+    hearingHeld: NEVER_RE,
+    decisionNext: TIMELINE_DECISION_NEXT_RE,
+    closed: TIMELINE_CLOSED_RE,
+  });
+}
+
+// The earliest comment deadline still ahead, from timeline rows titled
+// "... Comment Deadline" and dated on the deadline itself. Null when none is
+// open, so a passed deadline clears the stored one.
+function timelineCommentDeadline(rows: RawTimelineRow[], now = new Date()): Date | null {
+  const dates: Date[] = [];
+  for (const r of originalFlowRows(rows)) {
+    const date = timelineDate(r);
+    if (date && /comment (deadline|period ends?)/i.test(r.Title as string) && date.getTime() >= now.getTime()) dates.push(date);
+  }
+  return dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
+}
+
+function timelineHearings(rows: RawTimelineRow[]): NormalizedHearing[] {
+  const hearings: NormalizedHearing[] = [];
+  for (const r of originalFlowRows(rows)) {
+    const title = r.Title as string;
+    const date = timelineDate(r);
+    if (!date || !TIMELINE_MEETING_RE.test(title) || TIMELINE_NOTICE_RE.test(title)) continue;
+    hearings.push({
+      date,
+      endDate: null,
+      label: /public hearing/i.test(title) ? "Public hearing" : "Informational meeting",
+      location: null,
+    });
+  }
+  return hearings.sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
 // Replaces tags (and the stray U+200B zero-width space some entries
@@ -589,7 +713,11 @@ function cleanCounties(raw: string | null): string | null {
     .join(", ");
 }
 
-function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]): NormalizedProject {
+function normalizeFacility(
+  facility: RawFacility,
+  openCommentCoreNames: string[],
+  timelines: Map<number, RawTimelineRow[]> | null,
+): NormalizedProject {
   const sourceId = String(facility.Id);
   const matchKey = resolveMatchKey("or-efsc", sourceId);
 
@@ -653,6 +781,11 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
     );
   }
 
+  // Left undefined (stored values kept) when the timeline fetch failed this
+  // run; resolved facilities have no procedural step.
+  const timelineRows = timelines ? (timelines.get(facility.Id) ?? []) : null;
+  const review = timelineRows && currentStage === "local_review" ? classifyOrStep(timelineRows) : null;
+
   const pageUrl = facility.Page_x0020_URL ? `${PAGE_BASE}/${facility.Page_x0020_URL}` : `${SITE_BASE}/Pages/facilities-under-efsc.aspx`;
   const openForComment = hasOpenCommentPeriod(facility.Title, openCommentCoreNames);
 
@@ -677,14 +810,16 @@ function normalizeFacility(facility: RawFacility, openCommentCoreNames: string[]
     causeSlugs,
     causeDetail: `Waiting on a site certificate decision from the Oregon Energy Facility Siting Council, administered by the Oregon Department of Energy — ${facility.Title}${detailsText ? `, "${detailsText.slice(0, 300)}"` : ""}`,
     dataQualityNote: dataQualityNoteParts.join(" "),
-    // No actual hearing/comment-period dates are published anywhere on this
-    // source — the portal only exposes a live "open for comment right now"
-    // boolean, no start/end dates. hearingDetailsLink still points there
-    // when open; hearings is explicitly [] (never omitted) since this
-    // module does actively check for hearing data, it just never has real
-    // dates to report — see module header COMMENT_PORTAL_URL.
+    // The comment portal only exposes a live "open for comment right now"
+    // boolean, no start/end dates; hearingDetailsLink points there when open
+    // (see module header COMMENT_PORTAL_URL). Hearing dates come only from
+    // timeline rows dated on the event itself (see module header PROCEDURAL
+    // STEP AND HEARING DATES); undefined when the timeline fetch failed.
     hearingDetailsLink: openForComment ? COMMENT_PORTAL_URL : null,
-    hearings: [],
+    hearings: timelineRows ? timelineHearings(timelineRows) : undefined,
+    commentDeadline: timelineRows ? timelineCommentDeadline(timelineRows) : undefined,
+    reviewStep: timelineRows ? (review ? review.step : null) : undefined,
+    reviewStepAt: timelineRows ? (review ? review.at : null) : undefined,
     sources: [
       {
         label: `OR EFSC Facility Page: ${facility.Title}`,
@@ -713,6 +848,9 @@ export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Pr
   // this supplementary — degrades to "no comment-period data this run."
   const openCommentNames = await fetchOpenCommentProjectNames().catch(() => [] as string[]);
   const openCommentCoreNames = openCommentNames.map(coreProjectName);
+  // Same degrade-gracefully stance: no timelines means step/hearings are left
+  // as last stored, not cleared.
+  const timelines = await fetchTimelinesByFacility().catch(() => null);
 
   // See module header RESOLUTION DATE / RESOLVED-FACILITY CLASSIFICATION:
   // this module now tracks both still-pending candidates AND facilities
@@ -738,7 +876,7 @@ export async function ingestOrEfscFacilities(maxCandidates = MAX_CANDIDATES): Pr
 
   for (const candidate of candidates) {
     try {
-      const normalized = normalizeFacility(candidate, openCommentCoreNames);
+      const normalized = normalizeFacility(candidate, openCommentCoreNames, timelines);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

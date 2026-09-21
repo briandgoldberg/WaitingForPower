@@ -127,6 +127,37 @@
 // live page, none of which happened to be a currently-open siting-
 // certificate candidate at the moment this was checked).
 //
+// PROCEDURAL STEP: the same detail page also carries a Matters tab (every
+// filing: type, summary, date) and a Hearings tab (date, status, notes), so the
+// step costs no extra request. Confirmed live 2026-09-21 across all 30
+// candidate dockets (28 already granted, so the wording was calibrated on their
+// pre-order history; the 3 the order check leaves "active" are all withdrawn or
+// administratively closed, see below):
+//   - hearing scheduled: a Hearings-tab row dated in the future whose status is
+//     not Canceled/Withdrawn, other than a status conference or a WebEx test.
+//     "Customer Public Hearing" and "Attorney Appearances Only" rows count as
+//     scheduled but not as the decisive hearing.
+//   - hearing held: a past Hearings-tab row for the merits ("*Merits and
+//     Witness Testimony*"), "*Oral Arguments*" or an unlabeled court-reported
+//     session; a past public or customer hearing does NOT make a case
+//     decision-ready (the merits hearing still follows), nor does a transcript
+//     of one, so only a transcript that is not of a public hearing is used.
+//   - decision next: a "Proposed Order" filing (parties' proposed orders come
+//     after the merits hearing, e.g. 2025-334-E) or a post-hearing brief.
+//   - closed: a withdrawal or administrative closure. The Status field is
+//     unreliable in one direction only (it reads "Open" on granted dockets), but
+//     "Closed" was correct on every docket that showed it, so it is trusted.
+//     Confirmed: 2025-318-E and 2025-253-E (applications withdrawn) and
+//     2024-245-E (administratively closed) have no grant order, so this
+//     module's order check left them "active" and they read as pending; they
+//     now carry no step and are staged as cancelled (dated by the closing entry
+//     when there is one).
+// The Hearings-tab dates also feed hearings when the calendar page did not list
+// the docket, since both show the same scheduled sessions. No docket is
+// genuinely pending right now, so the "Application filed", "Hearing scheduled"
+// and "Awaiting commission order" branches were verified against the
+// pre-decision history of the granted dockets, not against a live pending one.
+//
 // Wired to Vercel Cron weekly, 20:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-sc-psc/route.ts) — a real run's timing was
 // measured (34 candidates, ~35s) before scheduling this. Also
@@ -137,6 +168,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://dms.psc.sc.gov";
 const NUMBER_TYPE_ELECTRIC = "5001";
@@ -248,10 +280,21 @@ export function parseSearchResults(html: string): DocketSearchResult[] {
   return results;
 }
 
+interface DetailHearing {
+  date: Date;
+  status: string;
+  notes: string;
+}
+
 interface DocketDetail {
   openedDate: Date | null;
   resolution: "granted" | "denied" | "dismissed" | null;
   resolutionDate: Date | null;
+  // The docket's own Status field; only "Closed" is trusted (see PROCEDURAL STEP).
+  statusClosed: boolean;
+  // Matters and Orders tabs as dated events, for the procedural step.
+  events: DocketEvent[];
+  hearingRows: DetailHearing[];
 }
 
 const OPENED_RE =
@@ -309,6 +352,49 @@ function earliestOrderDate(orders: DocketOrder[], re: RegExp): Date | null {
   return matches.reduce((earliest, o) => (o.orderDate!.getTime() < earliest.getTime() ? o.orderDate! : earliest), matches[0].orderDate!);
 }
 
+const STATUS_RE =
+  /<label class="control-label" for="Status">Status<\/label>[\s\S]{0,80}?<div class="col-md-offset-1">\s*([^<]+?)\s*<\/div>/;
+
+// Matters tab row: Id / Type / Summary (caption, then the filing's own title in
+// a <strong>) / Date / Attachments.
+const MATTER_ROW_RE =
+  /<tr>\s*<td>\s*<a href="javascript:showMatterDetail[^"]*">\d+<\/a>\s*<\/td>\s*<td class="nowrap">\s*([^<]*?)\s*<\/td>\s*<td>\s*<span>([\s\S]*?)<\/span>[\s\S]*?<td class="nowrap">\s*<span>([^<]*)<\/span>/g;
+
+// Hearings tab row: date / status / notes.
+const HEARING_ROW_RE =
+  /<tr>\s*<td class="nowrap"[^>]*>\s*<span>([^<]+)<\/span>[\s\S]*?<span class="[^"]*">([^<]*)<\/span>\s*<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/g;
+
+function tabSection(html: string, n: number): string {
+  const start = html.indexOf('id="detail-tabs-' + n + '"');
+  if (start < 0) return "";
+  const end = html.indexOf('id="detail-tabs-' + (n + 1) + '"', start);
+  return html.slice(start, end < 0 ? undefined : end);
+}
+
+function stripTags(html: string): string {
+  return decodeHtmlEntities(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+}
+
+function parseMatters(section: string): DocketEvent[] {
+  const events: DocketEvent[] = [];
+  for (const m of section.matchAll(MATTER_ROW_RE)) {
+    const title = /<strong>([\s\S]*?)<\/strong>/.exec(m[2])?.[1] ?? m[2];
+    events.push({ date: parseSlashDate(m[3]), text: decodeHtmlEntities(m[1]) + " " + stripTags(title) });
+  }
+  return events;
+}
+
+// "Wednesday, May 6, 2026 10:00 AM": the weekday is dropped like parseLongDate does.
+function parseHearingRows(section: string): DetailHearing[] {
+  const rows: DetailHearing[] = [];
+  for (const m of section.matchAll(HEARING_ROW_RE)) {
+    const date = new Date(decodeHtmlEntities(m[1]).replace(/^[A-Za-z]+,\s*/, ""));
+    if (Number.isNaN(date.getTime())) continue;
+    rows.push({ date, status: decodeHtmlEntities(m[2]), notes: stripTags(m[3]) });
+  }
+  return rows;
+}
+
 export function parseDetail(html: string): DocketDetail {
   const openedM = OPENED_RE.exec(html);
   const openedDate = openedM ? parseLongDate(decodeHtmlEntities(openedM[1])) : null;
@@ -344,7 +430,53 @@ export function parseDetail(html: string): DocketDetail {
   else if (resolution === "denied") resolutionDate = earliestOrderDate(orders, DENY_RE);
   else if (resolution === "dismissed") resolutionDate = earliestOrderDate(orders, DISMISS_RE);
 
-  return { openedDate, resolution, resolutionDate };
+  const events = [
+    ...parseMatters(tabSection(html, 1)),
+    // An order's summary is "<title> - <caption>"; only the title says what it did.
+    ...orders.map((o) => ({ date: o.orderDate, text: o.summary.split(/\s-\s+(?:Application|Petition|Joint)\b/i)[0] })),
+  ];
+  const hearingRows = parseHearingRows(tabSection(html, 4));
+  const statusClosed = /^closed$/i.test(decodeHtmlEntities(STATUS_RE.exec(html)?.[1] ?? ""));
+
+  return { openedDate, resolution, resolutionDate, statusClosed, events, hearingRows };
+}
+
+// See module header PROCEDURAL STEP.
+const NOT_A_HEARING_RE = /status conference|webex|ex parte/i;
+const NOT_DECISIVE_RE = /public|customer|attorney appearances/i;
+
+const STEP_SIGNALS = {
+  hearingSet: /\bhearing scheduled\b/i,
+  hearingOff: /\bhearing cancel+ed\b/i,
+  hearingHeld: /\bhearing held\b|\btranscripts?\b(?!.*\b(customer|public)\b)/i,
+  decisionNext: /\bproposed order\b|\bpost-?hearing brief\b/i,
+  closed: /\b(granting|approving|accepting)\s+(?:the\s+)?(?:motion\s+to\s+)?withdraw(?:al)?\b(?!\s+(?:as\s+)?counsel)|\badministratively close\b/i,
+};
+
+// Hearings-tab rows that are real sessions (not a status conference or a
+// WebEx test) and not cancelled.
+function liveHearingRows(rows: DetailHearing[]): DetailHearing[] {
+  return rows.filter((r) => !/cancel|withdrawn/i.test(r.status) && !NOT_A_HEARING_RE.test(r.notes));
+}
+
+// The Hearings tab as events: a future session is "hearing scheduled", a past
+// merits / oral argument / unlabeled court-reported session is "hearing held".
+function hearingRowEvents(rows: DetailHearing[], now: Date): DocketEvent[] {
+  return liveHearingRows(rows).map((r) => {
+    if (r.date.getTime() > now.getTime()) return { date: r.date, text: "hearing scheduled" };
+    return { date: r.date, text: NOT_DECISIVE_RE.test(r.notes) ? "public hearing" : "hearing held" };
+  });
+}
+
+function classifyScStep(detail: DocketDetail): ReviewStep | null {
+  const now = new Date();
+  if (detail.statusClosed) return null;
+  const review = classifyReviewStep([...detail.events, ...hearingRowEvents(detail.hearingRows, now)], STEP_SIGNALS);
+  const upcoming = liveHearingRows(detail.hearingRows).filter((r) => r.date.getTime() > now.getTime());
+  if (review && upcoming.length > 0) {
+    return { step: "Hearing scheduled", at: new Date(Math.min(...upcoming.map((r) => r.date.getTime()))) };
+  }
+  return review;
 }
 
 // "Monday, January 26, 2026" — day name is redundant and JS's native Date
@@ -450,11 +582,30 @@ function normalizeDocket(
   const capacityMw = extractCapacityMw(search.caption);
   const county = extractCounty(search.caption);
   const applicant = extractApplicant(search.caption);
-  const hearings = upcomingHearings.get(search.docketNumber) ?? [];
+  const detailUrl = BASE_URL + "/Web/Dockets/Detail/" + search.docketId;
+  let hearings = upcomingHearings.get(search.docketNumber) ?? [];
+  // The calendar page did not list this docket: fall back to the same future
+  // sessions on the docket's own Hearings tab.
+  if (hearings.length === 0) {
+    const now = Date.now();
+    hearings = liveHearingRows(detail.hearingRows)
+      .filter((r) => r.date.getTime() > now)
+      .map((r) => ({ date: r.date, link: detailUrl, location: null }));
+  }
+  // A resolved or closed docket has no live step; a docket whose matters and
+  // hearings could not be read leaves any stored step alone (undefined).
+  const review = detail.resolution === null ? classifyScStep(detail) : null;
+  const managed = detail.resolution !== null || detail.events.length > 0;
+
+  // A withdrawal or administrative closure leaves no grant, denial or dismissal
+  // order, so the order check alone would keep the docket "pending" forever.
+  const closingEvents = detail.events.filter((e) => STEP_SIGNALS.closed.test(e.text) && e.date);
+  const closedOut = detail.resolution === null && (detail.statusClosed || closingEvents.length > 0);
+  const closedDate = closingEvents.length > 0 ? new Date(Math.max(...closingEvents.map((e) => (e.date as Date).getTime()))) : null;
 
   let currentStage: ProjectStage;
   if (detail.resolution === "granted") currentStage = "approved_awaiting_construction";
-  else if (detail.resolution === "denied" || detail.resolution === "dismissed") currentStage = "cancelled";
+  else if (detail.resolution === "denied" || detail.resolution === "dismissed" || closedOut) currentStage = "cancelled";
   else currentStage = "local_review";
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
@@ -463,7 +614,7 @@ function normalizeDocket(
     "Sourced from the South Carolina Public Service Commission's public Docket Management System.",
     'The docket\'s own "Status" field is not reliable (observed to read "Open" even on long-granted dockets); "still waiting" here is inferred from scanning the docket\'s Orders tab for a granting/denying/dismissing order — see the ingestion module header for how this was calibrated.',
   ];
-  if (RESOLVED_STAGES.includes(currentStage) && !detail.resolutionDate) {
+  if (RESOLVED_STAGES.includes(currentStage) && !detail.resolutionDate && !closedDate) {
     dataQualityNoteParts.push(
       "This docket's status is resolved, but no dated order matching that resolution could be found in its own Orders tab — see the ingestion module header RESOLUTION DATE section.",
     );
@@ -499,7 +650,7 @@ function normalizeDocket(
     // See module header RESOLUTION DATE — undefined (not null) for an
     // ordinary still-active docket, per the project-wide undefined-vs-null
     // convention in common.ts.
-    ...(detail.resolutionDate ? { resolutionDate: detail.resolutionDate, resolutionDateConfidence: "exact" as const } : {}),
+    ...(detail.resolutionDate ?? closedDate ? { resolutionDate: (detail.resolutionDate ?? closedDate) as Date, resolutionDateConfidence: "exact" as const } : {}),
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the South Carolina Public Service Commission — Docket No. ${search.docketNumber}, "${search.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -511,6 +662,8 @@ function normalizeDocket(
         url: `${BASE_URL}/Web/Dockets/Detail/${search.docketId}`,
       },
     ],
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     externalIds: { scPsc: search.docketNumber },
   };
 }

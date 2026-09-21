@@ -224,6 +224,24 @@
 // id-puc:PAC-E-26-06) rather than silently merged; a human can add a
 // manualOverrides.csv row later if this should display as one project.
 //
+// PROCEDURAL STEP: the same case detail page already lists every filed
+// document with its own filed date ("MM/DD/YYYY&nbsp;<a>FILENAME</a>") under
+// Case Files, Orders & Notices, Company, Staff, Intervenor and Public Comments,
+// so the step costs no extra request. Confirmed live 2026-09-21 against
+// IPC-E-26-04, IPC-E-26-09 and AVU-E-26-10: IPUC decides these on "modified
+// procedure" (written comments, no hearing), so the marker for "decision is
+// next" is the applicant's REPLY COMMENTS filing (the last round of written
+// comments; IPC-E-26-04 filed "REPLY COMMENTS.PDF" 08/14/2026, IPC-E-26-09
+// "JOINT REPLY COMMENTS.TIF" 09/11/2026), while AVU-E-26-10, which has only its
+// application, a staff decision memo and a NOTICE_OF_APPLICATION order, stays
+// at "Application filed". A "NOTICE_OF_MODIFIED_PROCEDURE_ORDER" only sets the
+// comment deadlines, so it is not a step by itself. Filenames use underscores,
+// which defeat \b in the shared regexes, so they are turned into spaces first.
+// A FINAL_ORDER file (see RESOLUTION DATE) closes the case. Hearings: none of
+// the three real cases has a hearing, and the case page carries no hearing
+// dates (only IPUC's separate Commission Calendar does), so hearings is left
+// undefined rather than guessed.
+//
 // Wired to Vercel Cron weekly, 07:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-id-puc/route.ts). Real full-population timing
 // measured 2026-08-24: fetching the full open-case list (39 real rows) plus
@@ -236,6 +254,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://puc.idaho.gov";
 // util=1 confirmed live to mean "Electric" (the site's own Electric-utility
@@ -350,6 +369,8 @@ interface CaseDetail {
   filedDate: Date | null;
   status: string | null;
   resolutionDate: Date | null;
+  /** Every filed document on the page (date + filename), for the procedural step. */
+  events: DocketEvent[];
 }
 
 // Real observed format: "03/11/2026". Same parseMDY shape as every other
@@ -407,11 +428,35 @@ function extractResolutionDate(html: string): Date | null {
   return earliest;
 }
 
+// Every dated document on the case page, whatever section it sits in. The
+// filename (underscores read as spaces) is the event text.
+function extractDocketEvents(html: string): DocketEvent[] {
+  const events: DocketEvent[] = [];
+  for (const m of html.matchAll(ORDER_ENTRY_RE)) {
+    events.push({ date: parseMDY(m[1]), text: stripTags(m[2]).replace(/_/g, " ") });
+  }
+  return events;
+}
+
+// See module header PROCEDURAL STEP. A hearing is set by any hearing notice
+// filename; reply comments (or briefs) end the written record so the order is
+// next; a final order file closes the case.
+const STEP_SIGNALS = {
+  hearingSet: /\bnotice of (public |technical |evidentiary )?hearing\b/i,
+  hearingHeld: /\btranscript\b/i,
+  decisionNext: /\b(reply comments|reply brief|post-?hearing brief|proposed order)\b/i,
+  closed: /\bfinal order\b/i,
+};
+
+function classifyIdReviewStep(events: DocketEvent[]): ReviewStep | null {
+  return classifyReviewStep(events, STEP_SIGNALS);
+}
+
 async function fetchCaseDetail(caseId: string): Promise<CaseDetail> {
   const html = await fetchText(DETAIL_URL(caseId));
   const filedRaw = extractDataCell(html, "Date Filed");
   const status = extractDataCell(html, "Status");
-  return { filedDate: filedRaw ? parseMDY(filedRaw) : null, status, resolutionDate: extractResolutionDate(html) };
+  return { filedDate: filedRaw ? parseMDY(filedRaw) : null, status, resolutionDate: extractResolutionDate(html), events: extractDocketEvents(html) };
 }
 
 // See module header STATUS for why a bare "certificate" (not the fuller
@@ -516,6 +561,10 @@ function normalizeCase(row: OpenCaseRow, detail: CaseDetail): NormalizedProject 
   const currentStage: ProjectStage = resolved ? "cancelled" : "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
+  // No documents parsed (page changed) leaves any stored step alone.
+  const review = resolved ? null : classifyIdReviewStep(detail.events);
+  const managed = resolved || detail.events.length > 0;
+
   const dataQualityNoteParts: string[] = [
     "Sourced from the Idaho Public Utilities Commission's public electric case search (Certificate of Public Convenience and Necessity applications, Idaho Code §61-528).",
     '"Still waiting" here is primarily determined by IPUC\'s own case search "Open"/"Closed" status (this source\'s own Status field on the case detail page is not published to be more granular than that once a case closes — see the ingestion module header for why disposition text isn\'t separately parsed here).',
@@ -546,6 +595,8 @@ function normalizeCase(row: OpenCaseRow, detail: CaseDetail): NormalizedProject 
     ...(RESOLVED_STAGES.includes(currentStage) && detail.resolutionDate
       ? { resolutionDate: detail.resolutionDate, resolutionDateConfidence: "exact" as const }
       : {}),
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Idaho Public Utilities Commission — Case No. ${row.caseNumber}, "${row.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -222,6 +222,22 @@
 // grants, since the qualifying filing is dated identically regardless of
 // which of the five real title patterns it matched.
 //
+// PROCEDURAL STEP (added 2026-09-21): the filing list already fetched per
+// candidate (date, Type of Filing, Title of Filing) feeds the shared classifier
+// in reviewStep.ts (see MO_STEP_SIGNALS and classifyMoReviewStep), with no
+// extra request. Calibrated 2026-09-21 against every real title in the 62
+// in-window dockets: hearings are set by Orders ("Order Setting Local Public
+// Hearing", "Order Changing Start Date of Evidentiary Hearing", "Order
+// Setting Procedural Schedule", which carries the evidentiary hearing dates),
+// held ones show as "Transcripts" filings ("Transcript - Volume 1
+// (Evidentiary Hearing - ...)"), and briefs and Stipulation and Agreement /
+// Staff Recommendation filings are what precede the order. A case whose EFIS
+// status is Closed/Archived gets no step, and a resolved one gets null. The
+// dated hearings still come only from the Upcoming Local Public Hearings page
+// (see PUBLIC HEARINGS); if that page cannot be read, hearings are left
+// undefined for the run so stored ones survive, and the step still comes from
+// the filings.
+//
 // Wired to Vercel Cron weekly, 03:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-mo-psc/route.ts).
 
@@ -229,6 +245,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://efis.psc.mo.gov";
 
@@ -561,6 +578,53 @@ function resolveDocket(filings: FilingRow[]): ResolutionInfo {
   return { resolution: "closed-unclear", date: latest.date };
 }
 
+// Step signals for MO, run against "<Type of Filing>: <Title of Filing>".
+// Confirmed against real titles:
+//   - hearingSet: an Order or Notice that sets, resets, changes or delays a
+//     hearing ("Order Setting Local Public Hearing", "Order Changing Date of
+//     Hearing", "Notice Setting Time of Hearing") or sets the procedural
+//     schedule, which carries the evidentiary hearing dates. "Order Setting
+//     Time for Responses and Requests for Hearing" and "Prehearing
+//     Conference" orders are not hearings.
+//   - hearingHeld: only an evidentiary hearing transcript. Local public
+//     hearing transcripts come mid-case, before rebuttal testimony.
+//   - hearingOff: cancelling or vacating a hearing, or suspending the
+//     procedural schedule (what a settlement does). The default also reads
+//     "continued ... hearing", but here "Order Continuing Evidentiary Hearing"
+//     sets a new date.
+//   - decisionNext: a Brief, an oral argument, or a Stipulation and Agreement
+//     or Staff Recommendation (only when no later hearing is set, see
+//     classifyMoReviewStep).
+//   - closed: resolveDocket decides that, so the default is off.
+const MO_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet:
+    /^(?:order|notice):\s.*\b(?:setting|re-?setting|rescheduling|changing|delaying|continuing)\b(?!.*\b(?:time for|prehearing|pre-hearing)).*\bhearings?\b|^order:\s*(?:corrected )?order (?:setting|establishing) (?:a )?procedural schedule\b/i,
+  hearingOff: /\b(?:cancel+(?:ing|ed)|vacat(?:ing|ed))\b.{0,40}\bhearings?\b|\bhearing\b.{0,30}\b(?:cancel+ed|vacated)|\bsuspending (?:the )?procedural schedule\b/i,
+  hearingHeld: /^transcripts?:.*\bevidentiary hearing\b/i,
+  decisionNext: /^brief:|\boral argument\b|^(?:stipulation and agreement|staff recommendation):/i,
+  closed: /(?!)/,
+};
+
+// A Stipulation and Agreement or Staff Recommendation only means the order is
+// next when no hearing was set after it (a contested case files its staff
+// recommendation early and then goes to hearing).
+const WEAK_DECISION_RE = /^(?:stipulation and agreement|staff recommendation):/i;
+
+function classifyMoReviewStep(filings: FilingRow[], hasUpcomingHearing: boolean) {
+  const all: DocketEvent[] = filings.map((f) => ({ date: f.date, text: `${f.typeOfFiling}: ${f.titleOfFiling}` }));
+  const lastSet = Math.max(
+    0,
+    ...all.filter((e) => MO_STEP_SIGNALS.hearingSet.test(e.text) && !MO_STEP_SIGNALS.hearingOff.test(e.text)).map((e) => e.date?.getTime() ?? 0),
+  );
+  const events = all.filter((e) => !WEAK_DECISION_RE.test(e.text) || (e.date?.getTime() ?? 0) >= lastSet);
+  const result = classifyReviewStep(events, MO_STEP_SIGNALS);
+  // The Upcoming Local Public Hearings page is the authority on what is still to come.
+  if (hasUpcomingHearing && result && result.step !== "Hearing scheduled") {
+    return { step: "Hearing scheduled" as const, at: result.at };
+  }
+  return result;
+}
+
 // See module header FUEL/PROJECT TYPE & CAPACITY.
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
   [/\bsolar\b|photovoltaic/i, "solar"],
@@ -620,11 +684,15 @@ function extractCounty(style: string): string | null {
 function normalizeCase(
   candidate: CaseSearchResult,
   resolutionInfo: ResolutionInfo,
-  upcomingHearings: Map<string, UpcomingLocalHearing[]>,
+  filings: FilingRow[],
+  upcomingHearings: Map<string, UpcomingLocalHearing[]> | null,
 ): NormalizedProject {
   const { resolution, date: resolutionDate } = resolutionInfo;
   const matchKey = resolveMatchKey("mo-psc", candidate.caseNo);
-  const hearings = upcomingHearings.get(candidate.caseNo) ?? [];
+  const hearings = upcomingHearings?.get(candidate.caseNo) ?? [];
+  // See module header PROCEDURAL STEP: a resolved or Closed/Archived case gets null.
+  const review =
+    resolution || /^closed/i.test(candidate.status) ? null : classifyMoReviewStep(filings, hearings.length > 0);
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.styleOfCase);
   const applicant = extractApplicant(candidate.styleOfCase);
   const county = extractCounty(candidate.styleOfCase);
@@ -678,8 +746,11 @@ function normalizeCase(
     // Upcoming Local Public Hearings list (which has no per-case URL to
     // deep-link to) — the same case-specific page already used as this
     // project's own source URL below.
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/Display/${candidate.caseId}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    // Undefined when the hearings page could not be read, so stored hearings survive.
+    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
     sources: [
       {
         label: `MO PSC Case No. ${candidate.caseNo}`,
@@ -718,8 +789,9 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
 
   // A failure here shouldn't block the whole ingestion run over a feature
-  // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingLocalHearingsByCase().catch(() => new Map<string, UpcomingLocalHearing[]>());
+  // this supplementary — degrades to "no hearing data this run" (null, not an
+  // empty map, so hearings stored by an earlier run are kept).
+  const upcomingHearings = await fetchUpcomingLocalHearingsByCase().catch(() => null);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -728,7 +800,7 @@ export async function ingestMoPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     try {
       const filings = await fetchFilings(session, candidate.caseId);
       const resolutionInfo = resolveDocket(filings);
-      const normalized = normalizeCase(candidate, resolutionInfo, upcomingHearings);
+      const normalized = normalizeCase(candidate, resolutionInfo, filings, upcomingHearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

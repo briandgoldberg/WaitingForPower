@@ -98,6 +98,22 @@
 // scheduling this. Also politeness-delayed between per-candidate detail
 // requests.
 //
+// PROCEDURAL STEP (added 2026-09-21): the same detail response already carries
+// every event (past and future) and the filed documents, so the shared
+// classifier in reviewStep.ts is fed from it with no extra request (see
+// AZ_STEP_SIGNALS and buildStepEvents). Confirmed live 2026-09-21 against the
+// 6 dockets with no decision yet: the Siting Committee hearing runs several
+// consecutive days ("...Committee Hearing" events), so the LAST hearing day
+// decides held vs. scheduled (a hearing still in progress is "scheduled").
+// Once the Committee has voted, the Chairman files a "Line-Siting Certificate
+// of Environmental Compatibility" document (docket 30025, 2026-09-18) and the
+// full Commission then takes it up at an "Open Meeting" event; either one means
+// the decision is next. Pre-hearing conferences are ignored, and so are
+// documents that merely mention a transcript (a "Prefiling Conference"
+// transcript on docket 29778 is not the hearing). A docket with no signal at
+// all (docket 29778, "Continued Indefinitely", no hearing events) stays at
+// "Application filed". Only dockets with no decision get a step.
+//
 // RESOLUTION DATE (added 2026-09-12): each entry in `decisions` (the same
 // array STATUS above already reads to decide granted/denied) carries its
 // own real `decisionDate` field — re-confirmed live against docket 26574:
@@ -117,6 +133,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent as StepEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://efiling.azcc.gov";
 const DOCKET_TYPE_LINE_SITING = 1231;
@@ -195,6 +212,8 @@ interface DocketDetail {
   // genuine hearing events — see isAttendableEvent), not just the
   // earliest — see module header EVENTS/BROADENED.
   attendableEvents: AttendableEvent[];
+  // Synthetic step events built from the same response — see PROCEDURAL STEP.
+  stepEvents: StepEvent[];
 }
 
 const DENY_RE = /\bdeny(?:ing|al)?\b|\bdismiss/i;
@@ -260,10 +279,49 @@ function pickResolutionDate(decisions: DocketDecision[], resolution: "granted" |
   return new Date(Math.min(...dates.map((d) => d.getTime())));
 }
 
-async function fetchDetail(docketID: number): Promise<DocketDetail> {
+const AZ_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^hearing scheduled/i,
+  hearingOff: /^hearing (?:cancel+ed|vacated)/i,
+  hearingHeld: /^hearing held/i,
+  decisionNext: /^open meeting|certificate of environmental compatibility/i,
+  closed: /(?!)/, // never: a docket with a decision is resolved before the step is asked for
+};
+
+interface DocketDocument {
+  description?: string | null;
+  filedDate?: string | null;
+}
+
+function buildStepEvents(filedDate: string, events: DocketEvent[], documents: DocketDocument[]): StepEvent[] {
+  const out: StepEvent[] = [{ date: parseIsoDate(filedDate), text: "Application filed" }];
+  let lastHearing: Date | null = null;
+  for (const e of events) {
+    if (!e.public) continue;
+    const d = new Date(e.eventDateTime);
+    if (Number.isNaN(d.getTime())) continue;
+    if (/open meeting/i.test(e.eventType) && !/contingent/i.test(e.eventType)) {
+      out.push({ date: d, text: `Open meeting: ${e.eventType}` });
+    } else if (!CONFERENCE_EVENT_RE.test(e.eventType) && /hearing/i.test(e.eventType)) {
+      if (!lastHearing || d > lastHearing) lastHearing = d;
+    }
+  }
+  if (lastHearing) {
+    // Treat the whole last hearing day as still to come.
+    const endOfDay = lastHearing.getTime() + 24 * 60 * 60 * 1000;
+    out.push({ date: lastHearing, text: endOfDay > Date.now() ? "Hearing scheduled" : "Hearing held" });
+  }
+  for (const doc of documents) {
+    if (doc.description && /certificate of environmental compatibility/i.test(doc.description)) {
+      out.push({ date: doc.filedDate ? parseIsoDate(doc.filedDate) : null, text: doc.description });
+    }
+  }
+  return out;
+}
+
+async function fetchDetail(docketID: number, filedDate: string): Promise<DocketDetail> {
   const res = await fetch(`${BASE_URL}/api/edocket/docket/${docketID}`);
   if (!res.ok) throw new Error(`AZ ACC detail request failed (${res.status}) for docket ${docketID}`);
-  const data = (await res.json()) as { decisions?: DocketDecision[]; events?: DocketEvent[] };
+  const data = (await res.json()) as { decisions?: DocketDecision[]; events?: DocketEvent[]; documents?: DocketDocument[] };
   const decisions = data.decisions ?? [];
   const resolution = decisions.length === 0 ? null : decisions.some((d) => DENY_RE.test(d.description)) ? "denied" : "granted";
   const resolutionDate = pickResolutionDate(decisions, resolution);
@@ -292,7 +350,8 @@ async function fetchDetail(docketID: number): Promise<DocketDetail> {
     });
   }
 
-  return { resolution, resolutionDate, attendableEvents };
+  const stepEvents = buildStepEvents(filedDate, data.events ?? [], data.documents ?? []);
+  return { resolution, resolutionDate, attendableEvents, stepEvents };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -362,6 +421,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
   const resolutionDate: Date | null | undefined =
     RESOLVED_STAGES.includes(currentStage) && detail.resolutionDate ? detail.resolutionDate : undefined;
   const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
+  const review = currentStage === "local_review" ? classifyReviewStep(detail.stepEvents, AZ_STEP_SIGNALS) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -401,6 +461,8 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility from the Arizona Corporation Commission's Line Siting Committee — Docket No. ${search.docketNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     hearingDetailsLink:
       detail.attendableEvents.length > 0 ? `https://edocket.azcc.gov/search/docket-search/item-detail/${search.docketID}` : null,
     hearings: detail.attendableEvents.map((e) => ({ date: e.date, endDate: e.endDate, label: e.label, location: e.location })),
@@ -444,7 +506,7 @@ export async function ingestAzAccLineSiting(maxCandidates = MAX_CANDIDATES): Pro
 
   for (const candidate of candidates) {
     try {
-      const detail = await fetchDetail(candidate.docketID);
+      const detail = await fetchDetail(candidate.docketID, candidate.filedDate);
       const normalized = normalizeDocket(candidate, detail);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);

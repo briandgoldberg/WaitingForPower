@@ -287,7 +287,8 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedHearing, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://epuc.vermont.gov";
 const SEARCH_PAGE_URL = `${BASE_URL}/?q=node/88`;
@@ -896,10 +897,111 @@ function extractCapacityMw(text: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+// ===== PROCEDURAL STEP — one extra request per still-pending case. =====
+//
+// Each case has a "Case Log" (register of actions) sub-page at
+// ?q=node/64/{caseId}/FV-ROAMessage-Copy-Portal, plain server-rendered HTML,
+// no login or challenge (confirmed live 2026-09-21 against 10 real cases).
+// Every row is a system date, then either an email-notification line (skipped)
+// or the entry itself ("Notice of Evidentiary Hearing issued, scheduled for
+// event(s) | 05/26/26 at 9:30 AM at via videoconference", "Result for
+// 05/26/26  Evidentiary Hearing changed to Held", "Party's proposed findings
+// of fact ...", "Brief/Memo of Law/Findings of Fact", "Reply Brief").
+// The Schedule sub-page (FV-Schedule-Portal) was checked too but carries only
+// conferences and deadlines, not the filings that show where the case stands.
+interface CaseLogEntry {
+  date: Date | null;
+  text: string;
+}
+
+async function fetchCaseLog(caseId: string): Promise<CaseLogEntry[]> {
+  const res = await fetch(`${BASE_URL}/?q=node/64/${caseId}/FV-ROAMessage-Copy-Portal`);
+  if (!res.ok) throw new Error(`VT PUC case log request failed (${res.status}) for case ${caseId}`);
+  const html = await res.text();
+  const start = html.indexOf("Date Filed or Issued");
+  if (start < 0) return [];
+  const entries: CaseLogEntry[] = [];
+  for (const row of html.slice(start).split("</tr>")) {
+    const lines = row
+      .replace(/<script[\s\S]*?<\/script>/g, " ")
+      .replace(/<[^>]*>/g, "\n")
+      .split("\n")
+      .map((l) => decodeHtmlEntities(l))
+      .filter((l) => l);
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(lines[0] ?? "");
+    if (!m || /^(?:Sent email|Notification)/.test(lines[1] ?? "")) continue;
+    const rest = lines.slice(1).filter((l) => !/^\d{1,2}\/\d{1,2}\/\d{2}$/.test(l));
+    entries.push({ date: new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2])), text: rest.join(" ") });
+  }
+  return entries;
+}
+
+// Step signals for VT, run against each log entry. Confirmed live 2026-09-21:
+//   - hearingSet: "Notice of Evidentiary/Public/Technical Hearing issued,
+//     scheduled for event(s)" and "Joint Hearing and Scheduling Order". A
+//     "Notice of Prehearing Conference", "Notice of Scheduling Conference" or
+//     "Notice of Site Visit" is only a scheduling call and does not count.
+//   - hearingOff: an evidentiary/public hearing whose Result changed to
+//     Cancelled, Rescheduled or Postponed.
+//   - hearingHeld: Result for an evidentiary or technical hearing changed to
+//     Held, or its transcript. A public hearing alone does not end the case
+//     record (the evidentiary hearing can follow), so it is not counted.
+//   - decisionNext: post-hearing briefs, and the petitioner's proposed
+//     findings of fact / proposed CPG, which is what the Commission rules on
+//     ("Party's proposed findings of fact", "Brief/Memo of Law/Findings of
+//     Fact", "Reply Brief").
+//   - closed: a certificate order or dismissal. The default regex is not used
+//     because it reads "Order Granting Motion to Intervene" as a final order.
+const VT_STEP_SIGNALS: StepSignals = {
+  hearingSet: /^notice of (?:evidentiary |public |technical )?hearing issued|\bhearing and scheduling order\b/i,
+  hearingOff: /^result for [\d/]+\s+(?:evidentiary |public |technical )?hearing changed to (?:cancel+ed|rescheduled|postponed|vacated)/i,
+  hearingHeld: /^result for [\d/]+\s+(?:evidentiary|technical) hearing changed to held|^transcript\b.*\b(?:evidentiary|technical) hearing/i,
+  decisionNext: /^party's proposed (?:order|findings|cpg)|^brief\/memo of law\/findings of fact|^reply brief\b/i,
+  closed: /\border (?:granting|denying) (?:a )?certificate of public good\b|\border (?:granting|resolving)? ?(?:motion for )?(?:involuntary )?dismissal\b|\bfinal order\b/i,
+};
+
+function classifyVtReviewStep(log: CaseLogEntry[]) {
+  const events: DocketEvent[] = log.map((e) => ({ date: e.date, text: e.text }));
+  return classifyReviewStep(events, VT_STEP_SIGNALS);
+}
+
+// Dated evidentiary / public / technical hearings from "Notice of ... Hearing
+// issued, scheduled for event(s) | 05/26/26 at 9:30 AM at via videoconference;
+// ..." entries that are still ahead. The public-hearing calendar above covers
+// most public hearings; this adds evidentiary hearings, which the calendar
+// omits, and dedupes on the exact time.
+const LOG_HEARING_NOTICE_RE = /^notice of (evidentiary |public |technical )?hearing issued, scheduled for event\(s\)\s*(.*)$/i;
+const LOG_HEARING_EVENT_RE = /(\d{1,2})\/(\d{1,2})\/(\d{2})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s+at\s+(.*?)(?=\s+-\s+before\b|;|$)/gi;
+
+function extractLogHearings(log: CaseLogEntry[], now: Date, caseUrl: string) {
+  const out: { date: Date; link: string; location: string | null; label: string }[] = [];
+  for (const e of log) {
+    const notice = LOG_HEARING_NOTICE_RE.exec(e.text);
+    if (!notice) continue;
+    const label = notice[1] ? `${notice[1].trim().replace(/^./, (c) => c.toUpperCase())} hearing` : "Hearing";
+    for (const m of notice[2].matchAll(LOG_HEARING_EVENT_RE)) {
+      let hour = Number(m[4]) % 12;
+      if (/pm/i.test(m[6])) hour += 12;
+      const date = new Date(2000 + Number(m[3]), Number(m[1]) - 1, Number(m[2]), hour, Number(m[5]));
+      if (date.getTime() <= now.getTime()) continue;
+      // A later Result of Cancelled/Rescheduled for that date withdraws it.
+      const withdrawn = log.some((x) => {
+        const r = /^result for (\d+)\/(\d+)\/(\d+)\s.*changed to (?:cancel+ed|rescheduled|postponed|vacated)/i.exec(x.text);
+        return r != null && Number(r[1]) === Number(m[1]) && Number(r[2]) === Number(m[2]) && Number(r[3]) === Number(m[3]);
+      });
+      if (withdrawn) continue;
+      const location = m[7].trim().replace(/\s+/g, " ");
+      out.push({ date, link: caseUrl, location: location || null, label });
+    }
+  }
+  return out;
+}
+
 function normalizeCandidate(
   record: CaseRecord,
   upcomingHearings: Map<string, UpcomingHearing[]>,
   resolution: CaseResolution | null,
+  log: CaseLogEntry[] | null = null,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("vt-puc", record.caseNumber);
 
@@ -911,7 +1013,19 @@ function normalizeCandidate(
   const statusLabel = CASE_STATUS_LABELS[record.statusCode] ?? record.statusCode;
   const currentStage: ProjectStage = resolution?.stage ?? "local_review";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
-  const hearings = upcomingHearings.get(record.caseNumber) ?? [];
+  const calendarHearings = upcomingHearings.get(record.caseNumber) ?? [];
+  // A still-pending case is classified from its case log; a decided one gets
+  // null. With no log (fetch failed, or a decided case) the step is left
+  // undefined so the stored value stays; hearings then come from the calendar
+  // alone, as before.
+  const managed = log != null && currentStage === "local_review";
+  const review = managed ? classifyVtReviewStep(log) : null;
+  const logHearings = managed ? extractLogHearings(log, new Date(), CASE_DETAIL_URL(record.caseId)) : [];
+  const hearings: (UpcomingHearing & { label: string | null })[] = calendarHearings.map((h) => ({ ...h, label: null }));
+  for (const h of logHearings) {
+    if (!hearings.some((x) => x.date.getTime() === h.date.getTime())) hearings.push(h);
+  }
+  hearings.sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Vermont Public Utility Commission's public ePUC case search, scoped to pending Certificate of Public Good (CPG, 30 V.S.A. §248 / §248(j)) petitions — the PUC is Vermont's own, direct siting authority for generation, transmission, and storage facilities under §248; see the ingestion module header for the statutory confirmation.",
@@ -960,7 +1074,9 @@ function normalizeCandidate(
     causeDetail: `Waiting on a Certificate of Public Good from the Vermont Public Utility Commission, pursuant to 30 V.S.A. §248 — Case No. ${record.caseNumber}, "${record.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? CASE_DETAIL_URL(record.caseId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
+    hearings: hearings.map((h): NormalizedHearing => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `VT PUC Case No. ${record.caseNumber}`,
@@ -1019,7 +1135,14 @@ export async function ingestVtPucDockets(maxCandidates = MAX_CANDIDATES): Promis
       }
       realApplicationCandidates += 1;
       const resolution = resolveFromOrders(ordersByCase.get(record.caseNumber) ?? []);
-      const normalized = normalizeCandidate(record, upcomingHearings, resolution);
+      // One extra request per still-pending case (see PROCEDURAL STEP); a
+      // failure only leaves this case without a step this run.
+      let log: CaseLogEntry[] | null = null;
+      if (!resolution) {
+        await sleep(REQUEST_DELAY_MS);
+        log = await fetchCaseLog(record.caseId).catch(() => null);
+      }
+      const normalized = normalizeCandidate(record, upcomingHearings, resolution, log);
       toUpsert.push(normalized);
       if (rotatingTier.has(record)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

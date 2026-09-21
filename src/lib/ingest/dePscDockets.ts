@@ -270,6 +270,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://delafile.delaware.gov";
 const SEARCH_URL = `${BASE_URL}/AdvancedSearch/AdvancedSearchDocket.aspx`;
@@ -611,12 +612,49 @@ function inferProjectTypeAndFuel(source: DocketSource): { projectType: ProjectTy
   return { projectType: "generation", fuelType: "solar" };
 }
 
-function normalizeCandidate(candidate: Candidate, source: DocketSource): NormalizedProject {
+// PROCEDURAL STEP (added 2026-09-21): the docket detail page (the same URL as
+// this module's `sources` link, a bare GET with no session) lists every
+// attached document with a Description, so the step is read from those. The
+// list has no dates (see RESOLUTION DATE above), so the events are undated and
+// reviewStepAt can only fall back to the docket's own filing date for
+// "Application filed". Confirmed live against all 13 real candidates: the
+// shared classifier's default signals fit the real descriptions, with one
+// override (below). A "Staff Memo" (the Community Energy Facility
+// recommendation that precedes the Commission's order, e.g. 26-0300, 26-0071,
+// 26-0120) and "Transcripts, Commission Meeting, ..." (25-0968) read as the
+// decision being next, while a docket with only its application, deficiency
+// notices and a bare "Docket No. .. Order No. .." reads as "Application
+// filed". Weakest point: a bare numbered order can be an early procedural one
+// or the disposition (see STATUS above), which this cannot tell apart, but
+// Docket Status has already excluded closed dockets. No hearing dates are
+// published anywhere in DelaFile's public pages, so hearings stays undefined.
+// The shared hearingHeld default misses the plural ("Transcripts, Commission Meeting, ...").
+const DE_SIGNALS = { hearingHeld: /\btranscripts?\b|\bhearing held\b/i };
+
+export async function fetchDocketDocumentEvents(matterNo: string): Promise<DocketEvent[]> {
+  const res = await fetch(DOCKET_DETAIL_URL(matterNo));
+  if (!res.ok) throw new Error(`DE PSC docket detail request failed (${res.status}) for docket ${matterNo}`);
+  const html = await res.text();
+  const start = html.indexOf("Attached Documents");
+  if (start < 0) return [];
+  const events: DocketEvent[] = [];
+  for (const row of html.slice(start).matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+    const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => stripTags(c[1]));
+    if (cells.length >= 2 && cells[1]) events.push({ date: null, text: cells[1] });
+  }
+  return events;
+}
+
+function normalizeCandidate(candidate: Candidate, source: DocketSource, docs: DocketEvent[]): NormalizedProject {
   const matchKey = resolveMatchKey("de-psc", candidate.matterNo);
   const { projectType, fuelType } = inferProjectTypeAndFuel(source);
   const capacityMw = extractCapacityMw(candidate.caption);
   const county = extractCounty(candidate.caption);
   const mentionsSolar = /solar/i.test(candidate.caption) || /solar/i.test(candidate.company);
+
+  // Undefined when the documents list could not be read or came back empty.
+  const review = docs.length > 0 ? classifyReviewStep(docs, DE_SIGNALS) : undefined;
+  const reviewStepAt = review ? (review.step === "Application filed" ? review.at ?? candidate.filingDate : review.at) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -655,6 +693,8 @@ function normalizeCandidate(candidate: Candidate, source: DocketSource): Normali
     dateConfidence: "exact",
     currentStatus: `Delaware PSC Docket ${candidate.matterNo}: ${candidate.statusLabel || "open"} (${source.docketTypeLabel})`,
     currentStage: "local_review" as ProjectStage,
+    reviewStep: review === undefined ? undefined : review ? review.step : null,
+    reviewStepAt: review === undefined ? undefined : reviewStepAt,
     causeSlugs,
     causeDetail: `Waiting on a ${source.docketTypeLabel} from the Delaware Public Service Commission (${source.statute}) — Docket No. ${candidate.matterNo}, "${candidate.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -729,7 +769,10 @@ export async function ingestDePscDockets(maxCandidates = MAX_CANDIDATES): Promis
     }
     realApplicationCandidates += 1;
     try {
-      const normalized = normalizeCandidate(candidate, source);
+      // A failed documents fetch leaves the step unmanaged rather than dropping the project.
+      const docs = await fetchDocketDocumentEvents(candidate.matterNo).catch(() => []);
+      await sleep(REQUEST_DELAY_MS);
+      const normalized = normalizeCandidate(candidate, source, docs);
       toUpsert.push(normalized);
       if (rotatingTier.has(item)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

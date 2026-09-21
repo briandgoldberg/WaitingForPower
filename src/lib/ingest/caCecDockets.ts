@@ -231,12 +231,30 @@
 // for applicationFiledDate) so `resolutionDate`/`resolutionDateConfidence`
 // can be set without a second fetch. Left undefined for any project that
 // hasn't resolved, per common.ts's keepExistingIfUnmanaged convention.
+//
+// PROCEDURAL STEP AND PAST HEARINGS (added 2026-09-21): the same docket-log
+// rows also give the procedural step. A "Proposed Order - CEC Business
+// Meeting" (Opt-In) or a Presiding Member's Proposed Decision (AFC) with no
+// final order after it means the Commission vote is next ("Awaiting
+// commission order"); a project-specific hearing/meeting notice whose event
+// date is still ahead is "Hearing scheduled"; anything else is "Application
+// filed". Scoping meetings, staff assessment public meetings and workshops
+// come before the decision, so a transcript or recording of one does not
+// count as "hearing over". Hearings now keep PAST events too (not just
+// upcoming ones), so a project shows the public meetings it has already
+// held; a notice whose body date is more than two days before the docketed
+// date is skipped, since that date is a reference to an earlier event, not
+// the announced one, and a cancellation/postponement notice is skipped.
+// RESOLUTION_TITLE_RE also gained a bare "Final Order": Opt-In cases close
+// with a filing titled exactly "Final Order" (Darden Clean Energy Project,
+// 23-OPT-02, docketed 6/13/2025), which the older alternatives missed.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const SITE_BASE_URL = "https://www.energy.ca.gov";
 const EFILING_BASE_URL = "https://efiling.energy.ca.gov";
@@ -375,8 +393,10 @@ function parseMDY(raw: string): Date | null {
 const FILING_ROW_RE =
   /<td>\d+<\/td><td>([^<]*)<\/td><td[^>]*>\s*<span[^>]*><strong>(?:<a[^>]*>)?([^<]*)</g;
 
-interface UpcomingHearing {
+interface DocketHearing {
   date: Date;
+  // "Docketed Date" of the notice, used as the step date for a scheduled hearing.
+  docketed: Date | null;
   link: string;
   label: string | null;
   location: string | null;
@@ -465,7 +485,10 @@ interface UpcomingHearing {
 // filing rows, including the rare ones with no `<i class="icon-file">`
 // page-count marker) — used here as a safe per-row boundary so date/venue
 // text belonging to one filing can never be attributed to its neighbor.
-const FILING_SPAN_RE = /<span id="MainContent_grdFilings_lblDocumentList_\d+">([\s\S]*?)<\/span>/g;
+const FILING_SPAN_RE =
+  /<td>\d+<\/td><td>([^<]*)<\/td><td[^>]*>\s*<span id="MainContent_grdFilings_lblDocumentList_\d+">([\s\S]*?)<\/span>/g;
+// A cancellation is not an event; a rescheduling notice still announces a new date.
+const NOTICE_OFF_RE = /\b(cancel+(ed|ing|ation)|postpone(d|ment))\b/i;
 const FILING_TITLE_RE = /<strong>(?:<a href="([^"]*)"[^>]*>)?([^<]*)(?:<\/a>)?<\/strong>/;
 const NOTICE_TITLE_RE = /^(?:updated\s+)?notice\s+of\b.*(?:\bhearing\b|\bpublic meeting\b|\bscoping meeting\b|\bworkshop\b)/i;
 const DATE_RE = /([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/;
@@ -492,24 +515,22 @@ function parseLongDate(monthName: string, day: string, year: string): Date | nul
 }
 
 // See PUBLIC HEARING DATES above — scans the same already-fetched docket-log
-// HTML fetchDocketFilings parses filings from, keeping every real
-// still-future date found (not just the earliest) — a docket could in
-// principle carry more than one such notice over its life (e.g. a
-// rescheduling, or separate events on separate sub-issues), even though the
-// current live population never showed more than one per candidate (see
-// module header's "honest gap" note). Deduped by exact timestamp in case
-// the same filing row could ever be matched twice.
-function extractUpcomingHearings(html: string, docketNumber: string): UpcomingHearing[] {
-  const now = Date.now();
-  const hearings: UpcomingHearing[] = [];
+// HTML fetchDocketFilings parses filings from, keeping every real date found,
+// past and future (see PROCEDURAL STEP AND PAST HEARINGS in the module
+// header): a docket can carry several such notices over its life (a
+// rescheduling, or separate events on separate sub-issues). Deduped by exact
+// timestamp in case the same filing row could ever be matched twice.
+function extractHearings(html: string, docketNumber: string): DocketHearing[] {
+  const hearings: DocketHearing[] = [];
   const fallbackLink = `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`;
 
   for (const rowMatch of html.matchAll(FILING_SPAN_RE)) {
-    const row = rowMatch[1];
+    const docketed = parseMDY(decodeHtmlEntities(rowMatch[1]));
+    const row = rowMatch[2];
     const titleMatch = FILING_TITLE_RE.exec(row);
     if (!titleMatch) continue;
     const title = stripTags(titleMatch[2] ?? "");
-    if (!NOTICE_TITLE_RE.test(title)) continue;
+    if (!NOTICE_TITLE_RE.test(title) || NOTICE_OFF_RE.test(title)) continue;
 
     // See the two real date shapes documented above: body text is
     // everything between the title and the page-count `<i
@@ -550,11 +571,14 @@ function extractUpcomingHearings(html: string, docketNumber: string): UpcomingHe
         date.setHours(hour, Number(tm[2]), 0, 0);
       }
     }
-    if (date.getTime() <= now) continue;
+    // A body date well before the docketed date is a reference to an earlier
+    // event, not the one this notice announces.
+    if (docketed && date.getTime() < docketed.getTime() - 2 * 86_400_000) continue;
     if (hearings.some((h) => h.date.getTime() === date.getTime())) continue;
 
     hearings.push({
       date,
+      docketed,
       link: titleMatch[1] ? titleMatch[1] : fallbackLink,
       label: noticeLabel(title),
       location,
@@ -563,7 +587,7 @@ function extractUpcomingHearings(html: string, docketNumber: string): UpcomingHe
   return hearings;
 }
 
-async function fetchDocketFilings(docketNumber: string): Promise<{ filings: DocketFiling[]; upcomingHearings: UpcomingHearing[] }> {
+async function fetchDocketFilings(docketNumber: string): Promise<{ filings: DocketFiling[]; hearings: DocketHearing[] }> {
   const url = `${EFILING_BASE_URL}/Lists/DocketLog.aspx?docketnumber=${encodeURIComponent(docketNumber)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`CEC docket log request failed (${res.status}) for ${docketNumber}`);
@@ -577,7 +601,7 @@ async function fetchDocketFilings(docketNumber: string): Promise<{ filings: Dock
       `CEC docket log for ${docketNumber} returned zero parsed filing rows — the GridView row structure likely changed. Check FILING_ROW_RE in src/lib/ingest/caCecDockets.ts against a fresh response.`,
     );
   }
-  return { filings, upcomingHearings: extractUpcomingHearings(html, docketNumber) };
+  return { filings, hearings: extractHearings(html, docketNumber) };
 }
 
 // See module header STATUS: a belt-and-suspenders re-check of each
@@ -601,7 +625,7 @@ async function fetchDocketFilings(docketNumber: string): Promise<{ filings: Dock
 // confirm a safe pattern against) — only phrases with a directly-confirmed
 // real CEC final-action example are kept.
 const RESOLUTION_TITLE_RE =
-  /^(\*{0,3}\s*)?(commission (order and )?final decision|commission decision|final decision|project permit denial)\b/i;
+  /^(\*{0,3}\s*)?(commission (order and )?final decision|commission decision|final decision|final order|project permit denial)\b/i;
 const DENIAL_TITLE_RE = /\border denying\b/i;
 
 interface ResolutionCheck {
@@ -636,6 +660,30 @@ function checkDocketResolution(filings: DocketFiling[]): ResolutionCheck {
     }
   }
   return { resolved, denied, earliestDate, resolutionDate };
+}
+
+// See module header PROCEDURAL STEP AND PAST HEARINGS. Titles are anchored at
+// the start so a filer's "Comments on the Proposed Order" does not count. A
+// project-specific hearing whose date is still ahead is fed in as a
+// synthetic "scheduled" event (dated by the notice's own docketed date), since
+// the shared classifier reads text, not event dates.
+const PROPOSED_DECISION_RE = /^(\*{0,3}\s*)?(proposed order|presiding member.?s proposed decision|pmpd\b)/i;
+const SCHEDULED_EVENT_RE = /^scheduled hearing:/;
+const NEVER_RE = /(?!)/;
+
+function classifyCecStep(filings: DocketFiling[], hearings: DocketHearing[]): { step: string; at: Date | null } | null {
+  const now = Date.now();
+  const events: DocketEvent[] = filings.map((f) => ({ date: f.date, text: f.title }));
+  for (const h of hearings) {
+    if (h.date.getTime() > now) events.push({ date: h.docketed, text: `scheduled hearing: ${h.label ?? "meeting"}` });
+  }
+  return classifyReviewStep(events, {
+    hearingSet: SCHEDULED_EVENT_RE,
+    hearingOff: NEVER_RE,
+    hearingHeld: NEVER_RE,
+    decisionNext: PROPOSED_DECISION_RE,
+    closed: NEVER_RE,
+  });
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY: takes the first MW
@@ -711,7 +759,8 @@ function normalizeCandidate(
   candidate: ListingCandidate,
   detail: DetailInfo,
   resolution: ResolutionCheck,
-  upcomingHearings: UpcomingHearing[],
+  hearings: DocketHearing[],
+  review: { step: string; at: Date | null } | null,
 ): NormalizedProject | null {
   if (!detail.docketNumber) return null;
 
@@ -733,6 +782,7 @@ function normalizeCandidate(
     RESOLVED_STAGES.includes(currentStage) && resolution.resolutionDate ? resolution.resolutionDate : undefined;
   const resolutionDateConfidence = projectResolutionDate ? "exact" : undefined;
 
+  const upcomingHearings = hearings.filter((h) => h.date.getTime() > Date.now());
   const matchKey = resolveMatchKey("ca-cec", detail.docketNumber);
   const { projectType, fuelType } = inferProjectTypeAndFuel(candidate.title, detail.technology);
   const capacityValue = extractCapacityMw(detail.capacityText);
@@ -780,7 +830,9 @@ function normalizeCandidate(
     causeDetail: `Waiting on California Energy Commission certification — Docket ${detail.docketNumber}${detail.projectTypeText ? ` (${detail.projectTypeText})` : ""}, "${candidate.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: upcomingHearings.length > 0 ? upcomingHearings[0].link : null,
-    hearings: upcomingHearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `CEC Docket ${detail.docketNumber}`,
@@ -821,9 +873,10 @@ export async function ingestCaCecDockets(maxCandidates = MAX_CANDIDATES): Promis
         errors.push({ matchKey: candidate.href, message: "No Docket Number found on detail page" });
         continue;
       }
-      const { filings, upcomingHearings } = await fetchDocketFilings(detail.docketNumber);
+      const { filings, hearings } = await fetchDocketFilings(detail.docketNumber);
       const resolution = checkDocketResolution(filings);
-      const normalized = normalizeCandidate(candidate, detail, resolution, upcomingHearings);
+      const review = resolution.resolved ? null : classifyCecStep(filings, hearings);
+      const normalized = normalizeCandidate(candidate, detail, resolution, hearings, review);
       if (normalized) {
         toUpsert.push(normalized);
         if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);

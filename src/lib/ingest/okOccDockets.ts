@@ -184,6 +184,25 @@
 // fetches, each politeness-delayed) took under 3 seconds — nowhere near
 // the 300s cron maxDuration budget even with large future growth headroom.
 //
+// PROCEDURAL STEP: the per-case document list already fetched for the STATUS
+// check is a dated log of every filing, each with an "ECF Document Type" (and
+// an "Order Title" on orders). Only 4 cases exist and all are resolved, so this
+// was checked against their pre-decision filings (2026-09-21), not a live
+// pending case:
+//   - hearing set: the Commission's "ORDER GRANTING MOTION FOR PROCEDURAL
+//     ORDER" / "...TO ESTABLISH PROCEDURAL SCHEDULE" sets the schedule,
+//     including the merits hearing. A "Notice of Hearing" document is NOT used:
+//     most of them notice a hearing on a procedural or notice motion (e.g.
+//     PUD2025-000069 filing 7 and 12), not the merits, and they are not
+//     distinguishable by type.
+//   - hearing held: a "Hearing Exhibit" document (PUD2025-000069 has one on
+//     2026-03-10, four weeks before its final order) or a transcript. A
+//     "Witness and Exhibit List" comes before the hearing, so it is not enough.
+//   - closed: handled by determineResolution, so no closing regex is used.
+// A case with a procedural order but no hearing exhibit yet reads "Hearing
+// scheduled" even if the (undated) hearing has passed, until an exhibit or
+// transcript is filed. No hearing dates are published, so hearings are unset.
+//
 // Wired to Vercel Cron weekly, 01:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ok-occ/route.ts).
 
@@ -192,6 +211,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://public.occ.ok.gov/WebLink";
 const REPO_NAME = "OCC";
@@ -453,6 +473,21 @@ function extractCounties(docs: WebLinkDocument[]): string | null {
   return counties.size > 0 ? [...counties].join(", ") : null;
 }
 
+// See module header PROCEDURAL STEP.
+const STEP_SIGNALS = {
+  hearingSet: /\border granting motion (for procedural order|to establish procedural schedule)\b/i,
+  hearingHeld: /\bhearing exhibit\b|\btranscript\b/i,
+  decisionNext: /\b(proposed order|post-?hearing brief|report and recommendations?)\b/i,
+  closed: /(?!)/,
+};
+
+function documentEvents(docs: WebLinkDocument[]): DocketEvent[] {
+  return docs.map((d) => ({
+    date: d.creationDate,
+    text: `${d.metadata["ECF Document Type"] ?? ""} ${d.metadata["Order Title"] ?? ""}`.trim(),
+  }));
+}
+
 interface Candidate {
   caseNumber: string;
   earliestDate: Date | null;
@@ -491,6 +526,11 @@ function normalizeCase(
   const projectType: ProjectType = "transmission";
   const fuelType: FuelType = "transmission";
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+
+  // A resolved case has no live step; a case with no documents leaves any
+  // stored step alone (undefined).
+  const review = resolution.resolution === null ? classifyReviewStep(documentEvents(docs), STEP_SIGNALS) : null;
+  const managed = resolution.resolution !== null || docs.length > 0;
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Oklahoma Corporation Commission's High Voltage Transmission Line Siting Act Certificate of Authority (COA) docket records (Public Utility Docket case type).",
@@ -533,6 +573,8 @@ function normalizeCase(
           : `${BASE_URL}/Search.aspx?dbid=0&repo=${REPO_NAME}`,
       },
     ],
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     externalIds: { okOcc: caseNumber },
   };
 }

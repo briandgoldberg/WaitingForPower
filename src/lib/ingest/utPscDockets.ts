@@ -228,6 +228,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 import zlib from "node:zlib";
 
 const LISTING_URL = "https://psc.utah.gov/electric/dockets/all-electric-dockets/";
@@ -558,6 +559,7 @@ const DENY_RE = /\bden(?:y|ies|ied|ying)\b[\s\S]{0,150}\b(?:certificate|CPCN|app
 interface DocketResolution {
   resolution: "granted" | "denied" | null;
   orderDate: Date | null;
+  docs: DocumentRow[];
 }
 
 // Checks every document row whose label looks like a final order (newest
@@ -576,11 +578,37 @@ async function fetchDocketResolution(url: string): Promise<DocketResolution> {
     if (!res.ok) throw new Error(`Utah PSC order PDF request failed (${res.status}) for ${candidate.href}`);
     const buf = Buffer.from(await res.arrayBuffer());
     const text = extractPdfText(buf);
-    if (GRANT_RE.test(text)) return { resolution: "granted", orderDate: candidate.date };
-    if (DENY_RE.test(text)) return { resolution: "denied", orderDate: candidate.date };
+    if (GRANT_RE.test(text)) return { resolution: "granted", orderDate: candidate.date, docs };
+    if (DENY_RE.test(text)) return { resolution: "denied", orderDate: candidate.date, docs };
     await sleep(REQUEST_DELAY_MS);
   }
-  return { resolution: null, orderDate: orderCandidates[0]?.date ?? null };
+  return { resolution: null, orderDate: orderCandidates[0]?.date ?? null, docs };
+}
+
+// Step signals for UT, run against each document label of the docket page
+// (already fetched for the resolution check, no extra request). Confirmed live
+// 2026-09-21 against every 2018-2024 CPCN docket:
+//   - hearingSet: "Scheduling Order and Notice of Hearing", "Amended Scheduling
+//     Order and Notice of Virtual Hearing" (21-035-54, 18-2508-01). "Notice of
+//     Virtual Scheduling Conference" is only a scheduling call.
+//   - hearingHeld: "Reporter's Transcript", "Audio of Hearing held ...",
+//     "Recorded Live Stream of Virtual Hearing Held ...".
+//   - decisionNext: a settlement stipulation, or (for the paper-only dockets
+//     such as Deseret's Bonanza projects, which never get a hearing) the
+//     Division of Public Utilities' comments, after which the order follows.
+//   - closed: the final "Order" / "Report and Order" rows and grant/deny
+//     orders; "Order Granting Intervention" is a procedural order and must not
+//     count (the default closed regex would read it as a final order).
+const UT_STEP_SIGNALS: StepSignals = {
+  hearingSet: /\bnotice of (?:virtual )?hearing\b/i,
+  hearingHeld: /\btranscript\b|\baudio of hearing\b|\brecorded live stream\b.*\bhearing held\b/i,
+  decisionNext: /\bsettlement stipulation\b|^(?:redacted )?comments from the division of public utilities\b|\breply comments\b/i,
+  closed: /^(?:order|(?:erratum )?report and order)$|^order (?:granting|approving|denying)\b(?!.*\b(?:intervention|extension|motion|leave)\b)/i,
+};
+
+function classifyUtReviewStep(docs: DocumentRow[]) {
+  const events: DocketEvent[] = docs.map((d) => ({ date: d.date, text: d.label }));
+  return classifyReviewStep(events, UT_STEP_SIGNALS);
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -662,6 +690,9 @@ function normalizeDocket(
   const isResolvedStage = resolution.resolution === "granted" || resolution.resolution === "denied";
   const resolutionDate = isResolvedStage ? resolution.orderDate : null;
 
+  // A resolved docket gets null; a pending one is classified from its document list.
+  const review = currentStage === "local_review" ? classifyUtReviewStep(resolution.docs) : null;
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -694,6 +725,8 @@ function normalizeDocket(
     currentStage,
     resolutionDate: resolutionDate ?? undefined,
     resolutionDateConfidence: resolutionDate ? "exact" : undefined,
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity determination from the Utah Public Service Commission — Docket No. ${listing.docketNo}, "${listing.matter}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -141,6 +141,29 @@
 // mapping isn't exercised by any real candidate right now); flagged in
 // dataQualityNote whenever it's actually used.
 //
+// PROCEDURAL STEP (added 2026-09-21): EFSEC has no filing-by-filing docket, but
+// each facility page's "Facility progress" widget (same detail fetch, no extra
+// request) shows EFSEC's own status for its five siting stages, each one of
+// "Complete", "In progress", "Pending decision" or blank. Confirmed live
+// 2026-09-21 against all 19 facilities, see parseProgress/buildStepEvents:
+//   - "Land use and adjudication" Complete (the adjudicative hearing is over)
+//     with the final recommendation not yet Complete, or "Final
+//     recommendation and governor's decision" In progress: the Council's
+//     recommendation and the Governor's decision are next, "Awaiting
+//     commission order". No current candidate is in that state; the mapping
+//     is calibrated on the stage labels, not on a live example.
+//   - "Final recommendation ..." Complete: closed, no step. Carriger Solar is
+//     the live case: its f-status badge still reads "Application review" but
+//     all four stages read Complete and its recent documents include the
+//     Governor's approval letter and the final SCA.
+//   - A hearing (not a comment period) on the sitewide events feed already
+//     fetched for hearings: "Hearing scheduled".
+//   - Everything else is "Application filed". "Pending decision" on the later
+//     stages is deliberately NOT a signal: Goldeneye shows it for three stages
+//     while its own Application review stage is still In progress, so it
+//     reads as a projection, not a decision being ready.
+// The widget carries no dates, so reviewStepAt is left null.
+//
 // Wired to Vercel Cron weekly, 21:00 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-wa-efsec/route.ts) — a real run's timing was
 // measured before scheduling this (originally 19 total facilities, 5
@@ -153,6 +176,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://efsec.wa.gov";
 
@@ -342,6 +366,8 @@ interface FacilityDocument {
 }
 
 interface FacilityDetail {
+  /** EFSEC's own per-stage progress, keyed by stage name ("Land use and adjudication" etc.); value is "Complete", "In progress", "Pending decision" or "". */
+  progress: Map<string, string>;
   applicant: string | null;
   filedRaw: string | null;
   description: string | null;
@@ -431,6 +457,44 @@ export function parseRecentDocuments(html: string): FacilityDocument[] {
   return docs;
 }
 
+// One `step-item` per stage inside the "Facility progress" view: the stage
+// link text, then a `fac-status-*` block whose field__item holds the label
+// (blank for a stage with no information). Confirmed by hand 2026-09-21.
+export function parseProgress(html: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const start = html.indexOf("<h2>Facility progress");
+  if (start < 0) return map;
+  const section = html.slice(start, start + 60000);
+  // Split per stage first: a stage with no information has no label at all,
+  // and one regex over the whole section would borrow the next stage's.
+  for (const block of section.split('class="step-item views-row"').slice(1)) {
+    const name = /step-link">\s*<a href="[^"]*">([^<]+)<\/a>/.exec(block)?.[1];
+    if (!name) continue;
+    const label = /field--name-name field--type-string field--label-hidden field__item">([^<]*)</.exec(block)?.[1] ?? "";
+    map.set(name.replace(/&#0?39;/g, "'").trim(), label.trim());
+  }
+  return map;
+}
+
+const WA_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^hearing scheduled/i,
+  hearingOff: /(?!)/,
+  hearingHeld: /^adjudication complete/i,
+  decisionNext: /^final recommendation in progress/i,
+  closed: /^final decision complete/i,
+};
+
+function buildStepEvents(filed: Date | null, progress: Map<string, string>, events: FacilityEvent[]): DocketEvent[] {
+  const out: DocketEvent[] = [{ date: filed, text: "Application filed" }];
+  const stage = (prefix: string) => [...progress].find(([k]) => k.toLowerCase().startsWith(prefix))?.[1] ?? "";
+  const final = stage("final recommendation");
+  if (final === "Complete") out.push({ date: null, text: "Final decision complete" });
+  else if (final === "In progress") out.push({ date: null, text: "Final recommendation in progress" });
+  if (stage("land use") === "Complete") out.push({ date: null, text: "Adjudication complete" });
+  for (const e of events) if (/hearing/i.test(e.label)) out.push({ date: e.start, text: "Hearing scheduled" });
+  return out;
+}
+
 async function fetchFacilityDetail(slug: string): Promise<FacilityDetail> {
   const html = await fetchText(`${BASE_URL}${slug}`);
   const description = extractDescription(html);
@@ -448,6 +512,7 @@ async function fetchFacilityDetail(slug: string): Promise<FacilityDetail> {
       : extractCapacityMw(description);
 
   return {
+    progress: parseProgress(html),
     applicant: extractApplicant(html),
     filedRaw: extractTimelineDate(html, "Application received") ?? extractTimelineDate(html, "Application completed"),
     description,
@@ -552,7 +617,7 @@ function cleanCounty(raw: string | null): string | null {
 function normalizeFacility(
   summary: FacilitySummary,
   detail: FacilityDetail,
-  eventsByFacilityName: Map<string, FacilityEvent[]>,
+  eventsByFacilityName: Map<string, FacilityEvent[]> | null,
 ): NormalizedProject {
   const sourceId = summary.nodeId ?? summary.slug;
   const matchKey = resolveMatchKey("wa-efsec", sourceId);
@@ -568,7 +633,14 @@ function normalizeFacility(
   const fuelType = inferFuelType(summary.types);
   const county = cleanCounty(summary.county);
   const filedDate = parseMonthYear(detail.filedRaw);
-  const events = eventsByFacilityName.get(summary.name) ?? [];
+  const events = eventsByFacilityName?.get(summary.name) ?? [];
+  // See module header PROCEDURAL STEP. Skipped when the progress widget did
+  // not parse, so a layout change leaves stored values alone instead of
+  // guessing.
+  const review =
+    currentStage === "local_review" && detail.progress.size > 0
+      ? classifyReviewStep(buildStepEvents(filedDate, detail.progress, events), WA_STEP_SIGNALS)
+      : null;
   const resolutionDate = RESOLVED_STAGES.includes(currentStage) ? findResolutionDate(currentStage, detail.documents) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
@@ -632,8 +704,12 @@ function normalizeFacility(
     // first matching row's own event-detail link (every row this feed
     // matches carries one, see EVENT_ROW_RE), falling back to the
     // facility's own detail page only in case that's ever missing.
+    ...(currentStage !== "local_review" || detail.progress.size > 0
+      ? { reviewStep: review ? review.step : null, reviewStepAt: review ? review.at : null }
+      : {}),
     hearingDetailsLink: events.length > 0 ? (events[0].link || `${BASE_URL}${summary.slug}`) : null,
-    hearings: events.map((e) => ({ date: e.start, endDate: e.end, label: e.label, location: e.location })),
+    // Undefined when the events feed could not be read, so stored hearings survive.
+    hearings: eventsByFacilityName ? events.map((e) => ({ date: e.start, endDate: e.end, label: e.label, location: e.location })) : undefined,
     sources: [
       {
         label: `EFSEC Facility Page: ${summary.name}`,
@@ -660,7 +736,7 @@ export async function ingestWaEfsecFacilities(maxCandidates = MAX_CANDIDATES): P
   // block the whole ingestion run over a feature this supplementary, so it
   // degrades to "no hearing data this run" rather than failing every
   // candidate.
-  const eventsByFacilityName = await fetchActiveEventsByFacilityName().catch(() => new Map<string, FacilityEvent[]>());
+  const eventsByFacilityName = await fetchActiveEventsByFacilityName().catch(() => null);
 
   // See module header CANDIDATES (revised): every facility is now a
   // candidate, not just "Application review" ones — see that section for

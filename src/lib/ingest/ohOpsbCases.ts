@@ -88,6 +88,21 @@
 // meDepSiteLawPermits.ts/mdPscDockets.ts/wyIscDockets.ts each document their
 // own "no real date available" finding rather than forcing one.
 //
+// PROCEDURAL STEP: the case list has only a status, but the same detail page
+// fetchHearings already reads for every waiting case lists each hearing's date
+// (past ones stay on the page). Confirmed live 2026-09-21 across all 20
+// Pending / Pre-application cases: Carnation Solar (24-0881-EL-BGN) shows an
+// evidentiary hearing on 2026-02-09 that is over, so a Board decision is next
+// ("Awaiting commission order"); Fairfield Energy Center and Ashville Energy
+// Center have a local public hearing and an evidentiary hearing whose dates
+// are in the past by now, or ahead of it, depending on the day; any case with a
+// hearing still ahead reads "Hearing scheduled"; a Pending case with no
+// hearing listed yet reads "Application filed". A past local public hearing on
+// its own does not mean the case is decision-ready (the evidentiary hearing
+// still follows), so only an evidentiary hearing that has happened counts.
+// Pre-application cases have not been filed, so they carry no step (null).
+// There is no filing list in this source, so no finer step is possible.
+//
 // Wired to Vercel Cron weekly, 19:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-oh-opsb/route.ts) — a real run's timing was
 // measured (227 cases, 7.6s, the fastest source in this series) before
@@ -97,6 +112,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import type { ReviewStep } from "@/lib/ingest/reviewStep";
 
 const CASES_URL =
   "https://opsb.ohio.gov/wps/wcm/connect/gov/Ohio%20Content%20English/opsb?source=library&srv=cmpnt&cmpntid=691ce407-26ae-4653-9dc1-4789a8a6711e&WCM_Page.ResetAll=TRUE&location=Ohio%20Content%20English";
@@ -243,12 +259,19 @@ function findLocationAfterDateLine(lines: string[], dateLineIndex: number): stri
 // Every real upcoming hearing entry (both "Local public hearing" and
 // "Evidentiary hearing" labels — see BROADENED note above) is kept, not
 // just the earliest — a case can genuinely publish more than one.
-async function fetchHearings(detailUrl: string): Promise<UpcomingHearing[]> {
+interface HearingPage {
+  upcoming: UpcomingHearing[];
+  /** Date of the latest evidentiary hearing already held, if the page still lists one. */
+  evidentiaryHeld: Date | null;
+}
+
+async function fetchHearings(detailUrl: string): Promise<HearingPage | null> {
   const res = await fetch(detailUrl, { headers: BROWSER_HEADERS });
-  if (!res.ok) return [];
+  if (!res.ok) return null;
   const html = await res.text();
   const now = new Date();
   const hearings: UpcomingHearing[] = [];
+  let evidentiaryHeld: Date | null = null;
   for (const m of html.matchAll(HEARING_LABEL_RE)) {
     const labelEndIndex = m.index! + m[0].length;
     const window = html.slice(labelEndIndex, labelEndIndex + 400).replace(/<[^>]+>/g, "\n");
@@ -256,12 +279,25 @@ async function fetchHearings(detailUrl: string): Promise<UpcomingHearing[]> {
     const dateLineIndex = lines.findIndex((line) => DATE_LINE_RE.test(line));
     if (dateLineIndex === -1) continue;
     const d = parseHearingDateTime(lines[dateLineIndex], now);
-    if (!d || d.getTime() <= now.getTime()) continue;
+    if (!d) continue;
+    if (d.getTime() <= now.getTime()) {
+      if (/evidentiary/i.test(m[1]) && (!evidentiaryHeld || d > evidentiaryHeld)) evidentiaryHeld = d;
+      continue;
+    }
     if (hearings.some((h) => h.date.getTime() === d.getTime())) continue;
     const location = findLocationAfterDateLine(lines, dateLineIndex);
     hearings.push({ date: d, label: m[1].trim(), location });
   }
-  return hearings;
+  return { upcoming: hearings, evidentiaryHeld };
+}
+
+// See module header PROCEDURAL STEP.
+function stepFor(page: HearingPage): ReviewStep {
+  if (page.upcoming.length > 0) {
+    return { step: "Hearing scheduled", at: new Date(Math.min(...page.upcoming.map((h) => h.date.getTime()))) };
+  }
+  if (page.evidentiaryHeld) return { step: "Awaiting commission order", at: page.evidentiaryHeld };
+  return { step: "Application filed", at: null };
 }
 
 const STATUS_TO_STAGE: Record<string, ProjectStage> = {
@@ -319,7 +355,13 @@ function parseOpenDate(raw: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function normalizeCase(c: OpsbCase, hearings: UpcomingHearing[]): NormalizedProject {
+// page is null for a case that is not being tracked as waiting on a decision or whose
+// page could not be read; a failed read leaves the stored hearings and step alone.
+function normalizeCase(c: OpsbCase, page: HearingPage | null, stillWaiting: boolean): NormalizedProject {
+  const hearings = page?.upcoming ?? [];
+  // Only a filed (Pending) case has a step; pre-application and resolved cases have none.
+  const review = page && c.status.trim().toLowerCase() === "pending" ? stepFor(page) : null;
+  const managed = !stillWaiting || page !== null;
   const matchKey = resolveMatchKey("oh-opsb", c.caseNumber);
   const currentStage = stageForStatus(c.status);
   const { fuelType, projectType } = classify(c.type);
@@ -361,7 +403,9 @@ function normalizeCase(c: OpsbCase, hearings: UpcomingHearing[]): NormalizedProj
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need from the Ohio Power Siting Board — Case No. ${c.caseNumber}, "${c.project}" (${c.applicant})`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? `https://opsb.ohio.gov${c.url}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
+    hearings: managed ? hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })) : undefined,
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     sources: [
       {
         label: `Ohio OPSB Case ${c.caseNumber}`,
@@ -391,8 +435,8 @@ export async function ingestOhOpsbCases(): Promise<IngestSummary> {
       // ("16 of 227" — cheap at this volume) and stageForStatus above.
       const currentStage = stageForStatus(c.status);
       const stillWaiting = currentStage === "local_review" || currentStage === "planned_pre_filing";
-      const hearings = stillWaiting ? await fetchHearings(`https://opsb.ohio.gov${c.url}`).catch(() => []) : [];
-      toUpsert.push(normalizeCase(c, hearings));
+      const page = stillWaiting ? await fetchHearings(`https://opsb.ohio.gov${c.url}`).catch(() => null) : null;
+      toUpsert.push(normalizeCase(c, page, stillWaiting));
     } catch (err) {
       errors.push({ matchKey: c.caseNumber, message: String(err) });
     }

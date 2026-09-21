@@ -113,6 +113,24 @@
 // docket. PORTFOLIO_RE flags these in the data-quality note rather than
 // silently presenting them as a single physical project.
 //
+// PROCEDURAL STEP: the documents list already fetched for the final-order
+// check is a dated log of every pleading and order, so the step costs no extra
+// request. Confirmed live 2026-09-21 against all 3 active dockets:
+//   - 26-0000041 (PNM Rio Puerco): a "Recommended Decision" (7/24), an
+//     unopposed motion to vacate the public hearing and an "Order Vacating
+//     Hearing and Admitting Evidence" (8/19), so the hearing will not happen
+//     and the Commission's order is next ("Awaiting commission order").
+//   - 26-0000114 (PNM 2029-2032 resources) and 26-0000137 (El Paso Electric):
+//     applications, interventions, testimony, procedural and protective
+//     orders, but no filing that names a hearing, so "Application filed".
+// Defaults that misfire and are overridden: "order (approving|granting)" reads
+// "Order Approving Right-of-Way Width" (a partial order on 26-0000041) as a
+// closing order, so closure is only a "final order" document (as in
+// classifyResolution); and "Order Vacating Hearing and Admitting Evidence" is
+// a waived hearing, not a cancelled one awaiting a new date, so it counts as
+// the hearing being over. Procedural orders carry their hearing dates only
+// inside the PDF, not in any listed field, so hearings are left unset.
+//
 // Wired to Vercel Cron weekly, 21:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-nm-prc/route.ts) — a real run's timing was
 // measured (5 candidates) before scheduling this. Also politeness-delayed
@@ -122,6 +140,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://e360.prc.nm.gov";
 const SEARCH_PATH = "/core/api/apiflow/v1/prc/nm/intake/casedetails/getAll";
@@ -333,6 +352,18 @@ function parseIsoDate(raw: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// See module header PROCEDURAL STEP.
+const STEP_SIGNALS = {
+  hearingSet: /\b(public|evidentiary) hearing\b|\bnotice of (public |evidentiary )?hearing\b|\border setting (a )?(public |evidentiary )?hearing\b/i,
+  hearingHeld: /\btranscript\b|\badmitting evidence\b|\bhearing (was )?held\b/i,
+  decisionNext: /\brecommended decision\b|\bproposed order\b|\bcertification of stipulation\b|\bpost-?hearing brief\b/i,
+  closed: /\bfinal order\b/i,
+};
+
+function documentEvents(documents: RawDocument[]): DocketEvent[] {
+  return documents.map((d) => ({ date: parseIsoDate(d.fileddate), text: `${d.documenttype}: ${d.documentname}` }));
+}
+
 type Resolution = "granted" | "denied" | "dismissed" | null;
 
 const DENY_RE = /\bdeny(?:ing|al)?\b/i;
@@ -450,6 +481,11 @@ function normalizeDocket(
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
+  // A resolved docket has no live step; a docket with no documents listed
+  // leaves any stored step alone (undefined).
+  const review = isActive ? classifyReviewStep(documentEvents(documents), STEP_SIGNALS) : null;
+  const managed = !isActive || documents.length > 0;
+
   const dataQualityNoteParts: string[] = [
     "Sourced from the New Mexico Public Regulation Commission's PRCe360 public e-filing and case-management portal.",
   ];
@@ -512,6 +548,8 @@ function normalizeDocket(
         url: `${BASE_URL}/portal/public/#/public/nm-prc/en/CaseXscreen?screen=external-Case360&caseId=${search.caseId}`,
       },
     ],
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     externalIds: { nmPrc: search.docketNumber },
   };
 }

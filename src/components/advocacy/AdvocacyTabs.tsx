@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 
-export type AdvocacyTab = "national" | "state" | "project";
+export type AdvocacyTab = "project" | "state" | "national";
 
 export function AdvocacyTabs({
   defaultTab,
@@ -20,20 +20,20 @@ export function AdvocacyTabs({
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-3 gap-1 rounded-2xl sm:flex sm:gap-1.5 sm:rounded-full bg-black/5 dark:bg-white/10 p-1 w-full sm:w-fit sm:max-w-full sm:overflow-x-auto">
-        <TabButton active={tab === "national"} onClick={() => setTab("national")}>
-          National Advocacy
+        <TabButton active={tab === "project"} onClick={() => setTab("project")}>
+          Project Advocacy
         </TabButton>
         <TabButton active={tab === "state"} onClick={() => setTab("state")}>
           State Advocacy
         </TabButton>
-        <TabButton active={tab === "project"} onClick={() => setTab("project")}>
-          Projects
+        <TabButton active={tab === "national"} onClick={() => setTab("national")}>
+          National Advocacy
         </TabButton>
       </div>
 
-      <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
-      <div hidden={tab !== "state"}>{stateAdvocacy}</div>
       <div hidden={tab !== "project"}>{projectAdvocacy}</div>
+      <div hidden={tab !== "state"}>{stateAdvocacy}</div>
+      <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
     </div>
   );
 }

@@ -269,6 +269,36 @@
 // name, not a county, the same field-reuse WA's/MA's/CT's/NH's modules all
 // document; flagged in dataQualityNote.
 //
+// PROCEDURAL STEP: the docket detail page already fetched for the order check
+// lists every filing as a link label, mostly WITHOUT a date, and (newest
+// first) in page order. Confirmed live 2026-09-21 against all 11 "Open"
+// dockets. What signals each state:
+//   - hearing set: "Notice of Evidentiary Hearing(s)", "Notice of Final
+//     Hearing" and "Notice of Public Comment Hearing" (SB-2025-02, -03, -04,
+//     SB-2025-01). A "Notice of Preliminary Hearing" is deliberately not
+//     counted: the preliminary hearing is procedural and the hearing that
+//     decides the case is noticed separately (SB-2026-02 has only the
+//     preliminary hearing behind it and reads "Application filed").
+//   - hearing held: "...Record Request(s) from Evidentiary Hearing on January
+//     13, 2026" (SB-2025-04), i.e. a data or record request that names an
+//     evidentiary or final hearing, or a post-hearing memorandum/transcript.
+//     "Responses to EFSB's Preliminary Hearing Record Request" is not enough.
+//   - decision next: post-hearing memoranda. "Notice of Open Meeting" is NOT
+//     used (the default reads it as decision-next): it also notices the
+//     open meeting on a preliminary decision (SB-2025-02, -03), so it is
+//     ambiguous here.
+//   - closed: decided by detectResolution from the order text, so no closing
+//     regex is used (the default would read "Preliminary Decision and Order"
+//     as final).
+// The default cancellation regex is kept: "Request for Continuance of Show
+// Cause Hearing" (SB-2022-02) reads as a continued hearing. A hearing notice
+// whose own label carries a date ("NOTICE OF FINAL HEARING - September 8,
+// 2025 at 9:30 a.m.") is the only dated hearing data published: a future one
+// becomes a ProjectHearing and forces "Hearing scheduled", a past evidentiary
+// or final one counts as held. No other hearing dates are published, so a
+// docket with an undated notice and no record request reads "Hearing
+// scheduled" even if that hearing already took place.
+//
 // Wired to Vercel Cron [FREQUENCY TBD] (see vercel.json and
 // src/app/api/cron/ingest-ri-efsb/route.ts — not yet created; left for
 // manual wiring after this module is reviewed). Real full-population timing
@@ -280,6 +310,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 import zlib from "node:zlib";
 
 const BASE_URL = "https://ripuc.ri.gov";
@@ -446,6 +477,64 @@ function isRealApplicantWithdrawal(label: string): boolean {
 
 function isOrderCandidate(label: string): boolean {
   return ORDER_LIKE_RE.test(label) && !PROCEDURAL_ORDER_RE.test(label);
+}
+
+// See module header PROCEDURAL STEP.
+const STEP_SIGNALS = {
+  hearingSet: /\bnotice of (public comment |evidentiary |final |show cause )?hearings?\b/i,
+  hearingHeld: /\b(record|data) requests?\b.{0,60}\b(evidentiary|final) hearing\b|\bpost-?hearing\b|\btranscript\b|\(hearing held\)/i,
+  decisionNext: /\bpost-?hearing (memorandum|memoranda|brief)\b|\bproposed (order|decision)\b/i,
+  closed: /(?!)/,
+};
+
+const LABEL_DATE_RE = /\b(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}), (\d{4})(?:,? at (\d{1,2})(?::(\d{2}))? ?([ap])\.?m\.?)?/i;
+
+// The date a hearing notice's own label states, if any (wall-clock, like the
+// other sources here; 9:30 a.m. is used when no time is given).
+function parseLabelHearingDate(label: string): Date | null {
+  const m = LABEL_DATE_RE.exec(label);
+  if (!m) return null;
+  let hour = m[4] ? Number(m[4]) : 9;
+  const minute = m[5] ? Number(m[5]) : m[4] ? 0 : 30;
+  if (m[6]) {
+    const pm = m[6].toLowerCase() === "p";
+    if (pm && hour !== 12) hour += 12;
+    if (!pm && hour === 12) hour = 0;
+  }
+  const d = new Date(`${m[1]} ${m[2]}, ${m[3]} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const HEARING_KIND_RE = /\b(public comment|evidentiary|final|show cause) hearing\b/i;
+
+interface StepResult {
+  review: ReviewStep | null;
+  hearings: { date: Date; label: string }[];
+}
+
+function classifyEfsbStep(docs: DetailDocument[]): StepResult {
+  const now = new Date();
+  const hearings: { date: Date; label: string }[] = [];
+  // Page order is newest first; the classifier wants oldest first for
+  // documents that carry no date.
+  const events: DocketEvent[] = [...docs].reverse().map((d) => {
+    let text = d.label;
+    const when = STEP_SIGNALS.hearingSet.test(d.label) ? parseLabelHearingDate(d.label) : null;
+    const kind = HEARING_KIND_RE.exec(d.label)?.[1];
+    if (when && kind) {
+      if (when.getTime() > now.getTime()) {
+        hearings.push({ date: when, label: `${kind[0].toUpperCase()}${kind.slice(1).toLowerCase()} hearing` });
+      } else if (/^(evidentiary|final)$/i.test(kind)) {
+        text += " (hearing held)";
+      }
+    }
+    return { date: d.date ?? when, text };
+  });
+  const review = classifyReviewStep(events, STEP_SIGNALS);
+  if (review && hearings.length > 0) {
+    return { review: { step: "Hearing scheduled", at: new Date(Math.min(...hearings.map((h) => h.date.getTime()))) }, hearings };
+  }
+  return { review, hearings };
 }
 
 // Decompresses every FlateDecode content stream in a PDF with Node's
@@ -738,6 +827,7 @@ function normalizeDocket(
   resolution: Resolution,
   filedDate: Date | null,
   resolutionDate: Date | null,
+  step: StepResult | null,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("ri-efsb", row.docketNumber);
 
@@ -816,6 +906,10 @@ function normalizeDocket(
         url: resolveHref(row.href),
       },
     ],
+    hearingDetailsLink: step && step.hearings.length > 0 ? resolveHref(row.href) : null,
+    hearings: step ? step.hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: null })) : undefined,
+    reviewStep: step ? (step.review ? step.review.step : null) : undefined,
+    reviewStepAt: step ? (step.review ? step.review.at : null) : undefined,
     externalIds: { riEfsb: row.docketNumber },
   };
 }
@@ -855,7 +949,10 @@ export async function ingestRiEfsbDockets(maxCandidates = MAX_CANDIDATES): Promi
         ? { resolution: "withdrawn", dispositiveDoc: withdrawalDoc }
         : await detectResolution(docs);
       const resolutionDate = dispositiveDoc ? dispositiveDoc.date ?? parseDateFromHref(dispositiveDoc.href) : null;
-      const normalized = normalizeDocket(row, resolution, filedDate, resolutionDate);
+      // A resolved docket has no live step; a detail page with no documents
+      // leaves any stored step alone (undefined).
+      const step: StepResult | null = resolution !== null ? { review: null, hearings: [] } : docs.length > 0 ? classifyEfsbStep(docs) : null;
+      const normalized = normalizeDocket(row, resolution, filedDate, resolutionDate, step);
       toUpsert.push(normalized);
       if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

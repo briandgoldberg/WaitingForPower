@@ -137,7 +137,8 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedHearing, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://puc.sd.gov/Dockets/Electric";
 const USER_AGENT = "Mozilla/5.0 (compatible; WaitingForPowerBot/1.0)";
@@ -337,11 +338,97 @@ function parseOrderEntries(ordersHtml: string): OrderEntry[] {
   return entries;
 }
 
-async function fetchOrderEntries(year: string, docketNumber: string): Promise<OrderEntry[]> {
+async function fetchDocketPage(year: string, docketNumber: string): Promise<{ entries: OrderEntry[]; html: string }> {
   const url = `${BASE_URL}/${year}/${docketNumber}.aspx`;
   const html = await fetchText(url);
   const ordersMatch = /Orders:<\/strong>([\s\S]*?)(?:<p><strong>|<\/div>\s*<\/div>)/i.exec(html);
-  return ordersMatch ? parseOrderEntries(ordersMatch[1]) : [];
+  return { entries: ordersMatch ? parseOrderEntries(ordersMatch[1]) : [], html };
+}
+
+// See module header PROCEDURAL STEP. Run against each dated Orders / Filed
+// Documents line of the docket page (no extra request). Confirmed live
+// 2026-09-21 against every construction-permit docket from 2023 on
+// (EL23 to EL26):
+//   - hearingSet: an Order or Notice that sets the evidentiary hearing ("Order
+//     for and Notice of Evidentiary Hearing", "Order Establishing Procedural
+//     Schedule and Consolidating Dockets for Evidentiary Hearing") or approves
+//     the procedural schedule, which is where the hearing date is fixed.
+//     Anchored on Order/Notice so a filed "Joint Motion to Consolidate
+//     Evidentiary Hearings" does not count, and "Notice of Motion Hearing on
+//     Less than 10 Days' Notice" (a scheduling motion, EL26-014) is skipped.
+//   - decisionNext: the post-hearing briefing order or a settlement
+//     stipulation, after which the Commission rules.
+//   - closed: the permit order ("Order Granting Permit(s) to Construct",
+//     "Final Decision and Order Granting Permits"); the stage decides which
+//     dockets get a step at all, so this is a backstop.
+const SD_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^(?:order|notice)\b(?!.*\bmotion hearing\b).*\b(?:evidentiary hearing|procedural schedule)\b/i,
+  hearingOff: /\b(?:cancel+(?:ed|ing|ation)|vacat(?:ed|ing)|postpone(?:d|ment))\b.{0,30}hearing|\bhearing\b.{0,30}\b(?:cancel+ed|vacated|postponed)/i,
+  hearingHeld: /\bhearing transcript\b/i,
+  decisionNext: /\bpost-?hearing brief|\bbriefing schedule\b|\bsettlement stipulation\b/i,
+  closed: /\bfinal decision and order\b|\border granting (?:permits?|[^;]{0,80}; order granting permits?)\b/i,
+};
+
+// A hearing sentence on the docket page, e.g. "An evidentiary hearing will be
+// held beginning at 9:30 a.m. CST on Tuesday, January 21, in the Floyd Matthew
+// Training Center ... Pierre, SD." (EL24-023, no year) or "A public input
+// meeting on the application and project will be held Wednesday, July 1, 2026,
+// at 6:00 p.m. CDT at the Waverly/South Shore School Gymnasium, ..." (EL26-014).
+// The evidentiary hearing sentence omits the year, so it is recovered from the
+// weekday (the first year from the docket's own that makes them agree).
+const PAGE_HEARING_RE =
+  /(evidentiary hearing|public input meeting)[^<]{0,120}?will\s+be held\s+(?:beginning\s+at\s+[\d:]+\s*[ap]\.m\.\s*\w+\s+on\s+)?(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+([A-Za-z]+)\.?\s+(\d{1,2})(?:,\s*(\d{4}))?,?\s*([^<]*)/gi;
+const PAGE_HEARING_RANGE_RE = /public input meetings?[^<]{0,120}?will\s+be held\s+([A-Za-z]+)\.?\s+(\d{1,2})\s*-\s*(\d{1,2}),\s*(\d{4}),?\s+in\s+([^<]*)/gi;
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+interface PageHearing {
+  date: Date;
+  evidentiary: boolean;
+  location: string | null;
+}
+
+function parsePageHearings(html: string, docketYear: number): PageHearing[] {
+  const out: PageHearing[] = [];
+  for (const m of html.matchAll(PAGE_HEARING_RE)) {
+    const [, kind, weekday, monthText, dayText, yearText, rest] = m;
+    const month = MONTHS.indexOf(monthText.slice(0, 3).toLowerCase());
+    if (month < 0) continue;
+    const day = Number(dayText);
+    let date: Date | null = null;
+    if (yearText) {
+      date = new Date(Number(yearText), month, day);
+    } else {
+      for (let y = docketYear; y <= docketYear + 2 && !date; y++) {
+        const d = new Date(y, month, day);
+        if (WEEKDAYS[d.getDay()] === weekday.toLowerCase()) date = d;
+      }
+    }
+    if (!date || Number.isNaN(date.getTime())) continue;
+    const loc = /\b(?:in|at)\s+(?:the\s+)?([^,][^<]*?)\.?\s*$/i.exec(decodeHtmlEntities(rest).replace(/^(?:at\s+)?[\d:]+\s*[ap]\.m\.\s*\w*,?\s*/i, ""));
+    out.push({ date, evidentiary: /evidentiary/i.test(kind), location: loc ? loc[1].trim() || null : null });
+  }
+  // Multi-day form without weekdays, e.g. "Public Input Meetings on the
+  // Application will be held October 20-22, 2026, in Brookings, Milbank and
+  // Clear Lake, South Dakota." (EL26-026): dated at the first day.
+  for (const m of html.matchAll(PAGE_HEARING_RANGE_RE)) {
+    const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase());
+    if (month < 0) continue;
+    out.push({ date: new Date(Number(m[4]), month, Number(m[2])), evidentiary: false, location: decodeHtmlEntities(m[5]).replace(/\.$/, "") || null });
+  }
+  return out;
+}
+
+function classifySdReviewStep(entries: OrderEntry[], pageHearings: PageHearing[], now: number) {
+  const events: DocketEvent[] = entries.filter((e) => e.date).map((e) => ({ date: e.date, text: e.text }));
+  // An evidentiary hearing whose date has passed has been held even before a
+  // transcript or briefing order is posted.
+  const held = pageHearings.filter((h) => h.evidentiary && h.date.getTime() < now).sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (held.length > 0) events.push({ date: held[held.length - 1].date, text: "hearing transcript" });
+  // A hearing or public input meeting still ahead on the page means "Hearing scheduled".
+  const ahead = pageHearings.filter((h) => h.date.getTime() > now);
+  if (ahead.length > 0) events.push({ date: new Date(now), text: "Notice of evidentiary hearing" });
+  return classifyReviewStep(events, SD_STEP_SIGNALS);
 }
 
 type Resolution = "granted" | "denied" | "withdrawn" | null;
@@ -475,7 +562,7 @@ async function normalizeCandidate(
   upcomingAgendaHearings: Map<string, UpcomingAgendaHearing[]>,
 ): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
-  const orderEntries = await fetchOrderEntries(listing.year, listing.docketNumber);
+  const { entries: orderEntries, html: docketHtml } = await fetchDocketPage(listing.year, listing.docketNumber);
   const { stage: currentStage, resolutionDate } = resolveStageAndDate(orderEntries);
 
   const matchKey = resolveMatchKey("sd-puc", listing.docketNumber);
@@ -485,7 +572,18 @@ async function normalizeCandidate(
   const counties = extractCounties(listing.rawTitle);
   const applicant = extractApplicant(listing.rawTitleHtml);
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
-  const hearings = upcomingAgendaHearings.get(listing.docketNumber) ?? [];
+  const now = Date.now();
+  const docketUrl = `${BASE_URL}/${listing.year}/${listing.docketNumber}.aspx`;
+  const pageHearings = parsePageHearings(docketHtml, Number(listing.year));
+  const hearings: (UpcomingAgendaHearing & { label: string | null })[] = (upcomingAgendaHearings.get(listing.docketNumber) ?? []).map((h) => ({ ...h, label: null }));
+  for (const h of pageHearings) {
+    if (h.date.getTime() > now && !hearings.some((x) => x.date.getTime() === h.date.getTime())) {
+      hearings.push({ date: h.date, link: docketUrl, location: h.location, label: h.evidentiary ? "Evidentiary hearing" : "Public input meeting" });
+    }
+  }
+  hearings.sort((a, b) => a.date.getTime() - b.date.getTime());
+  // A resolved docket gets null; a pending one is classified from its orders.
+  const review = currentStage === "local_review" ? classifySdReviewStep(orderEntries, pageHearings, now) : null;
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the South Dakota Public Utilities Commission's public docket pages, scoped to Energy Conversion and Transmission Facility permit applications (SDCL 49-41B) filed in the Electric docket series — see the ingestion module header for the real caption phrasings this is scoped to.",
@@ -523,8 +621,10 @@ async function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility permit from the South Dakota Public Utilities Commission, pursuant to SDCL 49-41B — Docket No. ${listing.docketNumber}, "${listing.rawTitle.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     hearingDetailsLink: hearings.length > 0 ? hearings[0].link : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    hearings: hearings.map((h): NormalizedHearing => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `SD PUC Docket No. ${listing.docketNumber}`,

@@ -140,11 +140,28 @@
 // src/app/api/cron/ingest-ny-dps/route.ts) — a real run's timing was
 // measured (130.6s with MAX_CANDIDATES=60, see above) before scheduling
 // this. Also politeness-delayed between per-candidate detail requests.
+//
+// PROCEDURAL STEP AND HEARINGS (added 2026-09-21): DMM has no structured
+// hearing-date field, so both are read from what it does publish.
+//   - Step: the PublicDocuments list already fetched per candidate (Doctype,
+//     DocTitle, DateFiled) feeds the shared classifier in reviewStep.ts, with
+//     NY-specific signals (see NY_STEP_SIGNALS). Article VIII permits are
+//     issued by ORES and file almost no hearing notices in DMM, so those
+//     mostly stay "Application filed"; Article VII cases carry the signal.
+//   - Past hearings: a Transcripts document titled for a public statement or
+//     evidentiary hearing carries the hearing's date in its title (e.g.
+//     "25-T-0241_Public Statement Hearing_Wednesday, December 3, 2025_5PM_Webex").
+//   - Upcoming hearings: dps.ny.gov/calendar (Drupal HTML, no auth) lists
+//     upcoming events; each hearing event page names its case number, which is
+//     matched to a candidate. If the calendar cannot be read, hearings are left
+//     undefined for the run, so a transient failure never clears hearings a
+//     prior run stored.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedHearing } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://documents.dps.ny.gov/public";
 
@@ -277,6 +294,193 @@ interface DocketDetail {
   // not `FiledDate`, is the real field to read) — the actual date DPS issued
   // the grant/denial. Null whenever resolution is null.
   resolutionDate: Date | null;
+  // Every filed document, for the procedural step (see classifyNyReviewStep).
+  docs: StepDoc[];
+  // Hearings that already happened, dated from transcript titles.
+  pastHearings: NormalizedHearing[];
+}
+
+interface StepDoc {
+  doctype: string;
+  title: string;
+  date: Date | null;
+}
+
+// Step signals for NY, run against "<Doctype>: <title>". Confirmed against real
+// dockets 25-T-0241 and 25-T-0245:
+//   - hearingSet: a Notice or Press Release that names a hearing ("Notice
+//     Soliciting Comments and Announcing Virtual Public Statement Hearing").
+//   - hearingHeld: only an evidentiary hearing transcript. A public statement
+//     hearing is held early and leaves the decision far off, so its transcript
+//     is not treated as the hearing being over.
+//   - decisionNext: a Joint Proposal (Doctype "Joint Proposals and Stipulations"
+//     or its public comment notice) or a Recommended Decision.
+//   - hearingOff: the shared default minus "continued", which here just means
+//     the hearing session goes on.
+//   - closed: resolution is decided by GRANT_RE/DENY_RE, so the default is off.
+const NY_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^(?:notices|press releases):.*\bhearing\b|\bnotice\b.*\b(?:public statement|evidentiary) hearing\b/i,
+  hearingOff: /\b(?:cancel+(?:ed|ing|ation)|vacat(?:ed|ing)|postpone(?:d|ment)|reschedul\w+)\b.{0,30}hearing|\bhearing\b.{0,30}\b(?:cancel+ed|vacated|postponed)/i,
+  hearingHeld: /^transcripts:.*\bevidentiary hearing\b/i,
+  decisionNext: /^joint proposals and stipulations:|\brecommended decision\b|\bjoint proposal\b.*\bopportunity for public comment\b/i,
+  closed: /(?!)/,
+};
+
+// A hearing notice this old with no upcoming calendar entry has already been
+// held (DMM notices rarely carry the date), so it no longer means "scheduled".
+const STALE_NOTICE_DAYS = 90;
+
+function classifyNyReviewStep(docs: StepDoc[], hasUpcomingHearing: boolean) {
+  const publicStatementTimes = docs
+    .filter((d) => /^transcripts?$/i.test(d.doctype.trim()) && /\bpublic statement hearing\b/i.test(d.title))
+    .map((d) => d.date?.getTime() ?? 0);
+  const lastPublicStatement = publicStatementTimes.length ? Math.max(...publicStatementTimes) : 0;
+  const staleBefore = Date.now() - STALE_NOTICE_DAYS * 24 * 60 * 60 * 1000;
+  const events: DocketEvent[] = docs
+    .map((d) => ({ date: d.date, text: `${d.doctype}: ${d.title}` }))
+    // Drop hearing notices that a later transcript shows were held, or that are
+    // too old to still be pending (unless the calendar says one is coming).
+    .filter((e) => {
+      if (!NY_STEP_SIGNALS.hearingSet.test(e.text)) return true;
+      const t = e.date?.getTime() ?? 0;
+      if (t <= lastPublicStatement) return false;
+      return hasUpcomingHearing || t >= staleBefore;
+    });
+  const result = classifyReviewStep(events, NY_STEP_SIGNALS);
+  // The calendar is the authority on what is still to come.
+  if (hasUpcomingHearing && result && result.step !== "Hearing scheduled") {
+    return { step: "Hearing scheduled" as const, at: result.at };
+  }
+  return result;
+}
+
+const HEARING_TRANSCRIPT_RE = /\b(public statement|evidentiary) hearing\b/i;
+const LONG_DATE_RE = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/i;
+const TITLE_TIME_RE = /\b(\d{1,2})(?::(\d{2}))?\s*([AP])M\b/i;
+const MONTH_NUMBERS: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
+
+// Times are Eastern. This runs on UTC hosts, so the offset comes from the zone.
+function easternDate(y: number, mo: number, d: number, h: number, mi: number): Date {
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date(guess));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asIfUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+  return new Date(guess - (asIfUtc - guess));
+}
+
+// Past hearing from a transcript title. Null unless the title names a hearing
+// and a full date; the time of day is used when the title has one ("5PM"),
+// else noon.
+function parseTranscriptHearing(doc: StepDoc): NormalizedHearing | null {
+  if (!/^transcripts?$/i.test(doc.doctype.trim())) return null;
+  const kind = HEARING_TRANSCRIPT_RE.exec(doc.title);
+  const dm = LONG_DATE_RE.exec(doc.title);
+  if (!kind || !dm) return null;
+  const tm = TITLE_TIME_RE.exec(doc.title.slice(dm.index + dm[0].length));
+  let hour = 12;
+  let minute = 0;
+  if (tm) {
+    hour = (Number(tm[1]) % 12) + (tm[3].toUpperCase() === "P" ? 12 : 0);
+    minute = tm[2] ? Number(tm[2]) : 0;
+  }
+  return {
+    date: easternDate(Number(dm[3]), MONTH_NUMBERS[dm[1].toLowerCase()], Number(dm[2]), hour, minute),
+    endDate: null,
+    label: kind[1].toLowerCase() === "evidentiary" ? "Evidentiary hearing" : "Public statement hearing",
+    location: null,
+  };
+}
+
+// --- Upcoming hearings (dps.ny.gov/calendar) ---
+
+const CALENDAR_URL = "https://dps.ny.gov/calendar";
+const CALENDAR_MAX_PAGES = 10;
+const CASE_NUMBER_RE = /\b\d{2}-[A-Z]-\d{4}\b|\b\d{2}-\d{5}\b/g;
+
+interface CalendarHearing {
+  caseNumbers: string[];
+  hearing: NormalizedHearing;
+}
+
+async function fetchCalendarText(url: string): Promise<string> {
+  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; WaitingForPower/1.0)" } });
+  if (!res.ok) throw new Error(`NY DPS calendar request failed (${res.status}): ${url}`);
+  return res.text();
+}
+
+// Event page: "<div>Sep 24, 2026</div>" under month-day-year, then
+// start_date "1:00" and meridiem "PM ET", the notice body naming "CASE
+// 26-E-0284". Confirmed live 2026-09-21 on the Tracy Solar hearing event.
+function parseCalendarEvent(html: string): CalendarHearing | null {
+  const title = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+  const date = /month-day-year">\s*<div>\s*([A-Za-z]+ \d{1,2}, \d{4})\s*<\/div>/.exec(html);
+  const time = /class="start_date">\s*(\d{1,2}):(\d{2})\s*<\/div>\s*<div class="meridiem">\s*([AP])M/i.exec(html);
+  if (!title || !date) return null;
+  const dm = LONG_DATE_RE.exec(date[1]);
+  if (!dm) return null;
+  let hour = 12;
+  let minute = 0;
+  if (time) {
+    hour = (Number(time[1]) % 12) + (time[3].toUpperCase() === "P" ? 12 : 0);
+    minute = Number(time[2]);
+  }
+  const venue = /venue-name">\s*<div>([\s\S]*?)<\/div>/.exec(html);
+  const caseNumbers = [...new Set((stripTags(html).match(CASE_NUMBER_RE) ?? []).map((c) => c.toUpperCase()))];
+  const label = /evidentiary/i.test(title[1]) ? "Evidentiary hearing" : "Public statement hearing";
+  return {
+    caseNumbers,
+    hearing: {
+      date: easternDate(Number(dm[3]), MONTH_NUMBERS[dm[1].toLowerCase()], Number(dm[2]), hour, minute),
+      endDate: null,
+      label,
+      location: venue ? stripTags(venue[1]) || null : null,
+    },
+  };
+}
+
+// Returns null (never an empty map) when the calendar cannot be read, so the
+// caller leaves hearings undefined rather than clearing stored ones. Only
+// events with "hearing" in the slug are opened (public statement and
+// evidentiary hearings); comment deadlines, sessions and conferences are not.
+async function fetchCalendarHearings(): Promise<Map<string, NormalizedHearing[]> | null> {
+  try {
+    const slugs = new Set<string>();
+    for (let page = 0; page < CALENDAR_MAX_PAGES; page++) {
+      const html = await fetchCalendarText(`${CALENDAR_URL}?page=${page}`);
+      const found = [...html.matchAll(/href="\/event\/([^"]+)"/g)].map((m) => m[1]);
+      const before = slugs.size;
+      for (const slug of found) slugs.add(slug);
+      if (slugs.size === before) break;
+      await sleep(REQUEST_DELAY_MS);
+    }
+    if (slugs.size === 0) return null;
+    const byCase = new Map<string, NormalizedHearing[]>();
+    for (const slug of slugs) {
+      if (!/hearing/i.test(slug)) continue;
+      const parsed = parseCalendarEvent(await fetchCalendarText(`https://dps.ny.gov/event/${slug}`));
+      await sleep(REQUEST_DELAY_MS);
+      if (!parsed) continue;
+      for (const caseNumber of parsed.caseNumbers) {
+        const list = byCase.get(caseNumber) ?? [];
+        list.push(parsed.hearing);
+        byCase.set(caseNumber, list);
+      }
+    }
+    return byCase;
+  } catch {
+    return null;
+  }
 }
 
 // See module header STATUS. Runs against every filed document's title
@@ -295,7 +499,7 @@ async function fetchDetail(matterId: number): Promise<DocketDetail> {
   const res = await fetch(`${BASE_URL}/CaseMaster/PublicDocuments/${matterId}`);
   if (!res.ok) throw new Error(`NY DPS detail request failed (${res.status}) for matter ${matterId}`);
   const text = await res.text();
-  if (text.trim().length === 0) return { resolution: null, resolutionDate: null };
+  if (text.trim().length === 0) return { resolution: null, resolutionDate: null, docs: [], pastHearings: [] };
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -318,7 +522,8 @@ async function fetchDetail(matterId: number): Promise<DocketDetail> {
   // and Alfred Oaks Solar's real Track 2 grant, DateFiled "09/10/2024",
   // matching that document's own filename date). This module therefore
   // reads `DateFiled`, not `FiledDate`, for the resolution date.
-  const docs = (raw as Record<string, unknown>[]).map((d) => ({
+  const docs: StepDoc[] = (raw as Record<string, unknown>[]).map((d) => ({
+    doctype: String(d.Doctype ?? ""),
     title: normalizeSeparators(stripTags(String(d.DocTitle ?? ""))),
     date: parseMDY(d.DateFiled as string | undefined),
   }));
@@ -337,7 +542,11 @@ async function fetchDetail(matterId: number): Promise<DocketDetail> {
       break;
     }
   }
-  return { resolution, resolutionDate };
+  const pastHearings = docs
+    .map(parseTranscriptHearing)
+    .filter((h): h is NormalizedHearing => h !== null)
+    .filter((h, i, all) => all.findIndex((o) => o.date.getTime() === h.date.getTime() && o.label === h.label) === i);
+  return { resolution, resolutionDate, docs, pastHearings };
 }
 
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
@@ -408,7 +617,12 @@ function extractCounties(title: string): string | null {
   return names.join(", ");
 }
 
-function normalizeMatter(search: MatterSearchResult, detail: DocketDetail, track: "article7" | "article8"): NormalizedProject {
+function normalizeMatter(
+  search: MatterSearchResult,
+  detail: DocketDetail,
+  track: "article7" | "article8",
+  calendar: Map<string, NormalizedHearing[]> | null,
+): NormalizedProject {
   const matchKey = resolveMatchKey("ny-dps", search.caseOrMatterNumber);
   const projectType = inferProjectType(search.matterTitle);
   const fuelType = inferFuelType(search.matterTitle, projectType);
@@ -420,6 +634,11 @@ function normalizeMatter(search: MatterSearchResult, detail: DocketDetail, track
   if (detail.resolution === "granted") currentStage = "approved_awaiting_construction";
   else if (detail.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  const upcoming = calendar ? (calendar.get(search.caseOrMatterNumber.toUpperCase()) ?? []).filter((h) => h.date.getTime() >= Date.now()) : null;
+  const review = detail.resolution ? null : classifyNyReviewStep(detail.docs, (upcoming?.length ?? 0) > 0);
+  // Undefined when the calendar could not be read, so stored hearings survive.
+  const hearings = upcoming ? [...detail.pastHearings, ...upcoming] : undefined;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -464,6 +683,9 @@ function normalizeMatter(search: MatterSearchResult, detail: DocketDetail, track
     // `DateFiled` — undefined (not null) for a still-active docket.
     resolutionDate: detail.resolutionDate ?? undefined,
     resolutionDateConfidence: detail.resolutionDate ? "exact" : undefined,
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
+    hearings,
     causeSlugs,
     causeDetail: `Waiting on a determination from the New York Department of Public Service under ${trackLabel} — Case No. ${search.caseOrMatterNumber}, "${search.matterTitle}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -523,13 +745,15 @@ export async function ingestNyDpsDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(realApplications.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  const calendar = await fetchCalendarHearings();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
   for (const candidate of realApplications) {
     try {
       const detail = await fetchDetail(candidate.search.matterId);
-      const normalized = normalizeMatter(candidate.search, detail, candidate.track);
+      const normalized = normalizeMatter(candidate.search, detail, candidate.track, calendar);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

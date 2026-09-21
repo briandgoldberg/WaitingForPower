@@ -118,6 +118,7 @@ import type { FuelType, ProjectStage } from "@/lib/data/taxonomies";
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedMilestone } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://www.dora.state.co.us/pls/efi";
 const SEARCH_URL = `${BASE_URL}/EFI_SEARCH_UI.getProceedingResults`;
@@ -187,24 +188,36 @@ function parseIcsDate(dateStr: string): Date | null {
 // and the real, confirmed-live 0-of-22 current population. Every real
 // future hearing found is kept per docket (not just the earliest) — a
 // docket can genuinely have more than one on the books at once.
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
+async function fetchHearingCalendar(): Promise<{ upcoming: Map<string, UpcomingHearing[]>; held: Map<string, Date[]> }> {
   const res = await fetch(HEARING_CALENDAR_ICS_URL);
   if (!res.ok) throw new Error(`CO PUC hearing calendar ICS request failed (${res.status})`);
   const ics = await res.text();
   const now = Date.now();
-  const map = new Map<string, UpcomingHearing[]>();
+  const upcoming = new Map<string, UpcomingHearing[]>();
+  // Past "HRG" (evidentiary hearing) events, for the procedural step only.
+  // "V & R" entries are excluded: their DTSTART is the reset date, so a past
+  // one does not prove a hearing took place.
+  const held = new Map<string, Date[]>();
   for (const { dateStr, summary, location } of parseIcsEvents(ics)) {
     if (/vacated/i.test(summary)) continue;
     const date = parseIcsDate(dateStr);
-    if (!date || date.getTime() <= now) continue;
+    if (!date) continue;
+    const isPast = date.getTime() <= now;
+    if (isPast && (!/\bHRG\b/.test(summary) || /\bV\s*&\s*R\b/i.test(summary))) continue;
     for (const docketMatch of summary.matchAll(DOCKET_NUMBER_IN_SUMMARY_RE)) {
       const docketNo = docketMatch[0];
-      const arr = map.get(docketNo) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
-      map.set(docketNo, arr);
+      if (isPast) {
+        const arr = held.get(docketNo) ?? [];
+        arr.push(date);
+        held.set(docketNo, arr);
+      } else {
+        const arr = upcoming.get(docketNo) ?? [];
+        if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
+        upcoming.set(docketNo, arr);
+      }
     }
   }
-  return map;
+  return { upcoming, held };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -340,18 +353,72 @@ const DECISION_ROW_RE =
   /<a href=" ?EFI_Search_UI\.Show_Decision\?[^"]*"[^>]*class="clsTableText">([\s\S]*?)<\/a><\/td>\s*<td[^>]*>\s*(\w{3} \d{1,2}\/\d{1,2}\/\d{4})/g;
 const INTERIM_DECISION_RE = /\binterim\b/i;
 
-function extractResolutionDate(html: string): Date | null {
-  let latest: Date | null = null;
+interface DocketDecision {
+  title: string;
+  date: Date;
+}
+
+function parseDecisions(html: string): DocketDecision[] {
+  const out: DocketDecision[] = [];
   for (const m of html.matchAll(DECISION_ROW_RE)) {
-    const title = decodeHtmlEntities(m[1]);
-    if (INTERIM_DECISION_RE.test(title)) continue;
     // Strip the weekday prefix ("Tue 09/16/2025" -> "09/16/2025") the same
     // way parseDocuments' own submitted-date parsing already does — see
     // buildMilestones's `d.submitted = m[2].replace(/^\w{3} /, "")` below.
     const date = parseUsDate(m[2].replace(/^\w{3} /, ""));
-    if (date && (latest === null || date > latest)) latest = date;
+    if (date) out.push({ title: decodeHtmlEntities(m[1]), date });
+  }
+  return out;
+}
+
+function extractResolutionDate(decisions: DocketDecision[]): Date | null {
+  let latest: Date | null = null;
+  for (const d of decisions) {
+    if (INTERIM_DECISION_RE.test(d.title)) continue;
+    if (latest === null || d.date > latest) latest = d.date;
   }
   return latest;
+}
+
+// PROCEDURAL STEP (added 2026-09-21): the Decisions table just parsed (same
+// Show_Docket page, no extra request) is what says where a docket stands.
+// Confirmed live 2026-09-21 against all 17 CPCN dockets from the last 5 years:
+//   - Interim decisions ("-I" suffix) carry the scheduling: "Interim Decision
+//     ... Scheduling Hearing", "... Scheduling Evidentiary Hearing", "Setting
+//     Matter For Hearing" (hearingSet); "Interim Decision Vacating Hearing and
+//     Deadlines", "... Vacating Remote Evidentiary Hearing" (hearingOff). A
+//     "Vacating Remote Prehearing Conference" is not a hearing, and
+//     "Prehearing" does not match \bhearing\b.
+//   - A non-interim decision that grants, approves, denies or dismisses the
+//     application or its settlement is the closing order (closed). A
+//     non-interim decision that only grants a motion ("C25-0659 Commission
+//     Decision Granting Motion and Waiver of Response Time") is not.
+//   - Real gotcha worth knowing: Colorado leaves a docket "Active" after the
+//     ALJ's Recommended Decision grants the application (it becomes final if no
+//     exceptions come in), so 15 of the 17 dockets read "Active" with a
+//     granting decision on file. They get no step (null) here, since a closing
+//     order exists, even though STATUS MAPPING still stages them
+//     "local_review". Only 26A-0243E (interim decision scheduling a hearing,
+//     filed 2026-08-31) is a genuinely open case.
+// A hearing that already happened is read from the hearing calendar (past
+// "HRG" events that were not vacated or reset), since the filing list has no
+// transcripts or hearing notices.
+const CO_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^interim: .*\b(?:scheduling|setting)\b[^,;]{0,60}\bhearing\b|^hearing scheduled/i,
+  hearingOff: /^interim: .*\bvacating\b[^,;]{0,40}\bhearing\b/i,
+  hearingHeld: /^hearing held/i,
+  decisionNext: /(?!)/,
+  closed: /^decision: .*\b(?:granting|approving|denying|dismissing)\b.{0,150}\b(?:application|settlement)\b/i,
+};
+
+function buildStepEvents(filed: Date | null, decisions: DocketDecision[], heldHearings: Date[], upcoming: UpcomingHearing[]): DocketEvent[] {
+  const events: DocketEvent[] = [{ date: filed, text: "Application filed" }];
+  for (const d of decisions) {
+    const kind = INTERIM_DECISION_RE.test(d.title) || /-I\b/.test(d.title) ? "Interim" : "Decision";
+    events.push({ date: d.date, text: `${kind}: ${d.title}` });
+  }
+  for (const d of heldHearings) events.push({ date: d, text: "Hearing held" });
+  for (const h of upcoming) events.push({ date: h.date, text: "Hearing scheduled" });
+  return events;
 }
 
 function parseUsDate(raw: string): Date | null {
@@ -427,13 +494,21 @@ function buildMilestones(docs: DocketDocument[]): NormalizedMilestone[] {
 function normalizeDocket(
   search: DocketSearchResult,
   docs: DocketDocument[],
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  calendar: { upcoming: Map<string, UpcomingHearing[]>; held: Map<string, Date[]> } | null,
+  decisions: DocketDecision[],
   resolutionDateFound: Date | null,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("co-puc", search.docketId);
-  const hearings = upcomingHearings.get(search.docketId) ?? [];
+  const hearings = calendar?.upcoming.get(search.docketId) ?? [];
   const currentStage = stageForStatus(search.status);
   const filedDate = parseUsDate(search.date);
+  // See PROCEDURAL STEP above CO_STEP_SIGNALS. Undefined (keep stored value)
+  // when the hearing calendar could not be read, since a held hearing would
+  // be invisible.
+  const review =
+    currentStage === "local_review" && calendar
+      ? classifyReviewStep(buildStepEvents(filedDate, decisions, calendar.held.get(search.docketId) ?? [], hearings), CO_STEP_SIGNALS)
+      : null;
   const capacityMw = extractCapacityMw(search.title);
   const projectType = inferProjectType(search.title);
   const fuelType = inferFuelType(search.title, projectType);
@@ -485,8 +560,11 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Colorado Public Utilities Commission — Docket No. ${search.docketId}, "${search.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    ...(calendar || currentStage !== "local_review"
+      ? { reviewStep: review ? review.step : null, reviewStepAt: review ? review.at : null }
+      : {}),
     hearingDetailsLink: hearings.length > 0 ? `${DETAIL_URL}?p_docket_id=${encodeURIComponent(search.docketId)}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    hearings: calendar ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
     sources: [
       {
         label: `Colorado PUC Docket No. ${search.docketId}`,
@@ -516,7 +594,7 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   // A failure here shouldn't block the whole ingestion run over a feature
   // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
+  const calendar = await fetchHearingCalendar().catch(() => null);
 
   for (const candidate of candidates) {
     try {
@@ -532,8 +610,9 @@ export async function ingestCoPucDockets(maxCandidates = MAX_CANDIDATES): Promis
       // revisit.
       const html = await fetchDetail(candidate.docketId);
       const docs = stageForStatus(candidate.status) === "local_review" ? parseDocuments(html) : [];
-      const resolutionDateFound = extractResolutionDate(html);
-      const normalized = normalizeDocket(candidate, docs, upcomingHearings, resolutionDateFound);
+      const decisions = parseDecisions(html);
+      const resolutionDateFound = extractResolutionDate(decisions);
+      const normalized = normalizeDocket(candidate, docs, calendar, decisions, resolutionDateFound);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

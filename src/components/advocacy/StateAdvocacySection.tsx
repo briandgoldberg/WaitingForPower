@@ -4,6 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { STATE_NAMES } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
+import { STATE_COMMENT_RULES, type RecordRule } from "@/lib/data/stateCommentRules";
+
+const RULE_LABEL: Record<RecordRule, string> = {
+  closes_at_hearing: "Comments close at the hearing",
+  open_until_decision: "Comments open until the decision",
+  varies: "Rules vary by case",
+  unknown: "Comment rules not confirmed",
+};
 
 const STATES = Object.entries(STATE_NAMES)
   .filter(([code]) => STATE_REGULATORS[code])
@@ -55,6 +63,18 @@ export function StateAdvocacySection() {
                 </li>
               ))}
             </ul>
+            {STATE_COMMENT_RULES[code] && (
+              <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs flex flex-col gap-1">
+                <span className="font-semibold">{RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]}</span>
+                {STATE_COMMENT_RULES[code].howToComment && <span className="text-[var(--text-secondary)]">{STATE_COMMENT_RULES[code].howToComment}</span>}
+                {STATE_COMMENT_RULES[code].ruleNote && <span className="text-[var(--muted)]">{STATE_COMMENT_RULES[code].ruleNote}</span>}
+                {STATE_COMMENT_RULES[code].commentUrl && (
+                  <a href={STATE_COMMENT_RULES[code].commentUrl} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline w-fit">
+                    How to comment
+                  </a>
+                )}
+              </div>
+            )}
           </section>
         ))}
         {shown.length === 0 && <p className="text-sm text-[var(--muted)]">No state matches that.</p>}

@@ -6,40 +6,54 @@ import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
+import { STATE_COMMENT_RULES } from "@/lib/data/stateCommentRules";
 
 const PAGE_SIZE = 20;
 
-type Phase = "hearing" | "decision" | "waiting";
+type Phase = "comment" | "hearing" | "decision" | "waiting";
 
 const PHASES: { value: Phase | "all"; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "comment", label: "Comments open" },
   { value: "hearing", label: "Hearing coming up" },
   { value: "decision", label: "Decision next" },
   { value: "waiting", label: "Case open" },
 ];
 
-const ADVICE: Record<Phase, string> = {
-  hearing: "You can usually speak at the hearing or send a comment for the record. The docket has the date and how.",
-  decision: "The hearing is over, so the formal comment period has usually closed. You can still write to the commission and your legislators.",
-  waiting: "No hearing is scheduled that we know of. Many commissions accept comments while a case is open. Check the docket.",
-};
-
 const PILL: Record<Phase, string> = {
+  comment: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
   hearing: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
   decision: "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
   waiting: "bg-black/5 text-[var(--text-secondary)] dark:bg-white/10",
 };
 
+function adviceFor(ph: Phase, howToComment: string | null, rule: string | null): string {
+  const how = howToComment ? " " + howToComment : "";
+  if (ph === "comment") return "Send your comment by the deadline." + how;
+  if (ph === "hearing") return "You can usually speak at the hearing or send a comment for the record." + (how || " The docket has the date and how.");
+  if (ph === "decision") {
+    if (rule === "closes_at_hearing") return "The hearing is over and this state closes the record at the hearing, so formal comments are closed. You can still write to the commission and your legislators.";
+    if (rule === "open_until_decision") return "This state accepts public comments until the commission decides." + how;
+    return "The hearing is over, so the formal comment period has usually closed. You can still write to the commission and your legislators.";
+  }
+  if (rule === "closes_at_hearing") return "No hearing is scheduled that we know of. This state closes the record at the hearing, so comment before it is held." + how;
+  return "No hearing is scheduled that we know of. Many commissions accept comments while a case is open." + (how || " Check the docket.");
+}
+
 const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 function phaseOf(p: AdvocacyProject): Phase {
+  if (p.commentDeadline) return "comment";
   if (p.hearings.length > 0 || p.reviewStep === "Hearing scheduled") return "hearing";
   if (p.reviewStep === "Awaiting commission order") return "decision";
   return "waiting";
 }
 
-const ORDER: Record<Phase, number> = { hearing: 0, decision: 1, waiting: 2 };
+const ORDER: Record<Phase, number> = { comment: 0, hearing: 1, decision: 2, waiting: 3 };
+
+// The date that makes a project urgent: the comment deadline or the next hearing, whichever is first.
+const soonestDate = (p: AdvocacyProject): string => [p.commentDeadline, p.hearings[0]?.date].filter(Boolean).sort()[0] ?? "9999";
 
 type Sort = "soonest" | "largest" | "longest";
 
@@ -68,7 +82,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [rows, query, state]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: inScope.length, hearing: 0, decision: 0, waiting: 0 };
+    const c: Record<string, number> = { all: inScope.length, comment: 0, hearing: 0, decision: 0, waiting: 0 };
     for (const r of inScope) c[r.phase]++;
     return c;
   }, [inScope]);
@@ -79,10 +93,10 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
       if (sort === "largest") return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
       if (sort === "longest") return (b.p.yearsWaiting ?? -1) - (a.p.yearsWaiting ?? -1);
       if (a.phase !== b.phase) return ORDER[a.phase] - ORDER[b.phase];
-      if (a.phase === "hearing") {
-        // Dated hearings first, soonest at the top; hearings with no date yet after them.
-        const da = a.p.hearings[0]?.date ?? "9999";
-        const db = b.p.hearings[0]?.date ?? "9999";
+      if (a.phase === "comment" || a.phase === "hearing") {
+        // Dated items first, soonest at the top; a hearing with no date yet goes after them.
+        const da = soonestDate(a.p);
+        const db = soonestDate(b.p);
         if (da !== db) return da.localeCompare(db);
       }
       return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
@@ -164,6 +178,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
           const next = p.hearings[0];
+          const rule = codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
           return (
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
               <div className="flex items-start justify-between gap-3">
@@ -186,8 +201,9 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${PILL[ph]}`}>
-                    {ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
+                    {ph === "comment" && p.commentDeadline ? `Comments due ${fmtDay(p.commentDeadline)}` : ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
                   </span>
+                  {ph === "comment" && next && <span className="text-[var(--muted)]">Hearing {fmtDay(next.date)}</span>}
                   {ph === "hearing" && next?.label && <span className="text-[var(--muted)]">{next.label}</span>}
                   {ph === "hearing" && p.hearings.length > 1 && (
                     <span className="text-[var(--muted)]">+{p.hearings.length - 1} more date{p.hearings.length > 2 ? "s" : ""}</span>
@@ -195,10 +211,15 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
                   {ph === "decision" && p.reviewStepAt && <span className="text-[var(--muted)]">since {fmtDay(p.reviewStepAt)}</span>}
                 </div>
                 {ph === "hearing" && next?.location && <p className="text-xs text-[var(--muted)]">Where: {next.location}</p>}
-                <p className="text-xs text-[var(--text-secondary)]">{ADVICE[ph]}</p>
+                <p className="text-xs text-[var(--text-secondary)]">{adviceFor(ph, rule?.howToComment || null, rule && rule.recordRule !== "unknown" ? rule.recordRule : null)}</p>
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                {rule?.commentUrl && (
+                  <a href={rule.commentUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
+                    How to comment
+                  </a>
+                )}
                 {p.docketUrl && (
                   <a href={p.docketUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
                     Docket

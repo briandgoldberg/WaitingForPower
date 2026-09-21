@@ -227,6 +227,10 @@ model Project {
   // that put it in that step.
   reviewStep       String?
   reviewStepAt     DateTime?
+  // Last day to send a public comment on this project, when the source
+  // publishes one (for example Oregon's timeline "Comment Deadline" rows).
+  // Null means unknown, not "no comment period".
+  commentDeadline  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -234,6 +234,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://tpucdockets.tn.gov";
 const ACTIVE_INDEX_URL = `${BASE_URL}/indexes/TPUCActiveDocketIndex.htm`;
@@ -411,6 +412,33 @@ function resolveDocket(detail: DocketDetail): Resolution {
 // See module header FUEL/PROJECT TYPE & CAPACITY — only the transmission
 // branch is confirmed against a real live Tennessee caption; the rest are
 // kept for statutorily-real-but-currently-unobserved case types.
+// Step signals for TN, run against each filing description. Confirmed live
+// 2026-09-21 against the wording of the whole active index (all docket types,
+// since no electric CCN is open right now) and the closed Plains & Eastern
+// case (1400036, 2014 hearing):
+//   - hearingSet: "Notice Of Hearing", "Amended Notice Of Hearing", "Notice Of
+//     Hearing On Settlement Agreement", "Notice Of Hearing And Deliberations".
+//     "Notice Of Pre-Hearing Conference" is only a scheduling call, so it does
+//     not count; "Order Granting Electronic Participation In Hearing" is not a
+//     notice either.
+//   - hearingOff: "Notice Of Cancellation Of Hearing" (also matches hearingSet,
+//     so the latest of the two decides).
+//   - hearingHeld: "Transcript Of Proceedings ..." posted after the hearing.
+//   - decisionNext: "Post Hearing Brief" (the default regex only takes the
+//     hyphenated spelling, which TN does not use) and proposed orders.
+//   - closed: left at the default ("Order Granting CCN", "Order Granting
+//     Cancellation ..."); the docket's own Closed status decides the stage.
+const TN_STEP_SIGNALS: StepSignals = {
+  hearingSet: /^(?:amended )?notice of (?:[\w-]+ ){0,2}hearing\b/i,
+  hearingHeld: /\btranscript of proceedings\b/i,
+  decisionNext: /\bpost[- ]?hearing (?:brief|memorand)|\bproposed (?:order|findings)|\breply brief|\binitial brief/i,
+};
+
+function classifyTnReviewStep(detail: DocketDetail) {
+  const events: DocketEvent[] = detail.filings.map((f) => ({ date: f.date, text: f.description }));
+  return classifyReviewStep(events, TN_STEP_SIGNALS);
+}
+
 const WIND_RE = /\bwind\b/i;
 const SOLAR_RE = /\bsolar\b|photovoltaic/i;
 const STORAGE_RE = /\bbattery\b|\bbess\b|energy\s+storage/i;
@@ -548,6 +576,11 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
   // not the date this ingestion run executed.
   const resolutionDate = resolution ? detail.filings[0]?.date ?? null : null;
 
+  // A resolved docket gets null. TPUC posts no hearing date as data (only the
+  // "Notice Of Hearing" filing, whose date is the filing date), so hearings
+  // are left undefined and the stored value is kept.
+  const review = currentStage === "local_review" ? classifyTnReviewStep(detail) : null;
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -585,6 +618,8 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
     ...(RESOLVED_STAGES.includes(currentStage) && resolutionDate
       ? { resolutionDate, resolutionDateConfidence: "exact" as const }
       : {}),
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Tennessee Public Utility Commission — Docket No. ${detail.docketNumber}, "${detail.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

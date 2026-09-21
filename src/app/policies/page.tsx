@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
 };
 
-const TABS: AdvocacyTab[] = ["national", "state", "project"];
+const TABS: AdvocacyTab[] = ["project", "state", "national"];
 
 export default async function PoliciesPage({
   searchParams,
@@ -26,7 +26,7 @@ export default async function PoliciesPage({
 }) {
   const { tab } = await searchParams;
   // The old Public Hearings tab was folded into Projects.
-  const defaultTab = TABS.find((t) => t === tab) ?? (tab === "hearings" ? "project" : "national");
+  const defaultTab = TABS.find((t) => t === tab) ?? "project";
   const advocacyProjects = await getAdvocacyProjects();
 
   return (

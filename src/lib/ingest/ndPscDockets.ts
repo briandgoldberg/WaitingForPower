@@ -144,6 +144,20 @@
 // feature needs, the same kind of simplification several sibling states'
 // own hearing-calendar code already makes.
 //
+// PROCEDURAL STEP (added 2026-09-21): the docket-entry list already fetched per
+// candidate carries a Type, a description and a Date Filed for every entry, so
+// it feeds the shared classifier in reviewStep.ts (see ND_STEP_SIGNALS and
+// classifyNdReviewStep), with no extra request. Only cases still at
+// "local_review" get a step; a resolved case gets null. Confirmed live
+// 2026-09-21 against the 2025 and 2026 siting cases: a formal, technical or
+// consolidated hearing shows up as an "Audio" entry ("Electronic Recording of
+// 20 August 2026 Formal Hearing") or a "Hearing Transcript" entry, and a
+// "Proposed Findings of Fact, Conclusions of Law and Order" follows it.
+// Hearing dates: the calendar above is the only dated source, and it is also
+// the authority on whether a hearing is still to come. If it cannot be read,
+// hearings and the step are left undefined for the run so stored values
+// survive.
+//
 // Wired to Vercel Cron weekly (see vercel.json and
 // src/app/api/cron/ingest-nd-psc/route.ts — left for the maintainer to
 // finalize the schedule and route).
@@ -154,6 +168,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://apps.psc.nd.gov/cases";
 const USER_AGENT = "Mozilla/5.0 (compatible; WaitingForPowerBot/1.0)";
@@ -287,6 +302,9 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
   const res = await fetch(MEETINGS_URL, { headers: { "User-Agent": USER_AGENT, Accept: "text/html" } });
   if (!res.ok) throw new Error(`ND PSC meeting notices request failed (${res.status})`);
   const html = await res.text();
+  if (!html.includes("meetings-boxes")) {
+    throw new Error("ND PSC meeting notices page had no meeting blocks — the page structure likely changed. Check MEETING_BLOCK_RE in src/lib/ingest/ndPscDockets.ts.");
+  }
 
   const map = new Map<string, UpcomingHearing[]>();
   const now = Date.now();
@@ -368,14 +386,58 @@ const TRANSFER_RE = /\btransfer\b/i;
 interface DocketEntry {
   getId3: string;
   type: string;
+  description: string;
+  date: Date | null;
 }
 
 // Confirmed live 2026-08-25 against real pscasedetail docket-entry rows.
+// Also reads the description and the trailing "Date Filed" cell (YYYY.MM.DD)
+// after the page-count/On Behalf Of/Filed By cells — confirmed live 2026-09-21.
 const DOCKET_ENTRY_RE =
-  /<a href="psdocketdetail\?getId=\d+&getId2=\d+&getId3=(\d+)"[^>]*>[^<]*<\/a>\s*<br \/><strong><small>([^<]*)<\/small><\/strong>/g;
+  /<a href="psdocketdetail\?getId=\d+&getId2=\d+&getId3=(\d+)"[^>]*>([^<]*)<\/a>\s*<br \/><strong><small>([^<]*)<\/small><\/strong>[\s\S]*?<td>[^<]*<\/td>\s*<td>[^<]*<\/td>\s*<td>(\d{4})\.(\d\d)\.(\d\d)<\/td>/g;
 
 function parseDocketEntries(html: string): DocketEntry[] {
-  return [...html.matchAll(DOCKET_ENTRY_RE)].map((m) => ({ getId3: m[1], type: m[2].trim() }));
+  return [...html.matchAll(DOCKET_ENTRY_RE)].map((m) => ({
+    getId3: m[1],
+    type: m[3].trim(),
+    description: decodeHtmlEntities(m[2]),
+    date: new Date(Number(m[4]), Number(m[5]) - 1, Number(m[6])),
+  }));
+}
+
+// Step signals for ND, run against "<Type>: <description>". Confirmed against
+// real 2025-2026 siting dockets:
+//   - hearingSet: a Notice that names a hearing ("Notice of Filing and Notice
+//     of Public Hearing", "Notice of Technical Hearings"). "Notice of
+//     Opportunity for Hearing" only invites a request, so it is not one.
+//   - hearingHeld: the recording ("Audio") or transcript of a formal,
+//     technical, consolidated or evidentiary hearing. A public-comment hearing
+//     recording alone does not count, since it can come before the technical
+//     hearing.
+//   - decisionNext: proposed or ALJ-recommended findings of fact, or briefs.
+//   - hearingOff: cancelled/vacated/postponed only; "rescheduled" would also
+//     match the notice that sets the new date.
+//   - closed: an Order entry that is the final order ("Findings of Fact,
+//     Conclusions of Law and Order", "Order", "Amended Order", "Order
+//     Adopting ..."). The stage comes from the order PDF, which was seen
+//     (PU-22-034, PU-22-141, PU-25-305) leaving a case at "local_review" after
+//     such an order, so the step must not call it "Awaiting commission order".
+const ND_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /^notice:(?!.*opportunity for).*\bhearings?\b/i,
+  hearingOff: /\b(?:cancel+(?:ed|ing|ation)|vacat(?:ed|ing)|postpone(?:d|ment))\b.{0,30}hearing|\bhearing\b.{0,30}\b(?:cancel+ed|vacated|postponed)/i,
+  hearingHeld: /^audio:.*\b(?:formal|technical|consolidated|evidentiary|informal) hearing\b|\bhearing transcript\b/i,
+  decisionNext: /\b(?:proposed|recommended) findings of fact\b|\b(?:post-?hearing|reply|initial) briefs?\b/i,
+  closed: /^order:\s*(?:order|amended order|findings of fact, conclusions of law and order|order adopting\b.*)\s*$/i,
+};
+
+function classifyNdReviewStep(entries: DocketEntry[], hasUpcomingHearing: boolean) {
+  const events: DocketEvent[] = entries.map((e) => ({ date: e.date, text: `${e.type}: ${e.description}` }));
+  const result = classifyReviewStep(events, ND_STEP_SIGNALS);
+  // The meeting calendar is the authority on what is still to come.
+  if (hasUpcomingHearing && result && result.step !== "Hearing scheduled") {
+    return { step: "Hearing scheduled" as const, at: result.at };
+  }
+  return result;
 }
 
 const PDF_LINK_RE = /href="(https:\/\/www\.psc\.nd\.gov\/webdocs\/[^"\s]+\.pdf)/i;
@@ -508,7 +570,7 @@ function extractCapacity(text: string): { value: number | null; unit: string | n
 
 async function normalizeCandidate(
   listing: CaseListing,
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  upcomingHearings: Map<string, UpcomingHearing[]> | null,
 ): Promise<NormalizedProject> {
   await sleep(REQUEST_DELAY_MS);
   const detailHtml = await getPage(`pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}`);
@@ -516,7 +578,10 @@ async function normalizeCandidate(
   const { stage: currentStage, orderDate } = await resolveStageFromOrders(listing.getId, listing.getId2, entries);
 
   const matchKey = resolveMatchKey("nd-psc", listing.caseNumber);
-  const hearings = upcomingHearings.get(listing.caseNumber) ?? [];
+  const hearings = upcomingHearings?.get(listing.caseNumber) ?? [];
+  // Resolved cases get null; if the calendar could not be read the step of a
+  // pending case is left undefined so a stored one survives (see PROCEDURAL STEP).
+  const review = currentStage === "local_review" && upcomingHearings ? classifyNdReviewStep(entries, hearings.length > 0) : null;
   const projectType = inferProjectType(listing.category, listing.description);
   const fuelType = inferFuelType(listing.category, listing.description, projectType);
   const { value: capacityValue, unit: capacityUnit } = extractCapacity(listing.description);
@@ -577,8 +642,12 @@ async function normalizeCandidate(
     causeSlugs,
     causeDetail: `Waiting on an Energy Conversion/Transmission Facility siting permit from the North Dakota Public Service Commission, pursuant to N.D.C.C. Ch. 49-22 — Case No. ${listing.caseNumber}, "${listing.description.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    ...(upcomingHearings || currentStage !== "local_review"
+      ? { reviewStep: review ? review.step : null, reviewStepAt: review ? review.at : null }
+      : {}),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    // Undefined when the calendar could not be read, so stored hearings survive.
+    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
     sources: [
       {
         label: `ND PSC Case No. ${listing.caseNumber}`,
@@ -628,8 +697,9 @@ export async function ingestNdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
 
   // A failure here shouldn't block the whole ingestion run over a feature
-  // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing[]>());
+  // this supplementary — degrades to "no hearing data this run" (null, not an
+  // empty map, so hearings stored by an earlier run are kept).
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => null);
 
   const toUpsert: NormalizedProject[] = [];
   for (const listing of selected) {

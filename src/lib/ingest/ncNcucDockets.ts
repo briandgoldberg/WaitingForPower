@@ -223,6 +223,25 @@
 // is deliberately excluded by bounding the parse to end where that second
 // heading begins.
 //
+// PROCEDURAL STEP (added 2026-09-21): the docket search and the Orders
+// search return no dated filing list to classify (the Orders search gives
+// titles only, and starw1.ncuc.gov is behind the Cloudflare challenge
+// described above), so the step comes from the same public hearings page as
+// HEARING CALENDAR, confirmed live 2026-09-21:
+//   - Its second table, "Proceedings Awaiting Decision", lists dockets whose
+//     hearing is over and that wait on a Commission order (no dates). A
+//     docket on it with no granting/denying order is "Awaiting commission
+//     order". It is hand-maintained and never pruned (it still lists granted
+//     dockets such as EMP-114 Sub 0), which is harmless here because a
+//     resolved docket gets no step at all.
+//   - A docket with a hearing on the schedule table above it is "Hearing
+//     scheduled" (an upcoming hearing wins over the awaiting-decision list).
+//   - Any other pending docket is "Application filed". This is the weakest
+//     of the three: the source cannot show a hearing that was held and left
+//     off the awaiting-decision list.
+// If the hearings page cannot be read, the step and hearings are left
+// undefined for the run, so a transient failure never clears stored values.
+//
 // NOT WIRED TO CRON YET, same as the other per-state modules. Also
 // politeness-delayed between per-candidate Orders requests.
 
@@ -336,7 +355,13 @@ function extractHearingRowLocation(row: string): string | null {
 // real upcoming hearing found is kept (not just the earliest) — a docket
 // can genuinely have more than one on the books at once (e.g. a Public
 // Witness Hearing and a separate Expert Witness Hearing, see module header).
-async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHearing[]>> {
+interface HearingsPage {
+  upcoming: Map<string, UpcomingHearing[]>;
+  // Docket numbers in the "Proceedings Awaiting Decision" table.
+  awaitingDecision: Set<string>;
+}
+
+async function fetchUpcomingHearingsByDocket(): Promise<HearingsPage> {
   const res = await fetch(HEARINGS_URL, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`NCUC hearings page request failed (${res.status})`);
   const html = await res.text();
@@ -349,6 +374,14 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
     );
   }
   const tableHtml = stripHtmlComments(html.slice(startIdx, endIdx));
+
+  // See module header PROCEDURAL STEP. The docket cell is the link whose text
+  // is a docket number ("E-2 Sub 1369"); the description cell's links are not.
+  const awaitingDecision = new Set<string>();
+  for (const m of stripHtmlComments(html.slice(endIdx)).matchAll(HEARING_DOCKET_RE)) {
+    const docketNumber = decodeHtmlEntities(m[1]);
+    if (/^[A-Z]+-\d+[A-Z]? Sub \d+[A-Z]?$/i.test(docketNumber)) awaitingDecision.add(docketNumber);
+  }
 
   const map = new Map<string, UpcomingHearing[]>();
   const now = Date.now();
@@ -374,7 +407,7 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
       map.set(docketNumber, arr);
     }
   }
-  return map;
+  return { upcoming: map, awaitingDecision };
 }
 
 type FormFields = [string, string][];
@@ -682,10 +715,10 @@ function extractApplicant(caption: string): string | null {
 function normalizeDocket(
   candidate: DocketCandidate,
   resolution: DocketResolution,
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  hearingsPage: HearingsPage | null,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("nc-ncuc", candidate.docketNumber);
-  const hearings = upcomingHearings.get(candidate.docketNumber) ?? [];
+  const hearings = hearingsPage?.upcoming.get(candidate.docketNumber) ?? [];
   const projectType = inferProjectType(candidate.caption);
   const fuelType = inferFuelType(candidate.caption, projectType);
   const capacityMw = extractCapacityMw(candidate.caption);
@@ -696,6 +729,16 @@ function normalizeDocket(
   if (resolution.resolution === "granted") currentStage = "approved_awaiting_construction";
   else if (resolution.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  // See module header PROCEDURAL STEP. Undefined (not null) for a pending
+  // docket when the hearings page could not be read, so a stored step survives.
+  let reviewStep: string | null | undefined;
+  if (resolution.resolution) reviewStep = null;
+  else if (hearingsPage) {
+    if (hearings.length > 0) reviewStep = "Hearing scheduled";
+    else if (hearingsPage.awaitingDecision.has(candidate.docketNumber)) reviewStep = "Awaiting commission order";
+    else reviewStep = "Application filed";
+  }
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -738,8 +781,12 @@ function normalizeDocket(
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Convenience and Necessity from the North Carolina Utilities Commission — Docket No. ${candidate.docketNumber}, "${candidate.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    reviewStep,
+    // The hearings page carries no date for the awaiting-decision table.
+    reviewStepAt: reviewStep === undefined ? undefined : null,
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/NCUC/PSC/DocketDetails.aspx?DocketId=${candidate.docketId}` : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    // Undefined when the hearings page could not be read, so stored hearings survive.
+    hearings: hearingsPage ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
     sources: [
       {
         label: `NC NCUC Docket No. ${candidate.docketNumber}`,
@@ -767,8 +814,9 @@ export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promi
   const rotatingMatchKeys = new Set<string>();
 
   // A failure here shouldn't block the whole ingestion run over a feature
-  // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByDocket().catch(() => new Map<string, UpcomingHearing[]>());
+  // this supplementary — degrades to "no hearing data this run" (null, not an
+  // empty map, so hearings stored by an earlier run are kept).
+  const hearingsPage = await fetchUpcomingHearingsByDocket().catch(() => null);
 
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
@@ -776,7 +824,7 @@ export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promi
   for (const candidate of candidates) {
     try {
       const resolution = await fetchResolution(session, candidate.docketNumber);
-      const normalized = normalizeDocket(candidate, resolution, upcomingHearings);
+      const normalized = normalizeDocket(candidate, resolution, hearingsPage);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

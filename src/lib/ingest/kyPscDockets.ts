@@ -184,6 +184,34 @@
 // 2024-00104) demonstrate the extraction works correctly, even though
 // neither is fetched by a normal run today.
 //
+// PROCEDURAL STEP: the filing list on each case's own ViewCaseFilings page
+// (already fetched, and already scanned by detectResolution) is a dated log of
+// every filing and order, so the step costs no extra request. Confirmed live
+// 2026-09-21 against all 15 open cases. What actually signals each state:
+//   - hearing set: an "Order Entered: 1. A hearing in this matter shall be held
+//     on July 8, 2026 ..." row (Case 2026-00001, Kentucky Power's cooling
+//     tower CPCN), a "Request for Publication of Notice of Hearing" filing, or,
+//     for Siting Board merchant cases, a "Witness List for Transmission Line
+//     Formal Hearing" (Case 2026-00096, whose 9/24/2026 hearing also shows on
+//     the hearings calendar below).
+//   - hearing held: "Notice of filing hearing transcripts" / "Notice of Filing
+//     Hearing Documents" and every "post-hearing" data request or brief (Case
+//     2026-00001 has all of them). A "Motion for the Preparation of a
+//     Stenographic Transcription" comes BEFORE the hearing, so a bare
+//     "transcript" is not used.
+//   - decision next: post-hearing briefs and reply briefs.
+//   - closed: a "Final Order Entered:" row or "this case is closed" (already
+//     handled by detectResolution, which decides the stage).
+// Cases with only a Notice of Intent, an application and data requests (the
+// large majority: Taylor RECC 2026-00098, Kentucky Power 2026-00184 and
+// 2026-00208, every merchant solar case) have no hearing signal, so they read
+// "Application filed". An upcoming hearing on the calendar overrides whatever
+// the filing list says, so a case with a hearing still ahead is never called
+// decision-ready. A KNOWN LIMIT of the hearings calendar (pre-existing, not
+// changed here): the Home/_hearings endpoint returned the current month for
+// iMonth=9, 10 and 11 alike when checked 2026-09-21, so hearings more than the
+// current month out are not reliably picked up.
+//
 // Wired to Vercel Cron weekly, 02:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ky-psc/route.ts) — a real run's timing was
 // measured (12 candidates, 10 real, 14.4s) before scheduling this. Also
@@ -193,6 +221,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://psc.ky.gov";
 const SEARCH_URL = `${BASE_URL}/Case/SearchCases`;
@@ -343,6 +372,8 @@ interface CaseDetail {
   // The real date the matched Final/Order-Entered filing was itself
   // received/filed on the case — see RESOLUTION-DATE EXTRACTION below.
   resolutionDate: Date | null;
+  // Every filing row (date + description), for the procedural step.
+  events: DocketEvent[];
 }
 
 // "M/D/YYYY" (exact) or a bare "YYYY*" (PSC's own marker for "we only know
@@ -418,6 +449,26 @@ function detectResolution(html: string): ResolutionInfo {
   return { resolution: null, date: null };
 }
 
+function extractFilingEvents(html: string): DocketEvent[] {
+  return [...html.matchAll(FILING_ROW_RE)].map((m) => ({ date: parseFilingDateTime(m[1]), text: stripTags(m[2]) }));
+}
+
+// See module header PROCEDURAL STEP.
+const STEP_SIGNALS = {
+  hearingSet: /\bhearing in this matter shall be held\b|\b(formal|public|evidentiary) hearing\b|\bnotice of (public )?hearing\b/i,
+  hearingHeld: /\bnotice of filing (of )?hearing (transcripts?|documents)\b|\bpost-?hearing\b/i,
+  decisionNext: /\b(reply brief|post-?hearing (response )?brief|submitted for (a )?decision)\b/i,
+  closed: /\bfinal order entered\b|\bthis case is closed\b/i,
+};
+
+function classifyKyReviewStep(events: DocketEvent[], upcoming: UpcomingHearing[]): ReviewStep | null {
+  const review = classifyReviewStep(events, STEP_SIGNALS);
+  if (review && upcoming.length > 0) {
+    return { step: "Hearing scheduled", at: new Date(Math.min(...upcoming.map((h) => h.date.getTime()))) };
+  }
+  return review;
+}
+
 function extractField(html: string, id: string): string | null {
   const re = new RegExp(`id=['"]${id}['"][^>]*>([^<]*)<`, "i");
   const m = re.exec(html);
@@ -443,7 +494,7 @@ async function fetchCaseDetail(caseNumber: string): Promise<CaseDetail> {
   const applicant = (extractField(html, "lblUtilities") ?? "").trim();
   const { resolution, date: resolutionDate } = detectResolution(html);
 
-  return { caseNumber, filingDate, dateConfidence, category, applicant, nature, resolution, resolutionDate };
+  return { caseNumber, filingDate, dateConfidence, category, applicant, nature, resolution, resolutionDate, events: extractFilingEvents(html) };
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY.
@@ -529,6 +580,10 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
   const hearings = upcomingHearings.get(detail.caseNumber) ?? [];
+  // A resolved case has no live step; a case whose filing list could not be
+  // parsed leaves any stored step alone (undefined).
+  const review = detail.resolution === null ? classifyKyReviewStep(detail.events, hearings) : null;
+  const managed = detail.resolution !== null || detail.events.length > 0;
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Kentucky Public Service Commission's public case search and case detail pages (Certificate of Public Convenience and Necessity / Certificate of Construction dockets).",
@@ -578,6 +633,8 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
       : {}),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/ViewCaseFilings/${detail.caseNumber}` : null,
     hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     sources: [
       {
         label: `KY PSC Case No. ${detail.caseNumber}`,

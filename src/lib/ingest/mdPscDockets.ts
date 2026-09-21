@@ -165,11 +165,23 @@
 // standard 250ms politeness delay took 105.6s — comfortably inside the
 // 300s cron budget, with no need to trim MAX_CANDIDATES for time-budget
 // reasons the way nyDpsDockets.ts had to.
+//
+// PROCEDURAL STEP AND HEARINGS (added 2026-09-21): the mail log's third column
+// is the filing date, which this module used to ignore; it now feeds the shared
+// classifier in reviewStep.ts (see classifyMdReviewStep). Dated upcoming
+// hearings come from one extra request per run, the PSC's own Hearing Schedule
+// page (GET /DMS/hearing, static HTML, no auth, lists only current and future
+// hearings for every case type, so it is filtered to the CPCN case numbers on
+// the list). If that request fails (Cloudflare fronts the site), hearings are
+// left undefined for the run rather than an empty array, so a transient block
+// never wipes hearings a prior run stored. The mail-log PDFs and psc.maryland
+// .gov pages are Cloudflare-blocked from scripts and are never fetched.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
-import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject, type NormalizedHearing } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://webpscxb.pscmaryland.com/DMS";
 
@@ -292,12 +304,22 @@ async function fetchCpcnList(): Promise<CpcnListPage> {
 interface MailLogDoc {
   filer: string;
   subject: string;
+  date: Date | null;
 }
 
 // Matches each mail-log table row on the case-detail postback response:
-// filer name (in a <strong>) then the filing's subject/description text.
-// Confirmed live 2026-08-23 against a full scan of all 175 real cases.
-const DOC_RE = /<strong class=.color\d.>([^<]*)<\/strong>\s*-?\s*([^<]*)<\/td>/g;
+// filer name (in a <strong>), the filing's subject/description text, then the
+// filing date (MM/DD/YYYY) in the next cell. Confirmed live 2026-08-23 against
+// a full scan of all 175 real cases; the date cell was added 2026-09-21 and
+// matched every row of five real mail logs (28 to 839 filings each).
+const DOC_RE = /<strong class=.color\d.>([^<]*)<\/strong>\s*-?\s*([^<]*?)<\/td>\s*<td[^>]*>\s*([\d/]+)\s*<\/td>/g;
+
+function parseUsDate(raw: string): Date | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[3]), Number(m[1]) - 1, Number(m[2])));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 async function fetchCaseDetail(list: CpcnListPage, rowIndex: number): Promise<MailLogDoc[]> {
   const ctl = String(rowIndex).padStart(2, "0");
@@ -318,7 +340,7 @@ async function fetchCaseDetail(list: CpcnListPage, rowIndex: number): Promise<Ma
 
   const docs: MailLogDoc[] = [];
   for (const m of html.matchAll(DOC_RE)) {
-    docs.push({ filer: stripTags(m[1]), subject: stripTags(m[2]) });
+    docs.push({ filer: stripTags(m[1]), subject: stripTags(m[2]), date: parseUsDate(m[3]) });
   }
   return docs;
 }
@@ -396,6 +418,131 @@ function determineResolution(docs: MailLogDoc[]): Resolution {
     if (FINAL_ORDER_FILER_RE.test(d.filer) && COMMISSION_DECOMMISSION_APPROVAL_RE.test(d.subject)) return "granted";
   }
   return null;
+}
+
+// --- Procedural step (see module header) ---
+
+// The shared defaults are tuned for other states, so the signals are
+// overridden here. Confirmed against real mail logs (9694, 9786, 9812):
+//   - hearingSet: "Notice of [Amended] [Contested|Continued|Evening] [Public
+//     Comment|Evidentiary] Hearing". Words are separated by spaces only, so
+//     "Notice of Pre-Hearing Conference" (a conference, not a hearing) is not
+//     matched.
+//   - hearingOff: the default treats "continued ... hearing" as a cancellation,
+//     but here "Notice of Continued Evidentiary Hearing" sets a new session.
+//   - decisionNext: a Proposed Order only counts when the Law Judge Division
+//     itself files it (parties attach proposed orders to briefs).
+//   - hearingHeld and closed: the held check is done in classifyMdReviewStep
+//     and closing is decided by determineResolution, so the defaults are off.
+const MD_STEP_SIGNALS: StepSignals = {
+  hearingSet: /\bnotice of (?:[a-z]+ ){0,4}hearing\b/i,
+  hearingOff: /\b(?:cancel+(?:ed|ing|ation)|vacat(?:ed|ing)|postpone(?:d|ment)|rescind\w*)\b.{0,30}hearing|\bhearing\b.{0,30}\b(?:cancel+ed|vacated|postponed)/i,
+  hearingHeld: /hearing held$/,
+  decisionNext: /^public utility law judge division\b.*\bproposed order\b|\b(?:post-?hearing|reply|initial) briefs?\b/i,
+  closed: /(?!)/,
+};
+
+const EVIDENTIARY_NOTICE_RE = /\bnotice of (?:[a-z]+ ){0,3}evidentiary hearing\b/i;
+// "Stenographers Record Hearing Date: July 20, 2026, 6:30 p.m." is the court
+// reporter's transcript, filed after a hearing session has actually happened.
+const STENOGRAPHER_RE = /stenographers? record/i;
+
+// A stenographer record only proves the decision is next when it follows an
+// evidentiary hearing notice (public comment hearings also get transcripts but
+// leave the evidentiary hearing still to come) and no later evidentiary notice
+// (a continued session) reopens it. Those records reach the shared classifier
+// as "hearing held" events; every other filing passes through as plain text.
+export function classifyMdReviewStep(docs: MailLogDoc[], hasUpcomingHearing: boolean) {
+  const time = (d: MailLogDoc) => d.date?.getTime() ?? 0;
+  const evidentiaryTimes = docs.filter((d) => EVIDENTIARY_NOTICE_RE.test(d.subject)).map(time);
+  const firstEvidentiary = evidentiaryTimes.length ? Math.min(...evidentiaryTimes) : Infinity;
+  const lastEvidentiary = evidentiaryTimes.length ? Math.max(...evidentiaryTimes) : 0;
+  const events: DocketEvent[] = docs.map((d) => {
+    const text = `${d.filer} - ${d.subject}`;
+    const heldSession = STENOGRAPHER_RE.test(d.subject) && time(d) >= firstEvidentiary && time(d) >= lastEvidentiary;
+    return { date: d.date, text: heldSession ? `${text} hearing held` : text };
+  });
+  const result = classifyReviewStep(events, MD_STEP_SIGNALS);
+  // The schedule page is the authority on what is still to come: a case with a
+  // hearing on it is not waiting on an order yet, whatever the mail log says.
+  if (result && hasUpcomingHearing && result.step === "Awaiting commission order") {
+    return { step: "Hearing scheduled" as const, at: result.at };
+  }
+  return result;
+}
+
+// --- Hearing schedule (GET /DMS/hearing) ---
+
+// Times on the page are Eastern. Vercel runs in UTC, so the offset is worked
+// out from the zone itself rather than trusting the host's local time.
+function easternDate(y: number, mo: number, d: number, h: number, mi: number): Date {
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date(guess));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asIfUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+  return new Date(guess - (asIfUtc - guess));
+}
+
+// Either a date header span or an entry cell, in page order, so each entry can
+// be paired with the date block it sits under. Confirmed live 2026-09-21
+// (97 date blocks, 117 entries).
+const SCHEDULE_TOKEN_RE =
+  /lblDateOfHearing_\d+">\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*<\/span>|<td style="width: 95%;">([\s\S]*?)<\/td>/g;
+// "10:00AM - Case No. 9812 - <applicant> (<detail>) - Evidentiary Hearing - Virtual Before: <judge>".
+// Only hearings the public can attend or that decide the case; pre-hearing
+// and technical conferences are skipped.
+const SCHEDULE_ENTRY_RE =
+  /^(\d{1,2}):(\d{2})\s*([AP])M\s*-\s*Case No\.\s*(\S+)\s*-\s*.+?\s-\s((?:Public Comment|(?:Contested |Continued |Virtual |Evening )*Evidentiary|Legislative[- ]Style|Virtual) Hearing)\b\s*-?\s*(.*?)\s*Before:/i;
+
+export function parseHearingSchedule(html: string): Map<string, NormalizedHearing[]> {
+  const byCase = new Map<string, NormalizedHearing[]>();
+  let date: { y: number; mo: number; d: number } | null = null;
+  for (const m of html.matchAll(SCHEDULE_TOKEN_RE)) {
+    if (m[1]) {
+      date = { mo: Number(m[1]), d: Number(m[2]), y: Number(m[3]) };
+      continue;
+    }
+    if (!date) continue;
+    const entry = SCHEDULE_ENTRY_RE.exec(stripTags(m[4]));
+    if (!entry) continue;
+    let hour = Number(entry[1]) % 12;
+    if (entry[3].toUpperCase() === "P") hour += 12;
+    const hearing: NormalizedHearing = {
+      date: easternDate(date.y, date.mo, date.d, hour, Number(entry[2])),
+      endDate: null,
+      label: entry[5].charAt(0).toUpperCase() + entry[5].slice(1).toLowerCase(),
+      location: entry[6] || null,
+    };
+    const list = byCase.get(entry[4]) ?? [];
+    list.push(hearing);
+    byCase.set(entry[4], list);
+  }
+  if (!date) {
+    throw new Error(
+      "MD PSC hearing schedule contained no date blocks, so the page structure likely changed or a Cloudflare challenge was served. Check SCHEDULE_TOKEN_RE in src/lib/ingest/mdPscDockets.ts against a fresh response.",
+    );
+  }
+  return byCase;
+}
+
+// Returns null (never an empty map) when the page can't be fetched or parsed,
+// so the caller leaves hearings undefined instead of clearing stored ones.
+async function fetchHearingSchedule(): Promise<Map<string, NormalizedHearing[]> | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/hearing`);
+    if (!res.ok) return null;
+    return parseHearingSchedule(await res.text());
+  } catch {
+    return null;
+  }
 }
 
 // --- Fuel/project type, capacity, county, applicant extraction ---
@@ -508,7 +655,7 @@ function extractApplicant(caption: string): string {
   return caption.slice(0, 80);
 }
 
-function normalizeCase(row: CpcnListRow, resolution: Resolution): NormalizedProject {
+function normalizeCase(row: CpcnListRow, resolution: Resolution, docs: MailLogDoc[], schedule: Map<string, NormalizedHearing[]> | null): NormalizedProject {
   const matchKey = resolveMatchKey("md-psc", row.caseNum);
   const { projectType, fuelType } = inferProjectTypeAndFuel(row.caption);
   const capacityMw = extractCapacityMw(row.caption);
@@ -519,6 +666,9 @@ function normalizeCase(row: CpcnListRow, resolution: Resolution): NormalizedProj
   if (resolution === "granted") currentStage = "approved_awaiting_construction";
   else if (resolution === "denied" || resolution === "withdrawn") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  const upcoming = schedule ? (schedule.get(row.caseNum) ?? []).filter((h) => h.date.getTime() >= Date.now()) : null;
+  const review = resolution ? null : classifyMdReviewStep(docs, (upcoming?.length ?? 0) > 0);
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -555,6 +705,10 @@ function normalizeCase(row: CpcnListRow, resolution: Resolution): NormalizedProj
     applicant,
     currentStatus: `Maryland PSC Case No. ${row.caseNum}: ${resolution ?? "active"}`,
     currentStage,
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
+    // Undefined when the schedule page could not be read, so stored hearings survive.
+    hearings: upcoming ?? undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity from the Maryland Public Service Commission — Case No. ${row.caseNum}, "${row.caption}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
@@ -593,6 +747,8 @@ export async function ingestMdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));
   const rotatingMatchKeys = new Set<string>();
 
+  const schedule = await fetchHearingSchedule();
+
   const toUpsert: NormalizedProject[] = [];
   const errors: { matchKey: string; message: string }[] = [];
 
@@ -600,7 +756,7 @@ export async function ingestMdPscDockets(maxCandidates = MAX_CANDIDATES): Promis
     try {
       const docs = await fetchCaseDetail(list, row.index);
       const resolution = determineResolution(docs);
-      const normalized = normalizeCase(row, resolution);
+      const normalized = normalizeCase(row, resolution, docs, schedule);
       toUpsert.push(normalized);
       if (rotatingTier.has(row)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

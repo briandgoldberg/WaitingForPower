@@ -206,6 +206,7 @@ import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies"
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://portal.ct.gov";
 const PENDING_MATTERS_URL = `${BASE_URL}/csc/1_applications-and-other-pending-matters/pending-matters`;
@@ -583,9 +584,70 @@ function parseReceivedDate(html: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// PROCEDURAL STEP (added 2026-09-21): a detail page lists every filed or
+// issued document as its own line ending in a two-digit-year date, e.g.
+// "Council Interrogatories to Applicant, 05/07/26", "Zoom Remote Public
+// Hearing Recording, 06/04/26 ( Passcode: ... )", "Council Set Date for
+// Decision, 08/06/26", "Responses to Council Interrogatories, recd. 08/26/26"
+// (confirmed live against Docket 550 and Petitions 1712/1720). The lines are
+// only recoverable from the raw HTML (stripHtml flattens them), so the page
+// is split on block boundaries first, and only lines after the "APPLICATION /
+// PETITION recd." heading count, since the page chrome above it carries dated
+// links of its own. The same single request already made for the filed date
+// supplies them, so no extra fetch.
+const DETAIL_LINE_DATE_RE = /^(.*?),?\s*(?:recd\.?\s*)?(\d{2})\/(\d{2})\/(\d{2})\b/i;
+
+export function parseDetailEvents(html: string): DocketEvent[] {
+  const lines = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>|<\/(?:p|li|h\d|tr|div)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&ndash;|&mdash;/g, "-")
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim());
+  const start = lines.findIndex((l) => RECEIVED_DATE_RE.test(l));
+  if (start < 0) return [];
+  const events: DocketEvent[] = [];
+  for (const line of lines.slice(start + 1)) {
+    const m = DETAIL_LINE_DATE_RE.exec(line);
+    if (!m || !m[1]) continue;
+    const date = parseTwoDigitYearDate(m[2], m[3], m[4]);
+    if (date) events.push({ date, text: m[1] });
+  }
+  return events;
+}
+
+// A hearing counts as still ahead only when the Calendar of Events lists a
+// future date for the case (see fetchUpcomingHearingsByCase); a detail page
+// lists a hearing's documents (notice, program, later the recording) but
+// never says whether a continued session is still to come. Otherwise the step
+// is read from the page's own lines: a hearing recording means the hearing has
+// been held, and briefs, proposed findings, a closed record or the Council
+// setting a date for decision mean the decision is next. The closed signal is
+// disabled because a decided case never gets here (see resolved in
+// normalizeCandidate). The page heading "HEARING INFORMATION" carries no date
+// and is skipped by parseDetailEvents, so a bare "Hearing Documents" line is
+// what marks a hearing as set.
+const NEVER_RE = /(?!)/;
+const CT_SIGNALS = {
+  hearingSet: /\bhearing (documents|notice|program|procedures)\b|\bnotice of (public )?hearing\b/i,
+  hearingHeld: /\bhearing recording\b|\btranscript\b/i,
+  decisionNext: /\bset date for decision\b|\b(proposed|draft) findings\b|\bbriefs?\b|\brecord closed\b|\bclos(e|ing) of (the )?(evidentiary )?record\b/i,
+  closed: NEVER_RE,
+};
+
+export function classifyCtStep(events: DocketEvent[], hearings: UpcomingHearing[]) {
+  if (hearings.length > 0) return { step: "Hearing scheduled", at: null };
+  return classifyReviewStep(events, CT_SIGNALS);
+}
+
 interface CandidateDetail {
   receivedDate: Date | null;
   decidedOnDetailPage: boolean;
+  events: DocketEvent[];
 }
 
 async function fetchCandidateDetail(url: string): Promise<CandidateDetail> {
@@ -600,6 +662,7 @@ async function fetchCandidateDetail(url: string): Promise<CandidateDetail> {
   return {
     receivedDate: parseReceivedDate(text),
     decidedOnDetailPage: DETAIL_DECIDED_RE.test(text),
+    events: parseDetailEvents(html),
   };
 }
 
@@ -748,6 +811,10 @@ function normalizeCandidate(
   const resolutionDate: Date | null | undefined =
     RESOLVED_STAGES.includes(currentStage) && resolutionDateFound ? resolutionDateFound : undefined;
   const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
+  // Undefined when there is nothing to judge from (no detail page fetched, or
+  // it listed no dated lines and no hearing is on the calendar).
+  const review = !resolved && detail ? classifyCtStep(detail.events, hearings) : null;
+  const stepManaged = resolved || (detail !== null && (detail.events.length > 0 || hearings.length > 0));
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   return {
@@ -770,6 +837,8 @@ function normalizeCandidate(
     currentStage,
     resolutionDate,
     resolutionDateConfidence,
+    reviewStep: stepManaged ? (review ? review.step : null) : undefined,
+    reviewStepAt: stepManaged ? (review ? review.at : null) : undefined,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Environmental Compatibility and Public Need (or related declaratory ruling) from the Connecticut Siting Council — ${label} No. ${candidate.number}, "${desc.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

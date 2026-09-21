@@ -111,6 +111,8 @@ export interface NormalizedProject {
   /** Procedural step of a state docket — see schema.prisma. undefined leaves the stored value alone. */
   reviewStep?: string | null;
   reviewStepAt?: Date | null;
+  /** Last day for public comment, when the source publishes it. undefined leaves the stored value alone. */
+  commentDeadline?: Date | null;
   isAggregateExample?: boolean;
   estimatedMwDelayed?: number | null;
   dataQualityNote?: string | null;
@@ -402,6 +404,7 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
     hearingDetailsLink: keepExistingIfUnmanaged(p.hearingDetailsLink, existing?.hearingDetailsLink),
     reviewStep: keepExistingIfUnmanaged(p.reviewStep, existing?.reviewStep),
     reviewStepAt: keepExistingIfUnmanaged(p.reviewStepAt, existing?.reviewStepAt),
+    commentDeadline: keepExistingIfUnmanaged(p.commentDeadline, existing?.commentDeadline),
     isAggregateExample: p.isAggregateExample ?? false,
     estimatedMwDelayed: p.estimatedMwDelayed ?? null,
     dataQualityNote: p.dataQualityNote ?? null,

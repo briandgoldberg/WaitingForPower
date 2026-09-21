@@ -302,6 +302,30 @@
 // case's lookup failing doesn't blank out every other case's real hearing
 // data.
 //
+// PROCEDURAL STEP (added 2026-09-21): no extra request. The Order-type activity
+// log already fetched per case carries the Commission's scheduling orders, and
+// the "Meetings by Case" response already fetched for hearings lists past
+// meetings as well as future ones, so both feed the shared classifier in
+// reviewStep.ts (see WV_STEP_SIGNALS and buildStepEvents). Confirmed live
+// 2026-09-21 against all 5 open E-CN dockets:
+//   - 26-0075-E-CN: "Hearing Set for 10/26/2026 to ..." order plus 6 future
+//     Evidentiary Hearing meetings -> "Hearing scheduled".
+//   - 26-0108-E-CN: Evidentiary Hearing meetings on 7/16 and 7/17/2026, both
+//     past -> "Awaiting commission order". A past Public Comment Hearing alone
+//     does not count (it can precede the evidentiary hearing).
+//   - 26-0135-E-CN-PW: "Hearing Cancel for 6/29/2026 and 6/30/2026; that the
+//     Commission will rely upon the pre-filed testimony ... in reaching its
+//     decision" -> "Awaiting commission order" (a cancelled hearing that
+//     leaves the decision to the Commission).
+//   - 26-0802-E-CN-PW: no orders and no meetings yet -> "Application filed".
+//   - 25-0637-E-CN: its 8/21/2026 Commission Final Order is caught by
+//     detectResolution (currentStage approved_awaiting_construction), so it gets
+//     no step.
+// "Hearing Cancel for X, Rescheduled Hearing for Y" (seen on 25-0637) is a
+// reschedule, not a cancellation, so hearingOff excludes it. The step is left
+// undefined when the meetings lookup failed, since a held hearing would be
+// invisible then.
+//
 // LOCATION — added 2026-09-05: the same response parsed above for Date/
 // Details-link also carries each meeting's own Meeting Type and Location
 // (e.g. "PSC  Howard M. Cunningham Hearing Room", "Hampshire Co.
@@ -314,6 +338,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://www.psc.state.wv.us";
 const SEARCH_URL = `${BASE_URL}/scripts/WebDocket/viewCaseForWebList.cfm`;
@@ -497,6 +522,9 @@ interface UpcomingHearing {
   location: string | null;
 }
 
+// Every meeting the case has on the calendar, past or future.
+type CaseMeetings = UpcomingHearing[];
+
 function parseMDYShortYear(raw: string): Date | null {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(raw.trim());
   if (!m) return null;
@@ -527,7 +555,7 @@ const HEARING_ROW_RE =
 // sitewide calendar page, only a per-case "Meetings by Case" search (see
 // module header). Every real FUTURE meeting is kept (not just the
 // earliest) — a case can genuinely have more than one on the books at once.
-async function fetchUpcomingHearingsForCase(caseNumber: string): Promise<UpcomingHearing[]> {
+async function fetchMeetingsForCase(caseNumber: string): Promise<CaseMeetings> {
   const params = new URLSearchParams({
     CaseNoOperator: "EQUAL",
     CaseNo: caseNumber,
@@ -541,11 +569,10 @@ async function fetchUpcomingHearingsForCase(caseNumber: string): Promise<Upcomin
     throw new Error(`WV PSC hearing-by-case search failed (${res.status}) for case ${caseNumber}`);
   }
   const html = await res.text();
-  const now = Date.now();
   const found: UpcomingHearing[] = [];
   for (const m of html.matchAll(HEARING_ROW_RE)) {
     const date = parseMDYShortYear(m[1]);
-    if (!date || date.getTime() <= now) continue;
+    if (!date) continue;
     if (!found.some((h) => h.date.getTime() === date.getTime())) {
       const label = stripTags(m[3]) || null;
       const location = stripTags(m[4]) || null;
@@ -561,12 +588,13 @@ async function fetchUpcomingHearingsForCase(caseNumber: string): Promise<Upcomin
 // the whole function is additionally wrapped in .catch(() => new Map()) at
 // the call site as this series' standard defense for a supplementary
 // (non-core) feature.
-async function fetchUpcomingHearingsByCase(caseNumbers: string[]): Promise<Map<string, UpcomingHearing[]>> {
-  const map = new Map<string, UpcomingHearing[]>();
+async function fetchMeetingsByCase(caseNumbers: string[]): Promise<Map<string, CaseMeetings>> {
+  const map = new Map<string, CaseMeetings>();
   for (const caseNumber of caseNumbers) {
     try {
-      const hearings = await fetchUpcomingHearingsForCase(caseNumber);
-      if (hearings.length > 0) map.set(caseNumber, hearings);
+      // Set even when empty ("checked, none"); a case missing from the map
+      // means the lookup failed, so its hearings and step are left alone.
+      map.set(caseNumber, await fetchMeetingsForCase(caseNumber));
     } catch {
       // One case's hearing lookup failing shouldn't block the others.
     }
@@ -631,6 +659,34 @@ function detectResolution(orderActivities: OrderActivity[]): ResolutionResult {
     if (CLOSED_FALLBACK_RE.test(activity.text)) return { resolution: "closed-unclear", date: activity.date };
   }
   return { resolution: null, date: null };
+}
+
+// See module header PROCEDURAL STEP. Run against each Order activity's summary
+// text plus a few synthetic events built from the meetings calendar.
+//   - decisionNext deliberately leaves out the default brief patterns: a
+//     scheduling order lists "Initial Briefs ... Reply Briefs ..." due dates
+//     months before the hearing (seen on 26-0075-E-CN), which would read as
+//     "briefs filed".
+//   - closed never matches: a case with a final order is already resolved
+//     before the step is asked for.
+const WV_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /\bhearings? set for\b|\brescheduled hearing for\b|\bnotice of filing and hearing\b|^hearing scheduled/i,
+  hearingOff: /\bhearing cancel(?!.{0,120}rescheduled)/i,
+  hearingHeld: /^evidentiary hearing held/i,
+  decisionNext: /\brely upon the pre-?filed testimony\b|\brecommended decision\b|\bsubmitted for decision\b/i,
+  closed: /(?!)/,
+};
+
+function buildStepEvents(record: CaseListRecord, orders: OrderActivity[], meetings: CaseMeetings): DocketEvent[] {
+  const events: DocketEvent[] = [{ date: record.filedDate, text: "Application filed" }, ...orders];
+  const now = Date.now();
+  for (const m of meetings) {
+    if (m.date.getTime() > now) events.push({ date: m.date, text: `Hearing scheduled: ${m.label ?? "meeting"}` });
+    // A past public comment hearing can come before the evidentiary hearing,
+    // so only an evidentiary one counts as the hearing having happened.
+    else if (/evidentiary/i.test(m.label ?? "")) events.push({ date: m.date, text: "Evidentiary hearing held" });
+  }
+  return events;
 }
 
 // See module header FUEL/PROJECT TYPE & CAPACITY.
@@ -740,7 +796,8 @@ function normalizeCase(
   record: CaseListRecord,
   docketLabel: string,
   resolutionResult: ResolutionResult,
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  orderActivities: OrderActivity[],
+  meetingsByCase: Map<string, CaseMeetings>,
 ): NormalizedProject {
   const { resolution, date: resolutionOrderDate } = resolutionResult;
   const matchKey = resolveMatchKey("wv-psc", record.caseNumber);
@@ -748,13 +805,22 @@ function normalizeCase(
   const capacityMw = extractCapacityMw(record.description);
   const counties = extractCounties(record.description);
   const county = counties.length > 0 ? counties.join(", ") : null;
-  const hearings = upcomingHearings.get(record.caseNumber) ?? [];
+  // Undefined when the meetings lookup failed, so stored hearings survive.
+  const meetings = meetingsByCase.get(record.caseNumber);
+  const now = Date.now();
+  const hearings = (meetings ?? []).filter((h) => h.date.getTime() > now);
 
   let currentStage: ProjectStage;
   if (resolution === "granted") currentStage = "approved_awaiting_construction";
   else if (resolution === "denied" || resolution === "dismissed" || resolution === "closed-unclear") {
     currentStage = "cancelled";
   } else currentStage = "local_review";
+
+  // See module header PROCEDURAL STEP.
+  const review =
+    currentStage === "local_review" && meetings
+      ? classifyReviewStep(buildStepEvents(record, orderActivities, meetings), WV_STEP_SIGNALS)
+      : null;
 
   // RESOLUTION DATE — see module header. Only set when this run actually
   // classified a resolving verdict (never for "local_review"); left
@@ -801,8 +867,11 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on a ${docketLabel} from the West Virginia Public Service Commission — Case No. ${record.caseNumber}, "${record.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    ...(meetings || currentStage !== "local_review"
+      ? { reviewStep: review ? review.step : null, reviewStepAt: review ? review.at : null }
+      : {}),
     hearingDetailsLink: hearings.length > 0 ? DETAIL_URL(record.caseId) : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
+    hearings: meetings ? hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })) : undefined,
     sources: [
       {
         label: `WV PSC Case No. ${record.caseNumber}`,
@@ -848,7 +917,7 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
   // See module header PUBLIC HEARING DATES. A failure here shouldn't block
   // the whole ingestion run over a feature this supplementary — degrades to
   // "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase(realCaseNumbers).catch(() => new Map<string, UpcomingHearing[]>());
+  const meetingsByCase = await fetchMeetingsByCase(realCaseNumbers).catch(() => new Map<string, CaseMeetings>());
 
   for (const entry of rotatedCandidates) {
     const { record, docketLabel } = entry;
@@ -861,7 +930,7 @@ export async function ingestWvPscDockets(maxCandidates = MAX_CANDIDATES): Promis
       realApplicationCandidates += 1;
       const orderActivities = await fetchOrderActivities(record.caseNumber);
       const resolutionResult = detectResolution(orderActivities);
-      const normalized = normalizeCase(record, docketLabel, resolutionResult, upcomingHearings);
+      const normalized = normalizeCase(record, docketLabel, resolutionResult, orderActivities, meetingsByCase);
       toUpsert.push(normalized);
       if (rotatingTier.has(entry)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {

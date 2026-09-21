@@ -161,6 +161,21 @@
 // application was observed live — kept in FUEL_KEYWORDS as an easy add,
 // not verified against a real example.
 //
+// PROCEDURAL STEP: the same OnBase document list gives a docket's step at no
+// extra request. UEPA permits are normally decided at a Commission agenda
+// meeting with no hearing (a hearing happens only if a protest turns the
+// docket into a contested case), so PUCN publishes no hearing dates anywhere
+// machine-readable; hearings is therefore left undefined for Nevada, not
+// empty, and only reviewStep/reviewStepAt are set. Confirmed 2026-09-21
+// against 16-06017 (BRIEFING MEMO "STAFF" 1/10/2025, then the bare GRANTED
+// order 1/22/2025) and 20-07025 (DRAFT ORDER 3/5/2026). A staff BRIEFING MEMO
+// or a DRAFT ORDER means the agenda decision is next ("Awaiting commission
+// order"); a TRANSCRIPT/DISTRIBUTED AT HEARING or BRIEF means a contested
+// hearing already happened, so the decision is next too. Everything earlier
+// (original filing, notice, affidavit of publication, procedural order) is
+// "Application filed". Only filings after the latest bare disposition order
+// count, so an earlier phase's memo does not make a later phase look ready.
+//
 // Wired to Vercel Cron weekly, 23:30 UTC Sundays (see vercel.json and
 // src/app/api/cron/ingest-nv-pucn/route.ts) — a real run's timing was
 // measured (148 candidates scanned, 28 real UEPA applications, ~38s) before
@@ -171,6 +186,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const LEGACY_BASE_URL = "https://pucweb1.state.nv.us/puc2/Dktinfo.aspx";
 const ONBASE_API_URL = "https://puc-onbase.nv.gov/api/CustomQuery/KeywordSearch";
@@ -353,6 +369,9 @@ interface DocketResolution {
   // "GRANTED" order confirmed live on docket 16-06017 dated 1/22/2025 (see
   // module header STATUS). Null whenever resolution is null.
   resolutionDate: Date | null;
+  // Procedural step of a still-active docket, from the same document list.
+  // Null once resolved or when the docket has no documents.
+  review: ReviewStep | null;
 }
 
 // See module header STATUS: an ORDER document's note is the real signal, a
@@ -366,6 +385,27 @@ const DISPOSITION_RE = /^(GRANTED|DENIED|DISMISSED)$/i;
 // these was necessary (without it, a docket's own grant-order Service List
 // made every resolved docket look "still active").
 const ADMINISTRATIVE_DOC_TYPES = new Set(["SERVICE LIST", "MISC CORRESPONDENCE", "AFFIDAVIT PUB/POST"]);
+
+// Per-state signals for the shared classifier, matched against "TYPE: note".
+// No hearing is ever "set" here (no dates are published), so hearingSet and
+// hearingOff never match; the closing order is handled by the resolution
+// check, so closed never matches either (an earlier phase's bare GRANTED
+// must not hide a later phase's step).
+const NEVER_RE = /(?!)/;
+const NV_STEP_SIGNALS = {
+  hearingSet: NEVER_RE,
+  hearingOff: NEVER_RE,
+  hearingHeld: /^(PROCEEDING TRANSCRIPT|TRANSCRIPT|DISTRIBUTED AT HEARING|BRIEF):/i,
+  decisionNext: /^(BRIEFING MEMO|DRAFT ORDER):/i,
+  closed: NEVER_RE,
+};
+
+function classifyNvReviewStep(docs: OnBaseDoc[], afterDate: Date | null): ReviewStep | null {
+  const events = docs
+    .filter((d) => !ADMINISTRATIVE_DOC_TYPES.has(d.type) && (afterDate == null || d.date.getTime() > afterDate.getTime()))
+    .map((d) => ({ date: d.date, text: `${d.type}: ${d.note}` }));
+  return classifyReviewStep(events, NV_STEP_SIGNALS);
+}
 
 async function fetchDocketResolution(docketNumber: string): Promise<DocketResolution> {
   const res = await fetch(ONBASE_API_URL, {
@@ -401,7 +441,7 @@ async function fetchDocketResolution(docketNumber: string): Promise<DocketResolu
   }
 
   const orders = docs.filter((d) => d.type === "ORDER" && DISPOSITION_RE.test(d.note.trim()));
-  if (orders.length === 0) return { resolution: null, resolutionDate: null };
+  if (orders.length === 0) return { resolution: null, resolutionDate: null, review: classifyNvReviewStep(docs, null) };
 
   orders.sort((a, b) => b.date.getTime() - a.date.getTime());
   const latestDisposition = orders[0];
@@ -409,12 +449,14 @@ async function fetchDocketResolution(docketNumber: string): Promise<DocketResolu
   const laterSubstantiveDoc = docs.some(
     (d) => !ADMINISTRATIVE_DOC_TYPES.has(d.type) && d.date.getTime() > latestDisposition.date.getTime(),
   );
-  if (laterSubstantiveDoc) return { resolution: null, resolutionDate: null };
+  if (laterSubstantiveDoc) {
+    return { resolution: null, resolutionDate: null, review: classifyNvReviewStep(docs, latestDisposition.date) };
+  }
 
   const note = latestDisposition.note.trim().toUpperCase();
-  if (note === "GRANTED") return { resolution: "granted", resolutionDate: latestDisposition.date };
-  if (note === "DENIED") return { resolution: "denied", resolutionDate: latestDisposition.date };
-  return { resolution: "dismissed", resolutionDate: latestDisposition.date };
+  if (note === "GRANTED") return { resolution: "granted", resolutionDate: latestDisposition.date, review: null };
+  if (note === "DENIED") return { resolution: "denied", resolutionDate: latestDisposition.date, review: null };
+  return { resolution: "dismissed", resolutionDate: latestDisposition.date, review: null };
 }
 
 // Requires an explicit generating-facility phrase to co-occur with a fuel
@@ -541,6 +583,8 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
     // undefined (not null) whenever no such order was found (still active).
     resolutionDate: resolution.resolutionDate ?? undefined,
     resolutionDateConfidence: resolution.resolutionDate ? "exact" : undefined,
+    reviewStep: resolution.review ? resolution.review.step : null,
+    reviewStepAt: resolution.review ? resolution.review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a Utility Environmental Protection Act permit from the Public Utilities Commission of Nevada — Docket No. ${candidate.docket}, "${candidate.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -72,6 +72,13 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { ProjectStage } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
+
+const REQUEST_DELAY_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const SERVICE_URL =
   "https://psc.ga.gov/facts-advanced-search/docket-filter-service/?statusId=7&industryId=3&title=&docketDateFrom=&docketDateTo=&pageSize=5000&pageNumber=1";
@@ -97,6 +104,55 @@ export async function fetchOpenElectricDockets(): Promise<GaDocket[]> {
   return json.resultsItems ?? [];
 }
 
+// PROCEDURAL STEP (added 2026-09-21): the docket page's own document list loads
+// from a second JSON endpoint, /search/service-facts-docket/ (found in
+// psc.ga.gov's docket.v2.js, confirmed live). It returns every filing in a
+// docket with a filed date and description, so the step can be read from
+// filings the same way txPuctDockets.ts does. Confirmed gotcha: the endpoint
+// returns an empty body unless pageNumber is passed. One request per matched
+// docket. Hearing dates are not published as data (only "Hearing Transcript"
+// filings after the fact, and notices whose dates live in the PDF), so
+// hearings stays undefined rather than guessed.
+interface GaDocketFiling {
+  description: string;
+  filedDate: string;
+}
+
+export async function fetchDocketFilings(docketId: number): Promise<GaDocketFiling[]> {
+  const url =
+    `https://psc.ga.gov/search/service-facts-docket/?docketId=${docketId}&sortDirection=ASC&sortColumn=Filed&searchText=&pageSize=500&pageNumber=1`;
+  const res = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+  if (!res.ok) throw new Error(`Georgia PSC filings request failed (${res.status}): ${url}`);
+  const json = (await res.json()) as { resultsItems: GaDocketFiling[] | null };
+  return json.resultsItems ?? [];
+}
+
+// Georgia closes a certification with an order titled "Order Adopting
+// Stipulation" / "Order Approving Joint Stipulation" (often "... and Granting
+// Certification"), or older "Final Order" / "Certification Order" filings.
+// The lookbehind skips party filings such as "Joint Proposed Order Adopting the
+// Stipulation". Deliberately narrower than the shared default, which would also
+// treat "ORDER APPROVING CHANGE OF CONTROL" or "ORDER DENYING MOTION ..."
+// (routine mid-docket orders) as closing.
+const GA_SIGNALS = {
+  closed: /(?<!proposed )\b(order (adopting|approving) (the )?(joint )?stipulation|order (granting|denying) (the )?certification|final order|certification order)\b/i,
+  // A stipulation between Staff and the utility means the decision is next.
+  decisionNext:
+    /\bstipulation\b|\bpost-?\s?hearing brief|\bproposed (final )?order\b/i,
+  hearingHeld: /\btranscripts?\b/i,
+  hearingSet: /\bnotice of (scheduled )?(special )?(hearing|administrative session)\b/i,
+};
+
+function parseIsoDate(raw: string): Date | null {
+  const d = new Date(`${raw.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function classifyFilings(filings: GaDocketFiling[]) {
+  const events: DocketEvent[] = filings.map((f) => ({ date: parseIsoDate(f.filedDate), text: f.description.replace(/\s+/g, " ") }));
+  return classifyReviewStep(events, GA_SIGNALS);
+}
+
 // Real certification-docket titles seen live all describe an RFP round or
 // a batch of power purchase agreements, never a single named facility —
 // see module header for why these become aggregate rows.
@@ -107,9 +163,10 @@ function parseDocketDate(raw: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function normalizeCertification(d: GaDocket): NormalizedProject {
+function normalizeCertification(d: GaDocket, filings: GaDocketFiling[]): NormalizedProject {
   const matchKey = resolveMatchKey("ga-psc", String(d.docketId));
   const filedDate = parseDocketDate(d.docketDate);
+  const review = filings.length > 0 ? classifyFilings(filings) : undefined;
 
   return {
     matchKey,
@@ -127,6 +184,10 @@ function normalizeCertification(d: GaDocket): NormalizedProject {
     applicant: "Georgia Power Company",
     currentStatus: `Georgia PSC Docket ${d.docketId}: ${d.statusName}`,
     currentStage: "local_review" as ProjectStage,
+    // Undefined when the filing list was empty (nothing to judge from); null
+    // when a closing order exists (the docket stays "Open" for compliance).
+    reviewStep: review === undefined ? undefined : review ? review.step : null,
+    reviewStepAt: review === undefined ? undefined : review ? review.at : null,
     causeSlugs: [] as CauseSlug[],
     causeDetail: `Georgia Power Company's certification of power purchase agreements or an RFP round with the Georgia PSC — represents multiple underlying projects, not one, so no single capacity or fuel type applies. Docket ${d.docketId}.`,
     isAggregateExample: true,
@@ -153,7 +214,10 @@ export async function ingestGaPscDockets(): Promise<IngestSummary> {
   for (const d of dockets) {
     try {
       if (CERTIFICATION_RE.test(d.title)) {
-        toUpsert.push(normalizeCertification(d));
+        // A failed filings fetch leaves the step unmanaged rather than dropping the project.
+        const filings = await fetchDocketFilings(d.docketId).catch(() => []);
+        toUpsert.push(normalizeCertification(d, filings));
+        await sleep(REQUEST_DELAY_MS);
       }
     } catch (err) {
       errors.push({ matchKey: String(d.docketId), message: String(err) });

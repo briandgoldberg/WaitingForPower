@@ -312,6 +312,21 @@
 // "tabled ... scheduled for an evidentiary hearing" pattern that
 // historically precedes one) while its hearing is still upcoming.
 //
+// PROCEDURAL STEP (added 2026-09-21): each Minutes paragraph that mentions a
+// case is a dated event (the meeting date), so a still-pending case's mentions
+// feed the shared classifier in reviewStep.ts (see NE_STEP_SIGNALS and
+// classifyNeReviewStep). Confirmed live 2026-09-21 against the 24-month
+// archive: a contested case is minuted as "scheduled for an evidentiary
+// hearing", then "recessed ... to conduct an evidentiary hearing", and the
+// Board can then deliberate and issue a written order later, which is the
+// "Awaiting commission order" state. The next-meeting agenda is the authority
+// on a hearing still to come, and is the only dated hearing source (the
+// minutes give no future dates). A resolved case gets null. If the agenda
+// cannot be read, hearings and the step are left undefined for the run so
+// stored values survive. Not covered: a case that appears only on the agenda
+// (PRB-4082-G at the time of writing) has no minutes mention yet, so it is
+// not a candidate at all.
+//
 // Wired to Vercel Cron weekly, 08:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ne-prb/route.ts).
 
@@ -319,6 +334,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://powerreview.nebraska.gov";
 const ARCHIVE_URL = `${BASE_URL}/minutes-archive`;
@@ -629,6 +645,35 @@ function detectResolution(text: string): Resolution {
   return null;
 }
 
+// Step signals for NE, run against each minutes paragraph that names the case.
+// Confirmed against real minutes (PRB-4039-G, PRB-4052-ESR, PRB-4057-G,
+// PRB-4061-G):
+//   - hearingSet: "scheduled for an evidentiary hearing" or the "Notice of
+//     Filing and Hearing Date" sent to interested parties.
+//   - hearingHeld: "recessed ... to conduct an evidentiary hearing" or "held an
+//     evidentiary hearing". The default would also read "transcript".
+//   - hearingOff: cancelled/vacated/postponed only; "continued" here is the
+//     Board moving on to its next agenda item.
+//   - decisionNext: briefs, a draft order or a matter taken under advisement.
+//   - closed: resolution is decided by detectResolution, so the default is off.
+const NE_STEP_SIGNALS: Required<StepSignals> = {
+  hearingSet: /\b(?:scheduled|set) for (?:an? )?(?:evidentiary )?hearing\b|\bnotice of filing and hearing date\b/i,
+  hearingOff: /\b(?:cancel+(?:ed|ing|ation)|vacat(?:ed|ing)|postpone(?:d|ment))\b.{0,30}hearing|\bhearing\b.{0,30}\b(?:cancel+ed|vacated|postponed)/i,
+  hearingHeld: /\b(?:conduct(?:ed)?|held) an? evidentiary hearing\b/i,
+  decisionNext: /\b(?:post-?hearing|reply|initial) briefs?\b|\bdraft order\b|\bunder advisement\b/i,
+  closed: /(?!)/,
+};
+
+function classifyNeReviewStep(mentions: CaseMention[], hasUpcomingHearing: boolean) {
+  const events: DocketEvent[] = mentions.map((m) => ({ date: m.meeting.date, text: m.text }));
+  const result = classifyReviewStep(events, NE_STEP_SIGNALS);
+  // The next-meeting agenda is the authority on what is still to come.
+  if (hasUpcomingHearing && result && result.step !== "Hearing scheduled") {
+    return { step: "Hearing scheduled" as const, at: result.at };
+  }
+  return result;
+}
+
 // See module header FUEL/PROJECT TYPE & CAPACITY.
 const FUEL_KEYWORDS: [RegExp, FuelType][] = [
   [/\bsolar\b/i, "solar"],
@@ -844,12 +889,12 @@ function normalizeCase(
   suffix: string | null,
   sortedMentions: CaseMention[],
   projectType: ProjectType,
-  upcomingHearings: Map<string, UpcomingHearing[]>,
+  upcomingHearings: Map<string, UpcomingHearing[]> | null,
 ): NormalizedProject {
   const sourceId = `${caseNumber}${suffix ?? ""}`;
   const matchKey = resolveMatchKey("ne-prb", sourceId);
   const caseDisplay = `PRB-${sourceId}`;
-  const hearings = upcomingHearings.get(sourceId) ?? [];
+  const hearings = upcomingHearings?.get(sourceId) ?? [];
 
   const facts = pickFactsMention(sortedMentions);
   const { mention: resolutionMention, resolution } = pickResolutionMention(sortedMentions);
@@ -865,6 +910,10 @@ function normalizeCase(
   if (resolution === "granted") currentStage = "approved_awaiting_construction";
   else if (resolution === "denied" || resolution === "dismissed" || resolution === "withdrawn") currentStage = "cancelled";
   else currentStage = "local_review";
+
+  // Resolved cases get null; if the agenda could not be read the step of a
+  // pending case is left undefined so a stored one survives (see PROCEDURAL STEP).
+  const review = currentStage === "local_review" && upcomingHearings ? classifyNeReviewStep(sortedMentions, hearings.length > 0) : null;
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
@@ -930,8 +979,12 @@ function normalizeCase(
     causeSlugs,
     causeDetail: `Waiting on approval from the Nebraska Power Review Board under Neb. Rev. Stat. §§70-1013 to 70-1014.01 — ${caseDisplay}, "${facts.text.slice(0, 300)}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
+    ...(upcomingHearings || currentStage !== "local_review"
+      ? { reviewStep: review ? review.step : null, reviewStepAt: review ? review.at : null }
+      : {}),
     hearingDetailsLink: hearings.length > 0 ? AGENDA_URL : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    // Undefined when the agenda could not be read, so stored hearings survive.
+    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
     sources,
     externalIds: { nePrb: sourceId },
   };
@@ -977,8 +1030,9 @@ export async function ingestNePrbDockets(maxCandidates = MAX_CANDIDATES): Promis
   const rotatingMatchKeys = new Set<string>();
 
   // A failure here shouldn't block the whole ingestion run over a feature
-  // this supplementary — degrades to "no hearing data this run."
-  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => new Map<string, UpcomingHearing[]>());
+  // this supplementary — degrades to "no hearing data this run" (null, not an
+  // empty map, so hearings stored by an earlier run are kept).
+  const upcomingHearings = await fetchUpcomingHearingsByCase().catch(() => null);
 
   const toUpsert: NormalizedProject[] = [];
 

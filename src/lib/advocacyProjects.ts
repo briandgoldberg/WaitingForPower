@@ -22,6 +22,8 @@ export interface AdvocacyProject {
   reviewStep: string | null;
   reviewStepAt: string | null;
   hearingLink: string | null;
+  // Last day for public comment when the source publishes one, else null.
+  commentDeadline: string | null;
   // Upcoming hearings only, soonest first.
   hearings: AdvocacyHearing[];
 }
@@ -40,6 +42,7 @@ const select = {
   reviewStep: true,
   reviewStepAt: true,
   hearingDetailsLink: true,
+  commentDeadline: true,
   sources: { select: { label: true, url: true }, take: 1 },
   hearings: { where: { date: { gte: new Date() } }, orderBy: { date: "asc" as const }, select: { date: true, label: true, location: true } },
 } as const;
@@ -62,7 +65,7 @@ export async function getAdvocacyProjects(): Promise<AdvocacyProject[]> {
     prisma.project.findMany({
       where: {
         ...base,
-        OR: [{ hearings: { some: { date: { gte: new Date() } } } }, { reviewStep: { in: ["Awaiting commission order", "Hearing scheduled"] } }],
+        OR: [{ hearings: { some: { date: { gte: new Date() } } } }, { commentDeadline: { gte: new Date() } }, { reviewStep: { in: ["Awaiting commission order", "Hearing scheduled"] } }],
       },
       select,
     }),
@@ -86,6 +89,7 @@ export async function getAdvocacyProjects(): Promise<AdvocacyProject[]> {
       reviewStep: r.reviewStep,
       reviewStepAt: r.reviewStepAt ? r.reviewStepAt.toISOString() : null,
       hearingLink: r.hearingDetailsLink,
+      commentDeadline: r.commentDeadline && r.commentDeadline.getTime() >= Date.now() ? r.commentDeadline.toISOString() : null,
       hearings: r.hearings.map((h) => ({ date: h.date.toISOString(), label: h.label, location: h.location })),
     }));
 }

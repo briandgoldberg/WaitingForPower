@@ -190,6 +190,19 @@
 // revisiting before it gets there -- same lesson nyDpsDockets.ts's header
 // documents for its own MAX_CANDIDATES choice.
 //
+// PROCEDURAL STEP: the CaseSummary.aspx document list already fetched for the
+// order check is a dated list of every filing, but with only a short title and
+// a folder (PETITIONS, EXHIBITS, CORRESPONDENCE, MOTIONS, ORDERS). Confirmed
+// live 2026-09-21 against all 8 candidates: most hold just a petition, exhibits
+// and an ORDERS row, which read "Application filed". Only Fenwick Creek Solar
+// (QO26060340) has a motion for partial summary decision, a cross-motion with
+// brief and a reply, so a decision on that motion is next ("Awaiting commission
+// order"). Two defaults misfire and are overridden: "transcript" matches
+// "EXHIBIT P-10_ PLANNING BOARD TRANSCRIPT" (a municipal board transcript filed
+// with the petition, not a Board hearing), and closure is never read from a
+// title (the order PDF text decides that, see STATUS). No hearing dates are
+// published anywhere in the docket data, so hearings are left unset.
+//
 // Wired to Vercel Cron weekly, 04:00 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-nj-bpu/route.ts). A real full run against the
 // live shared DB (12 candidates found, 8 real applications, 6 upserted, 2
@@ -200,6 +213,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent } from "@/lib/ingest/reviewStep";
 import zlib from "node:zlib";
 
 const BASE_URL = "https://publicaccess.bpu.state.nj.us";
@@ -530,14 +544,17 @@ interface DocketResolution {
   // AND ORDER" (filed 11/30/2017) — not this run's own fetch date. Null
   // whenever resolution is null.
   date: Date | null;
+  // Every document on the docket (filed date + title), for the procedural step.
+  events: DocketEvent[];
 }
 
 async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<DocketResolution> {
   const docs = await fetchCaseDocuments(jar, caseId);
+  const events: DocketEvent[] = docs.map((d) => ({ date: d.date, text: d.title }));
   const orders = docs
     .filter((d) => d.folder === "ORDERS")
     .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
-  if (orders.length === 0) return { resolution: null, date: null };
+  if (orders.length === 0) return { resolution: null, date: null, events };
 
   const latest = orders[0];
   const headRes = await fetchWithCookieBootstrap(
@@ -547,7 +564,7 @@ async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<Do
   ).catch(() => null);
   const contentLength = headRes?.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_ORDER_PDF_BYTES) {
-    return { resolution: null, date: null };
+    return { resolution: null, date: null, events };
   }
 
   const res = await fetchWithCookieBootstrap(jar, `${BASE_URL}/DocumentHandler.ashx?document_id=${latest.docId}`, {
@@ -555,11 +572,11 @@ async function fetchDocketResolution(jar: CookieJar, caseId: string): Promise<Do
   });
   if (!res.ok) throw new Error(`NJ BPU DocumentHandler.ashx request failed (${res.status}) for document ${latest.docId}`);
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > MAX_ORDER_PDF_BYTES) return { resolution: null, date: null };
+  if (buf.length > MAX_ORDER_PDF_BYTES) return { resolution: null, date: null, events };
   const text = extractPdfText(buf);
-  if (GRANT_RE.test(text)) return { resolution: "granted", date: latest.date };
-  if (DENY_RE.test(text)) return { resolution: "denied", date: latest.date };
-  return { resolution: null, date: null };
+  if (GRANT_RE.test(text)) return { resolution: "granted", date: latest.date, events };
+  if (DENY_RE.test(text)) return { resolution: "denied", date: latest.date, events };
+  return { resolution: null, date: null, events };
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +656,17 @@ function extractApplicant(caption: string): string {
   return caption.slice(0, 80);
 }
 
+// See module header PROCEDURAL STEP.
+const STEP_SIGNALS = {
+  hearingSet: /\bnotice of (public |evidentiary )?hearing\b|\b(public|evidentiary) hearing\b/i,
+  // The default "transcript" also matches a local planning board's transcript
+  // filed as an exhibit to the petition, so only a hearing transcript counts.
+  hearingHeld: /\bhearing transcripts?\b|\btranscript of (the )?(public |evidentiary )?hearing\b/i,
+  decisionNext: /\bsummary decision\b|\binitial decision\b|\b(initial|reply|post-?hearing) brief\b|&BRIEF\b|\bbrief in (support|opposition)\b/i,
+  // Closure is decided from the Board order's own text (see STATUS), never from a title.
+  closed: /(?!)/,
+};
+
 interface TrackedCandidate {
   search: DocketSearchResult;
   track: "40:55D-19" | "csi-waiver";
@@ -660,6 +688,11 @@ function normalizeCandidate(candidate: TrackedCandidate, resolution: DocketResol
   else currentStage = "local_review";
 
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+
+  // A resolved docket has no live step. The document list only carries
+  // titles (no hearing dates), so no hearings are set, only the step.
+  const review = resolution.resolution === null ? classifyReviewStep(resolution.events, STEP_SIGNALS) : null;
+  const managed = resolution.resolution !== null || resolution.events.length > 0;
 
   const trackLabel =
     track === "40:55D-19"
@@ -716,6 +749,8 @@ function normalizeCandidate(candidate: TrackedCandidate, resolution: DocketResol
         url: `${BASE_URL}/CaseSummary.aspx?case_id=${search.caseId}`,
       },
     ],
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     externalIds: { njBpu: search.docket },
   };
 }

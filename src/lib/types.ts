@@ -89,6 +89,7 @@ export interface ProjectDTO {
   // for sources that do not publish enough filing detail to tell.
   reviewStep: string | null;
   reviewStepAt: string | null;
+  commentDeadline: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
   // Every real upcoming hearing found for this project, oldest first —

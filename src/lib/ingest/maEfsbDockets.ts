@@ -179,6 +179,29 @@
 // resolved — see common.ts's own RESOLVED_STAGES guard, shared by every
 // module in this series.
 //
+// PROCEDURAL STEP: the Filings already fetched for STATUS each carry a
+// structured Type ("Transcript", "Brief", "Tentative Decision", "Notice",
+// "Procedural Schedule", "Final Decision" ...) and a date, so the step costs no
+// extra request. Checked live 2026-09-21 across all 24 in-scope dockets. The
+// real signals: an EVIDENTIARY HEARING transcript (the hearing is over), any
+// "Brief" or "Tentative Decision" (the Board's decision is next; EFSB18-02 has
+// both initial and reply briefs and no Final Decision), and a "Final Decision"
+// (closes the docket, handled by detectResolution). A "PUBLIC HEARING"
+// transcript is only the public-comment session (EFSB22-05 has one from
+// 12/2022 and nothing evidentiary since), so it is neutral. A hearing being SET
+// shows as a Notice ("Notice of Adjudication and Public Comment Hearing",
+// "Notice ... critical dates") or a Procedural Schedule filing (EFSB26-01 got
+// both in Aug and Sept 2026). The dates themselves live only inside the
+// attached PDFs, not in the API, so hearings is left undefined (no dated
+// hearing rows can be built). Because there is no date to tell an upcoming
+// hearing from a long-past one, a notice or schedule only counts as "Hearing
+// scheduled" for HEARING_NOTICE_FRESH_DAYS after it was filed; an older one
+// with nothing after it (EFSB22-05, EFSB22-06, both idle for 2+ years) falls
+// back to "Application filed" rather than claiming a hearing is still coming.
+// Only filing Types that can carry these signals are read, so a resident
+// comment or a "Compliance Filing" (which EFSB22-05 uses for public comments)
+// that happens to mention a hearing is never mistaken for a procedural step.
+//
 // Wired to Vercel Cron weekly, 00:30 UTC Mondays (see vercel.json and
 // src/app/api/cron/ingest-ma-efsb/route.ts). A real run against the live
 // site (71 candidates before lookback/exclude filtering, 24 after) was
@@ -191,6 +214,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
+import { classifyReviewStep, type DocketEvent, type ReviewStep } from "@/lib/ingest/reviewStep";
 
 const BASE_URL = "https://eeaonline.eea.state.ma.us/dpu/fileroom/api";
 const APP_BASE_URL = "https://eeaonline.eea.state.ma.us/dpu/fileroom";
@@ -213,6 +237,10 @@ const REQUEST_DELAY_MS = 250;
 // See module header LOOKBACK rationale: pre-~2016 dockets have unreliably
 // sparse digitized Filings records, not just lower relevance.
 const LOOKBACK_YEARS = 10;
+// See module header PROCEDURAL STEP: how long a hearing notice or procedural
+// schedule filing keeps a docket at "Hearing scheduled" when no later step
+// follows it.
+const HEARING_NOTICE_FRESH_DAYS = 180;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -355,6 +383,42 @@ function detectResolution(detail: DocketDetail): ResolutionInfo | null {
   return null;
 }
 
+// See module header PROCEDURAL STEP. Only these filing Types are read.
+const STEP_FILING_TYPES = new Set([
+  "initial filing",
+  "notice",
+  "procedural schedule",
+  "order of notice",
+  "transcript",
+  "brief",
+  "tentative decision",
+  "certification of record",
+  "final decision",
+]);
+const STEP_SIGNALS = {
+  hearingSet: /^(?:notice|order of notice):.*\b(?:adjudication|public (?:comment )?hearing|critical dates|hearing)\b|^procedural schedule:/i,
+  hearingOff: /(?!)/,
+  hearingHeld: /^transcript:.*\b(?:evidentiary|adjudicatory) hearing\b/i,
+  decisionNext: /^(?:brief|tentative decision|certification of record):/i,
+  closed: /^final decision:/i,
+};
+
+function classifyMaReviewStep(detail: DocketDetail, now: Date): ReviewStep | null {
+  const staleBefore = now.getTime() - HEARING_NOTICE_FRESH_DAYS * 86400000;
+  const events: DocketEvent[] = [];
+  for (const f of detail.Filings) {
+    const type = f.Type?.Name?.trim().toLowerCase() ?? "";
+    if (!STEP_FILING_TYPES.has(type)) continue;
+    const date = parseIsoDate(f.FiledDate);
+    let text = `${f.Type?.Name?.trim()}: ${stripHtml(f.Description)}`;
+    // A hearing notice or schedule with no later step in HEARING_NOTICE_FRESH_DAYS
+    // no longer says a hearing is coming (see module header).
+    if (STEP_SIGNALS.hearingSet.test(text) && date && date.getTime() < staleBefore) text = "stale notice";
+    events.push({ date, text });
+  }
+  return classifyReviewStep(events, STEP_SIGNALS);
+}
+
 const TRANSMISSION_RE = /transmission (?:line|facilit)|(?:^|[^0-9])\d[\d,]*[\s-]*kv\b/i;
 const LNG_RE = /liquefaction|\bLNG\b|liquefied natural gas/i;
 const PIPELINE_RE = /gas pipeline|distribution main|point of delivery|meter station|regulator station/i;
@@ -439,6 +503,10 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, resol
   const filedDate = search.OpenedDate ? new Date(search.OpenedDate) : null;
 
   const currentStage: ProjectStage = resolution?.stage ?? "local_review";
+  // A resolved docket has no live step; an empty filing list leaves any stored
+  // step alone (undefined).
+  const review = resolution ? null : classifyMaReviewStep(detail, new Date());
+  const managed = resolution !== null || detail.Filings.length > 0;
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -488,6 +556,8 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, resol
     // ordinary still-open docket, per the project-wide undefined-vs-null
     // convention in common.ts.
     ...(resolution?.date ? { resolutionDate: resolution.date, resolutionDateConfidence: "exact" as const } : {}),
+    reviewStep: managed ? (review ? review.step : null) : undefined,
+    reviewStepAt: managed ? (review ? review.at : null) : undefined,
     sources: [
       {
         label: `MA EFSB Docket ${search.Number}`,

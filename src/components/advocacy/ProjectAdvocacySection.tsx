@@ -9,27 +9,24 @@ import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 
 const PAGE_SIZE = 20;
 
-type Phase = "hearing" | "decision" | "set" | "waiting";
+type Phase = "hearing" | "decision" | "waiting";
 
 const PHASES: { value: Phase | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "hearing", label: "Hearing coming up" },
   { value: "decision", label: "Decision pending" },
-  { value: "set", label: "Hearing set" },
   { value: "waiting", label: "Waiting" },
 ];
 
 const ADVICE: Record<Phase, string> = {
-  hearing: "Attend or send a comment before the hearing.",
+  hearing: "Attend or send a comment before the hearing. Check the docket for the date and how to speak.",
   decision: "The hearing is over. Check the docket to see if comments are still accepted, or write to the commission.",
-  set: "A hearing is set. Check the docket for the date and how to speak.",
   waiting: "Open the docket to follow it, and comment where the regulator allows it.",
 };
 
 const PILL: Record<Phase, string> = {
   hearing: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
   decision: "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
-  set: "bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
   waiting: "bg-black/5 text-[var(--text-secondary)] dark:bg-white/10",
 };
 
@@ -37,13 +34,12 @@ const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 function phaseOf(p: AdvocacyProject): Phase {
-  if (p.hearings.length > 0) return "hearing";
+  if (p.hearings.length > 0 || p.reviewStep === "Hearing scheduled") return "hearing";
   if (p.reviewStep === "Awaiting commission order") return "decision";
-  if (p.reviewStep === "Hearing scheduled") return "set";
   return "waiting";
 }
 
-const ORDER: Record<Phase, number> = { hearing: 0, decision: 1, set: 2, waiting: 3 };
+const ORDER: Record<Phase, number> = { hearing: 0, decision: 1, waiting: 2 };
 
 type Sort = "soonest" | "largest" | "longest";
 
@@ -72,7 +68,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [rows, query, state]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: inScope.length, hearing: 0, decision: 0, set: 0, waiting: 0 };
+    const c: Record<string, number> = { all: inScope.length, hearing: 0, decision: 0, waiting: 0 };
     for (const r of inScope) c[r.phase]++;
     return c;
   }, [inScope]);
@@ -83,7 +79,12 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
       if (sort === "largest") return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
       if (sort === "longest") return (b.p.yearsWaiting ?? -1) - (a.p.yearsWaiting ?? -1);
       if (a.phase !== b.phase) return ORDER[a.phase] - ORDER[b.phase];
-      if (a.phase === "hearing") return a.p.hearings[0].date.localeCompare(b.p.hearings[0].date);
+      if (a.phase === "hearing") {
+        // Dated hearings first, soonest at the top; hearings with no date yet after them.
+        const da = a.p.hearings[0]?.date ?? "9999";
+        const db = b.p.hearings[0]?.date ?? "9999";
+        if (da !== db) return da.localeCompare(db);
+      }
       return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
     });
   }, [inScope, phase, sort]);
@@ -185,15 +186,15 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${PILL[ph]}`}>
-                    {ph === "hearing" ? `Hearing ${fmtDay(next.date)}` : ph === "decision" ? "Decision pending" : ph === "set" ? "Hearing set" : "Waiting"}
+                    {ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision pending" : "Waiting"}
                   </span>
-                  {ph === "hearing" && next.label && <span className="text-[var(--muted)]">{next.label}</span>}
+                  {ph === "hearing" && next?.label && <span className="text-[var(--muted)]">{next.label}</span>}
                   {ph === "hearing" && p.hearings.length > 1 && (
                     <span className="text-[var(--muted)]">+{p.hearings.length - 1} more date{p.hearings.length > 2 ? "s" : ""}</span>
                   )}
                   {ph === "decision" && p.reviewStepAt && <span className="text-[var(--muted)]">since {fmtDay(p.reviewStepAt)}</span>}
                 </div>
-                {ph === "hearing" && next.location && <p className="text-xs text-[var(--muted)]">Where: {next.location}</p>}
+                {ph === "hearing" && next?.location && <p className="text-xs text-[var(--muted)]">Where: {next.location}</p>}
                 <p className="text-xs text-[var(--text-secondary)]">{ADVICE[ph]}</p>
               </div>
 

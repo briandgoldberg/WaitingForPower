@@ -40,12 +40,10 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
   let attend: ActionRow;
   if (pub.length > 0) {
     attend = { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) };
-  } else if (p.hearings.length > 0) {
-    attend = { ok: false, label: "Hearing is not open to the public", lines: [`${fmtShort(p.hearings[0].date)} · ${p.hearings[0].label ?? "Hearing"}, parties only`] };
-  } else if (p.reviewStep === "Hearing scheduled") {
-    attend = { ok: null, label: "A hearing is set, date not published", lines: [] };
   } else {
-    attend = { ok: false, label: "No hearing to attend yet", lines: [] };
+    // Hearings closed to the public (evidentiary, parties only) are left off
+    // here; they stay on the project page.
+    attend = { ok: false, label: "No public hearing scheduled", lines: [] };
   }
 
   let comment: ActionRow;
@@ -91,7 +89,7 @@ function likelihood(acts: { attend: ActionRow; comment: ActionRow }): number {
 const soonestDate = (p: AdvocacyProject): string =>
   [p.commentDeadline, p.hearings.find(isPublicHearing)?.date ?? p.hearings[0]?.date].filter(Boolean).sort()[0] ?? "9999";
 
-type Sort = "best" | "soonest" | "largest" | "longest";
+type Sort = "best" | "soonest" | "largest";
 
 export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
   const [query, setQuery] = useState("");
@@ -138,7 +136,6 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
     const list = inScope.filter((r) => filter === "open" || (filter === "comment" ? r.acts.comment.ok === true : r.acts.attend.ok === true));
     return [...list].sort((a, b) => {
       if (sort === "largest") return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
-      if (sort === "longest") return (b.p.yearsWaiting ?? -1) - (a.p.yearsWaiting ?? -1);
       if (sort === "best" && a.score !== b.score) return b.score - a.score;
       const da = soonestDate(a.p);
       const db = soonestDate(b.p);
@@ -213,7 +210,6 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           <option value="best">Best to act on</option>
           <option value="soonest">Soonest date</option>
           <option value="largest">Largest first</option>
-          <option value="longest">Waiting longest</option>
         </select>
       </div>
 

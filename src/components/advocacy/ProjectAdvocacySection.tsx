@@ -27,10 +27,10 @@ const PILL: Record<Phase, string> = {
   waiting: "bg-black/5 text-[var(--text-secondary)] dark:bg-white/10",
 };
 
-function adviceFor(ph: Phase, howToComment: string | null, rule: string | null): string {
+function adviceFor(ph: Phase, howToComment: string | null, rule: string | null, deadlineOnly = false): string {
   const how = howToComment ? " " + howToComment : "";
-  if (ph === "comment") return "Send your comment by the deadline." + how;
-  if (ph === "hearing") return "You can usually speak at the hearing or send a comment for the record." + (how || " The docket has the date and how.");
+  if (ph === "comment") return (deadlineOnly ? "Send your comment by the deadline." : "Speak at the public hearing, or send a comment before it.") + how;
+  if (ph === "hearing") return "This hearing is for the parties, so the public usually cannot testify. You can still send a comment for the record." + how;
   if (ph === "decision") {
     if (rule === "closes_at_hearing") return "The hearing is over and this state closes the record at the hearing, so formal comments are closed. You can still write to the commission and your legislators.";
     if (rule === "open_until_decision") return "This state accepts public comments until the commission decides." + how;
@@ -43,8 +43,14 @@ function adviceFor(ph: Phase, howToComment: string | null, rule: string | null):
 const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
+// A hearing the public can speak at, as opposed to an evidentiary hearing where
+// the parties present testimony. Judged from the label the source gives.
+const PUBLIC_HEARING_RE = /public|comment|input|listening|town hall/i;
+const PARTIES_ONLY_RE = /evidentiary|party session|siting committee|contested|prehearing|technical|settlement/i;
+const isPublicHearing = (h: { label: string | null }) => !!h.label && PUBLIC_HEARING_RE.test(h.label) && !PARTIES_ONLY_RE.test(h.label);
+
 function phaseOf(p: AdvocacyProject): Phase {
-  if (p.commentDeadline) return "comment";
+  if (p.commentDeadline || p.hearings.some(isPublicHearing)) return "comment";
   if (p.hearings.length > 0 || p.reviewStep === "Hearing scheduled") return "hearing";
   if (p.reviewStep === "Awaiting commission order") return "decision";
   return "waiting";
@@ -53,7 +59,8 @@ function phaseOf(p: AdvocacyProject): Phase {
 const ORDER: Record<Phase, number> = { comment: 0, hearing: 1, decision: 2, waiting: 3 };
 
 // The date that makes a project urgent: the comment deadline or the next hearing, whichever is first.
-const soonestDate = (p: AdvocacyProject): string => [p.commentDeadline, p.hearings[0]?.date].filter(Boolean).sort()[0] ?? "9999";
+const soonestDate = (p: AdvocacyProject): string =>
+  [p.commentDeadline, p.hearings.find(isPublicHearing)?.date ?? p.hearings[0]?.date].filter(Boolean).sort()[0] ?? "9999";
 
 type Sort = "soonest" | "largest" | "longest";
 
@@ -177,7 +184,9 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
-          const next = p.hearings[0];
+          const publicNext = p.hearings.find(isPublicHearing);
+          const next = ph === "comment" ? publicNext : p.hearings[0];
+          const others = p.hearings.filter((h) => h !== next);
           const rule = codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
           return (
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
@@ -201,17 +210,17 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                   <span className={`rounded-full px-2 py-0.5 font-semibold ${PILL[ph]}`}>
-                    {ph === "comment" && p.commentDeadline ? `Comments due ${fmtDay(p.commentDeadline)}` : ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
+                    {ph === "comment" ? (p.commentDeadline ? `Comments due ${fmtDay(p.commentDeadline)}` : publicNext ? `Speak ${fmtDay(publicNext.date)}` : "Comments open") : ph === "hearing" ? (next ? `Hearing ${fmtDay(next.date)}` : "Hearing set") : ph === "decision" ? "Decision next" : "Case open"}
                   </span>
-                  {ph === "comment" && next && <span className="text-[var(--muted)]">Hearing {fmtDay(next.date)}</span>}
-                  {ph === "hearing" && next?.label && <span className="text-[var(--muted)]">{next.label}</span>}
-                  {ph === "hearing" && p.hearings.length > 1 && (
-                    <span className="text-[var(--muted)]">+{p.hearings.length - 1} more date{p.hearings.length > 2 ? "s" : ""}</span>
+                  {next?.label && <span className="text-[var(--muted)]">{next.label}</span>}
+                  {ph === "hearing" && next?.label && !isPublicHearing(next) && <span className="text-[var(--muted)]">(parties only)</span>}
+                  {others.length > 0 && (
+                    <span className="text-[var(--muted)]">+{others.length} more date{others.length > 1 ? "s" : ""}</span>
                   )}
                   {ph === "decision" && p.reviewStepAt && <span className="text-[var(--muted)]">since {fmtDay(p.reviewStepAt)}</span>}
                 </div>
-                {ph === "hearing" && next?.location && <p className="text-xs text-[var(--muted)]">Where: {next.location}</p>}
-                <p className="text-xs text-[var(--text-secondary)]">{adviceFor(ph, rule?.howToComment || null, rule && rule.recordRule !== "unknown" ? rule.recordRule : null)}</p>
+                {(ph === "hearing" || ph === "comment") && next?.location && <p className="text-xs text-[var(--muted)]">Where: {next.location}</p>}
+                <p className="text-xs text-[var(--text-secondary)]">{adviceFor(ph, rule?.howToComment || null, rule && rule.recordRule !== "unknown" ? rule.recordRule : null, !!p.commentDeadline && !publicNext)}</p>
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">

@@ -86,16 +86,12 @@ function likelihood(acts: { attend: ActionRow; comment: ActionRow }): number {
 }
 
 // The date that makes a project urgent: the comment deadline or the next public hearing, whichever is first.
-const soonestDate = (p: AdvocacyProject): string =>
-  [p.commentDeadline, p.hearings.find(isPublicHearing)?.date ?? p.hearings[0]?.date].filter(Boolean).sort()[0] ?? "9999";
-
-type Sort = "best" | "soonest" | "largest";
+const soonestDate = (p: AdvocacyProject): string => [p.commentDeadline, p.hearings.find(isPublicHearing)?.date].filter(Boolean).sort()[0] ?? "9999";
 
 export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [filter, setFilter] = useState<Filter>("open");
-  const [sort, setSort] = useState<Sort>("best");
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -134,15 +130,16 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
 
   const filtered = useMemo(() => {
     const list = inScope.filter((r) => filter === "open" || (filter === "comment" ? r.acts.comment.ok === true : r.acts.attend.ok === true));
+    // Soonest first: cases with a comment deadline or public hearing date, in date
+    // order, then the rest with the likeliest to take comments ahead, larger first.
     return [...list].sort((a, b) => {
-      if (sort === "largest") return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
-      if (sort === "best" && a.score !== b.score) return b.score - a.score;
       const da = soonestDate(a.p);
       const db = soonestDate(b.p);
       if (da !== db) return da.localeCompare(db);
+      if (a.score !== b.score) return b.score - a.score;
       return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
     });
-  }, [inScope, filter, sort]);
+  }, [inScope, filter]);
 
   const reset = () => setVisible(PAGE_SIZE);
 
@@ -200,16 +197,6 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
               {STATE_NAMES[c]}
             </option>
           ))}
-        </select>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as Sort)}
-          aria-label="Sort"
-          className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-        >
-          <option value="best">Best to act on</option>
-          <option value="soonest">Soonest date</option>
-          <option value="largest">Largest first</option>
         </select>
       </div>
 

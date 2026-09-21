@@ -2,28 +2,24 @@
 
 import { useState, type ReactNode } from "react";
 
-export type AdvocacyTab = "national" | "state" | "project" | "hearings";
+export type AdvocacyTab = "national" | "state" | "project";
 
 export function AdvocacyTabs({
   defaultTab,
-  hearingCount,
   nationalAdvocacy,
   stateAdvocacy,
   projectAdvocacy,
-  publicHearings,
 }: {
   defaultTab: AdvocacyTab;
-  hearingCount: number;
   nationalAdvocacy: ReactNode;
   stateAdvocacy: ReactNode;
   projectAdvocacy: ReactNode;
-  publicHearings: ReactNode;
 }) {
   const [tab, setTab] = useState<AdvocacyTab>(defaultTab);
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-1 rounded-2xl sm:flex sm:gap-1.5 sm:rounded-full bg-black/5 dark:bg-white/10 p-1 w-full sm:w-fit sm:max-w-full sm:overflow-x-auto">
+      <div className="grid grid-cols-3 gap-1 rounded-2xl sm:flex sm:gap-1.5 sm:rounded-full bg-black/5 dark:bg-white/10 p-1 w-full sm:w-fit sm:max-w-full sm:overflow-x-auto">
         <TabButton active={tab === "national"} onClick={() => setTab("national")}>
           National Advocacy
         </TabButton>
@@ -31,17 +27,13 @@ export function AdvocacyTabs({
           State Advocacy
         </TabButton>
         <TabButton active={tab === "project"} onClick={() => setTab("project")}>
-          Project Advocacy
-        </TabButton>
-        <TabButton active={tab === "hearings"} onClick={() => setTab("hearings")}>
-          Public Hearings{hearingCount > 0 && ` (${hearingCount})`}
+          Projects
         </TabButton>
       </div>
 
       <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
       <div hidden={tab !== "state"}>{stateAdvocacy}</div>
       <div hidden={tab !== "project"}>{projectAdvocacy}</div>
-      <div hidden={tab !== "hearings"}>{publicHearings}</div>
     </div>
   );
 }

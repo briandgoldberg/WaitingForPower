@@ -3,8 +3,6 @@ import { AdvocacyTabs, type AdvocacyTab } from "@/components/advocacy/AdvocacyTa
 import { NationalAdvocacySection } from "@/components/advocacy/NationalAdvocacySection";
 import { StateAdvocacySection } from "@/components/advocacy/StateAdvocacySection";
 import { ProjectAdvocacySection } from "@/components/advocacy/ProjectAdvocacySection";
-import { PublicHearingsSection } from "@/components/advocacy/PublicHearingsSection";
-import { getUpcomingPublicHearingGroups, getDecisionWatch } from "@/lib/hearings";
 import { getAdvocacyProjects } from "@/lib/advocacyProjects";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +17,7 @@ export const metadata: Metadata = {
   },
 };
 
-const TABS: AdvocacyTab[] = ["national", "state", "project", "hearings"];
+const TABS: AdvocacyTab[] = ["national", "state", "project"];
 
 export default async function PoliciesPage({
   searchParams,
@@ -27,19 +25,17 @@ export default async function PoliciesPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const defaultTab = TABS.find((t) => t === tab) ?? "national";
-  const [hearingGroups, advocacyProjects, decisionWatch] = await Promise.all([getUpcomingPublicHearingGroups(), getAdvocacyProjects(), getDecisionWatch()]);
-  const hearingCount = hearingGroups.reduce((n, g) => n + g.hearings.length, 0);
+  // The old Public Hearings tab was folded into Projects.
+  const defaultTab = TABS.find((t) => t === tab) ?? (tab === "hearings" ? "project" : "national");
+  const advocacyProjects = await getAdvocacyProjects();
 
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
       <AdvocacyTabs
         defaultTab={defaultTab}
-        hearingCount={hearingCount}
         nationalAdvocacy={<NationalAdvocacySection />}
         stateAdvocacy={<StateAdvocacySection />}
         projectAdvocacy={<ProjectAdvocacySection projects={advocacyProjects} />}
-        publicHearings={<PublicHearingsSection groups={hearingGroups} decisions={decisionWatch} />}
       />
     </div>
   );

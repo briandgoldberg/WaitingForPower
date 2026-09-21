@@ -70,3 +70,31 @@ export async function countUpcomingPublicHearings(): Promise<number> {
     },
   });
 }
+
+export interface DecisionWatchEntry {
+  slug: string;
+  name: string;
+  state: string | null;
+  capacityValue: number | null;
+  capacityUnit: string | null;
+  reviewStep: string;
+  reviewStepAt: string | null;
+}
+
+// Projects whose docket has moved past (or is about to reach) its hearing:
+// "Awaiting commission order" means the hearing is over and no order has
+// issued, "Hearing scheduled" means a hearing is set but its date is not in
+// the data. Newest step first.
+export async function getDecisionWatch(): Promise<DecisionWatchEntry[]> {
+  const rows = await prisma.project.findMany({
+    where: {
+      reviewStep: { in: ["Awaiting commission order", "Hearing scheduled"] },
+      mergedIntoId: null,
+      noLongerReported: false,
+      isAggregateExample: false,
+    },
+    select: { slug: true, name: true, state: true, capacityValue: true, capacityUnit: true, reviewStep: true, reviewStepAt: true },
+    orderBy: { reviewStepAt: "desc" },
+  });
+  return rows.map((r) => ({ ...r, reviewStep: r.reviewStep as string, reviewStepAt: r.reviewStepAt ? r.reviewStepAt.toISOString() : null }));
+}

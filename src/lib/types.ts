@@ -85,6 +85,10 @@ export interface ProjectDTO {
   // project's own docket source by a handful of ingestion modules — see
   // schema.prisma's Project.hearingDetailsLink comment for which ones.
   hearingDetailsLink: string | null;
+  // Procedural step of a state docket, e.g. "Awaiting commission order". Null
+  // for sources that do not publish enough filing detail to tell.
+  reviewStep: string | null;
+  reviewStepAt: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
   // Every real upcoming hearing found for this project, oldest first —

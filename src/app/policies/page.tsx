@@ -4,7 +4,7 @@ import { NationalAdvocacySection } from "@/components/advocacy/NationalAdvocacyS
 import { StateAdvocacySection } from "@/components/advocacy/StateAdvocacySection";
 import { ProjectAdvocacySection } from "@/components/advocacy/ProjectAdvocacySection";
 import { PublicHearingsSection } from "@/components/advocacy/PublicHearingsSection";
-import { getUpcomingPublicHearingGroups } from "@/lib/hearings";
+import { getUpcomingPublicHearingGroups, getDecisionWatch } from "@/lib/hearings";
 import { getAdvocacyProjects } from "@/lib/advocacyProjects";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function PoliciesPage({
 }) {
   const { tab } = await searchParams;
   const defaultTab = TABS.find((t) => t === tab) ?? "national";
-  const [hearingGroups, advocacyProjects] = await Promise.all([getUpcomingPublicHearingGroups(), getAdvocacyProjects()]);
+  const [hearingGroups, advocacyProjects, decisionWatch] = await Promise.all([getUpcomingPublicHearingGroups(), getAdvocacyProjects(), getDecisionWatch()]);
   const hearingCount = hearingGroups.reduce((n, g) => n + g.hearings.length, 0);
 
   return (
@@ -39,7 +39,7 @@ export default async function PoliciesPage({
         nationalAdvocacy={<NationalAdvocacySection />}
         stateAdvocacy={<StateAdvocacySection />}
         projectAdvocacy={<ProjectAdvocacySection projects={advocacyProjects} />}
-        publicHearings={<PublicHearingsSection groups={hearingGroups} />}
+        publicHearings={<PublicHearingsSection groups={hearingGroups} decisions={decisionWatch} />}
       />
     </div>
   );

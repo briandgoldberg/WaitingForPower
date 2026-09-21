@@ -159,6 +159,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               rows={[
                 p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
                 p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
+                p.reviewStep ? ["Review step", `${p.reviewStep}${p.reviewStepAt ? ` (since ${new Date(p.reviewStepAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })})` : ""}`] : null,
               ]}
             />
           )}

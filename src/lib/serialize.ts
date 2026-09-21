@@ -74,6 +74,8 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
     queueCluster: p.queueCluster,
     pointOfInterconnection: p.pointOfInterconnection,
     hearingDetailsLink: p.hearingDetailsLink,
+    reviewStep: p.reviewStep,
+    reviewStepAt: p.reviewStepAt ? p.reviewStepAt.toISOString() : null,
     sources: p.sources.map((s) => ({ label: s.label, url: s.url })),
     milestones: p.milestones
       .slice()

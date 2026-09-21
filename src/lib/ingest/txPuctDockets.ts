@@ -302,6 +302,34 @@ function findResolutionDate(filings: DocketFiling[]): Date | null {
   return dated.reduce((latest, d) => (d.getTime() > latest.getTime() ? d : latest));
 }
 
+// PROCEDURAL STEP (added 2026-09-21): PUCT posts every filing with a description
+// but no docket-level status, so the step is read from the filings. Hearing
+// dates themselves live inside the PDFs, not the table, so this records where
+// the case stands rather than a date. "Awaiting commission order" means the
+// hearing is over (a Proposal For Decision or exceptions to one exist) or SOAH
+// sent the case straight back to the Commission, and no closing order has
+// issued: that is the decision-ready stage.
+const PFD_RE = /PROPOSAL FOR DECISION|PROPOSED ORDER (ON|OF) THE ALJ|REMANDING TO THE COMMISSION|ORDER OF REMAND/i;
+const HEARING_SET_RE = /SETTING HEARING ON THE MERITS/i;
+const HEARING_OFF_RE = /CANCEL+ING HEARING|CANCEL+ATION OF HEARING/i;
+const SOAH_RE = /^SOAH ORDER NO. ?1/i;
+
+export function classifyReviewStep(filings: DocketFiling[]): { step: string; at: Date | null } | null {
+  const sorted = [...filings].sort((a, b) => a.itemNumber - b.itemNumber);
+  if (sorted.length === 0) return null;
+  const at = (f: DocketFiling | undefined) => (f ? parseUsDate(f.fileStamp) : null);
+  if (isResolved(filings)) return null;
+  const pfd = [...sorted].reverse().find((f) => PFD_RE.test(f.description));
+  if (pfd) return { step: "Awaiting commission order", at: at(pfd) };
+  const hearingEvent = [...sorted].reverse().find((f) => HEARING_SET_RE.test(f.description) || HEARING_OFF_RE.test(f.description));
+  if (hearingEvent && HEARING_SET_RE.test(hearingEvent.description) && !HEARING_OFF_RE.test(hearingEvent.description)) {
+    return { step: "Hearing scheduled", at: at(hearingEvent) };
+  }
+  const soah = sorted.find((f) => SOAH_RE.test(f.description.trim()));
+  if (soah) return { step: "At hearings office", at: at(soah) };
+  return { step: "Application filed", at: at(sorted[0]) };
+}
+
 const APPLICATION_RE = /^(JOINT )?APPLICATION OF/i;
 
 function parseUsDate(raw: string): Date | null {
@@ -411,6 +439,8 @@ function normalizeDocket(search: DocketSearchResult, filings: DocketFiling[]): N
   // this run," never overwriting a value another run may have set.
   const resolutionDate = resolved ? findResolutionDate(filings) : null;
 
+  const review = classifyReviewStep(filings);
+
   const causeSlugs: CauseSlug[] = ["local_state_opposition"];
 
   const dataQualityNoteParts: string[] = [
@@ -441,6 +471,8 @@ function normalizeDocket(search: DocketSearchResult, filings: DocketFiling[]): N
     currentStage,
     resolutionDate: resolutionDate ?? undefined,
     resolutionDateConfidence: resolutionDate ? "exact" : undefined,
+    reviewStep: review ? review.step : null,
+    reviewStepAt: review ? review.at : null,
     causeSlugs,
     causeDetail: `Waiting on a Certificate of Convenience and Necessity from the Texas Public Utility Commission — Docket No. ${search.controlNumber}, "${search.description}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

@@ -214,12 +214,19 @@ model Project {
   // project dropping out of a source's "active" search is expected
   // behavior, not a signal. Cleared automatically the next time that same
   // matchKey is seen again in a run.
-  noLongerReported Boolean @default(false)
+  noLongerReported Boolean   @default(false)
   // Set when this row is the same physical project as another (see
   // src/lib/dedupe.ts): points at the row that represents it. Merged rows are
   // kept (ingest keeps updating them) but hidden from lists, totals and search;
   // their sources and best fields show on the canonical row.
-  mergedIntoId String?
+  mergedIntoId     String?
+  // Where a state docket stands procedurally, e.g. "Awaiting commission order"
+  // (hearing held or case sent straight to the commission, no final order yet),
+  // "Hearing scheduled", "Application filed". Set by the docket ingests that can
+  // read filing history; null elsewhere. reviewStepAt is the date of the filing
+  // that put it in that step.
+  reviewStep       String?
+  reviewStepAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

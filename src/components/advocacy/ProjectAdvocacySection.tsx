@@ -144,8 +144,8 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5 max-w-sm">
-        <span className="text-xs font-medium">Likelihood of accepting comments</span>
-        <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting comments">
+        <span className="text-xs font-medium">Likelihood of accepting public comments</span>
+        <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting public comments">
           <div
             aria-hidden
             className="absolute top-1 bottom-1 rounded-full bg-[var(--accent)] transition-[left] duration-200 ease-out"

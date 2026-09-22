@@ -84,23 +84,20 @@ export default async function HomePage({
           </h1>
         </div>
 
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <Link
-              href="/policies?tab=project&comments=confirmed"
-              className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-              style={{ color: "var(--accent)" }}
-            >
-              Advocate for Open Projects →
-            </Link>
-            {feed === "changes" && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <StateFeedFilter state={state} />
-                <FeedSubscribeBox state={state} />
-              </div>
-            )}
+        <Link
+          href="/policies?tab=project&comments=confirmed"
+          className="shrink-0 self-start text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+          style={{ color: "var(--accent)" }}
+        >
+          Advocate for Open Projects →
+        </Link>
+
+        {feed === "changes" && (
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            <StateFeedFilter state={state} />
+            <FeedSubscribeBox state={state} />
           </div>
-        </div>
+        )}
 
         {feed === "changes" ? (
           /* key={state}: ChangesFeed seeds its own state from initialChanges

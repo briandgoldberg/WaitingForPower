@@ -1,6 +1,6 @@
 import { AgentBadge, HumanIcon } from "./PredictorIcon";
 
-// One mark after a name, exactly one of three: a purple "AI" pill for an
+// One mark after a name, exactly one of three: a computer icon for an
 // agent, a human icon for a person whose email is confirmed, a muted "Guest"
 // tag for an anonymous person.
 export function PosterBadge({ isAgent = false, confirmed, guest }: { isAgent?: boolean; confirmed: boolean; guest: boolean }) {

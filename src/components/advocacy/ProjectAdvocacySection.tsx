@@ -10,16 +10,15 @@ import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateComm
 
 const PAGE_SIZE = 20;
 
-type FilterKey = "comment" | "maybe" | "hearing";
-
-// Every project shown is an open case (awaiting a decision) by default. These
-// narrow further and combine as "and": selecting more than one shows only
-// cases that match all of them.
-const FILTERS: { value: FilterKey; label: string }[] = [
-  { value: "comment", label: "Comments Open" },
-  { value: "maybe", label: "Comments Possibly Open" },
-  { value: "hearing", label: "Hearing Coming Up" },
-];
+// How likely a project is to still be accepting comments, least to most
+// likely. The slider filters to this tier or higher; results are always
+// shown largest project first (MW), not by likelihood or date.
+const LIKELIHOOD_LEVELS = [
+  { min: 0, label: "Any status" },
+  { min: 1, label: "Not confirmed closed" },
+  { min: 2, label: "Possibly or confirmed open" },
+  { min: 3, label: "Confirmed open only" },
+] as const;
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -78,25 +77,22 @@ const ruleFor = (p: AdvocacyProject): StateCommentRule | undefined => {
   return codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
 };
 
-// "Comments Possibly Open" means we genuinely don't know either way, as
-// opposed to a hearing having already probably closed the record.
+// "Possibly open" means we genuinely don't know either way, as opposed to a
+// hearing having already probably closed the record.
 const isMaybeOpen = (acts: { comment: ActionRow }) => acts.comment.ok === null && acts.comment.label.startsWith("Maybe");
 
-// How worth acting on a case is: a confirmed comment window is worth most, then
-// a public hearing, then a "maybe". Closed or not-yet-open cases rank last.
-function likelihood(acts: { attend: ActionRow; comment: ActionRow }): number {
-  const c = acts.comment.ok === true ? 4 : isMaybeOpen(acts) ? 2 : acts.comment.ok === null ? 1 : 0;
-  const a = acts.attend.ok === true ? 3 : 0;
-  return c + a;
+// 0 = confirmed closed, 1 = probably closed, 2 = possibly open, 3 = confirmed open.
+function commentLikelihood(acts: { comment: ActionRow }): number {
+  if (acts.comment.ok === true) return 3;
+  if (isMaybeOpen(acts)) return 2;
+  if (acts.comment.ok === null) return 1;
+  return 0;
 }
-
-// The date that makes a project urgent: the comment deadline or the next public hearing, whichever is first.
-const soonestDate = (p: AdvocacyProject): string => [p.commentDeadline, p.hearings.find(isPublicHearing)?.date].filter(Boolean).sort()[0] ?? "9999";
 
 export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
-  const [activeFilters, setActiveFilters] = useState<FilterKey[]>([]);
+  const [minLikelihood, setMinLikelihood] = useState(0);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -104,7 +100,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
       projects.map((p) => {
         const rule = ruleFor(p);
         const acts = actionsFor(p, rule);
-        return { p, rule, acts, score: likelihood(acts) };
+        return { p, rule, acts, score: commentLikelihood(acts) };
       }),
     [projects],
   );
@@ -124,61 +120,41 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
     });
   }, [rows, query, state]);
 
-  const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { comment: 0, maybe: 0, hearing: 0 };
-    for (const r of inScope) {
-      if (r.acts.comment.ok === true) c.comment++;
-      if (isMaybeOpen(r.acts)) c.maybe++;
-      if (r.acts.attend.ok === true) c.hearing++;
-    }
-    return c;
-  }, [inScope]);
-
   const filtered = useMemo(() => {
-    const list = inScope.filter((r) => {
-      if (activeFilters.includes("comment") && r.acts.comment.ok !== true) return false;
-      if (activeFilters.includes("maybe") && !isMaybeOpen(r.acts)) return false;
-      if (activeFilters.includes("hearing") && r.acts.attend.ok !== true) return false;
-      return true;
-    });
-    // Soonest first: cases with a comment deadline or public hearing date, in date
-    // order, then the rest with the likeliest to take comments ahead, larger first.
-    return [...list].sort((a, b) => {
-      const da = soonestDate(a.p);
-      const db = soonestDate(b.p);
-      if (da !== db) return da.localeCompare(db);
-      if (a.score !== b.score) return b.score - a.score;
-      return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
-    });
-  }, [inScope, activeFilters]);
+    const list = inScope.filter((r) => r.score >= minLikelihood);
+    // Always largest project first, regardless of likelihood or date.
+    return [...list].sort((a, b) => (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1));
+  }, [inScope, minLikelihood]);
 
   const reset = () => setVisible(PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Projects awaiting a decision from state or federal regulators. Narrow to cases taking comments or with a hearing coming up.
+        Projects awaiting a decision from state or federal regulators, largest first.
       </p>
 
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
-        {FILTERS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => {
-              setActiveFilters((prev) => (prev.includes(o.value) ? prev.filter((v) => v !== o.value) : [...prev, o.value]));
-              reset();
-            }}
-            aria-pressed={activeFilters.includes(o.value)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              activeFilters.includes(o.value)
-                ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                : "border-[var(--border)] bg-[var(--panel)] text-[var(--text-secondary)] hover:border-[var(--accent)]"
-            }`}
-          >
-            {o.label} ({counts[o.value]})
-          </button>
-        ))}
+      <div className="flex flex-col gap-1.5 max-w-sm">
+        <div className="flex items-center justify-between text-xs">
+          <label htmlFor="likelihood" className="font-medium">
+            Likelihood of accepting comments
+          </label>
+          <span className="text-[var(--muted)]">{filtered.length} projects</span>
+        </div>
+        <input
+          id="likelihood"
+          type="range"
+          min={0}
+          max={LIKELIHOOD_LEVELS.length - 1}
+          step={1}
+          value={minLikelihood}
+          onChange={(e) => {
+            setMinLikelihood(Number(e.target.value));
+            reset();
+          }}
+          className="w-full accent-[var(--accent)]"
+        />
+        <span className="text-xs text-[var(--muted)]">{LIKELIHOOD_LEVELS[minLikelihood].label}</span>
       </div>
 
       <div className="flex flex-wrap gap-2">

@@ -60,12 +60,10 @@ export function StateAdvocacySection() {
               ))}
             </ul>
             {STATE_COMMENT_RULES[code] && (
-              <div className="mt-3 pt-3 border-t border-[var(--border)] text-xs flex flex-col gap-1">
-                <span className="font-semibold">{RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]}</span>
-                {STATE_COMMENT_RULES[code].howToComment && <span className="text-[var(--text-secondary)]">{STATE_COMMENT_RULES[code].howToComment}</span>}
-                {STATE_COMMENT_RULES[code].ruleNote && <span className="text-[var(--muted)]">{STATE_COMMENT_RULES[code].ruleNote}</span>}
+              <div className="mt-2 pt-2 border-t border-[var(--border)] text-xs flex items-center gap-3">
+                <span className="font-medium">{RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]}</span>
                 {STATE_COMMENT_RULES[code].commentUrl && (
-                  <a href={STATE_COMMENT_RULES[code].commentUrl} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline w-fit">
+                  <a href={STATE_COMMENT_RULES[code].commentUrl} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline shrink-0">
                     How to comment
                   </a>
                 )}

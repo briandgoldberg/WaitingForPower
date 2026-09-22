@@ -29,7 +29,7 @@ const LIKELIHOOD_LEVELS = [
 function matchesBucket(button: number, score: number): boolean {
   if (button === 0) return true;
   if (button === 1) return score <= 1;
-  return score === button + 1;
+  return score === button;
 }
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

@@ -14,22 +14,22 @@ const PAGE_SIZE = 20;
 // are, literally, awaiting a decision); the other three partition the rest by
 // comment likelihood, so a project appears under exactly one of them, never
 // more than one. Results are always shown largest project first (MW).
-const SHORT_LIKELIHOOD_LABELS = ["All", "Closed", "Maybe", "Confirmed"] as const;
+const SHORT_LIKELIHOOD_LABELS = ["All", "Unlikely", "Maybe", "Confirmed"] as const;
 
 const LIKELIHOOD_LEVELS = [
   { label: "Every project awaiting a decision" },
-  { label: "Comments likely closed" },
+  { label: "Comments unlikely to be accepted" },
   { label: "Comments possibly open, not confirmed" },
   { label: "Comments confirmed open" },
 ] as const;
 
-// Which likelihood tier (see commentLikelihood) each of the four buttons
-// covers. Button 0 covers everything; 1 through 3 partition tiers 0-3 with no
-// overlap: 1 takes the two "closed" tiers together, 2 and 3 take one each.
+// Which commentLikelihood score each button (after "All") shows: exactly one
+// score per button, so a project is never shown under more than one.
+const BUCKET_SCORE = [null, 0, 2, 3] as const;
+
 function matchesBucket(button: number, score: number): boolean {
-  if (button === 0) return true;
-  if (button === 1) return score <= 1;
-  return score === button;
+  const want = BUCKET_SCORE[button];
+  return want === null || score === want;
 }
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -57,6 +57,11 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
       ? { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) }
       : null;
 
+  // Being past the hearing (decisionNext) says only that the hearing is
+  // over, not whether comments are still accepted — so it only counts here
+  // when the state's own rule confirms an answer either way. Everywhere else
+  // (including a decision-pending case in an unconfirmed state) falls through
+  // to "maybe": we genuinely don't know, not "probably closed".
   let comment: ActionRow;
   const how = rule?.howToComment ? [rule.howToComment] : [];
   if (p.commentDeadline) {
@@ -65,8 +70,6 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
     comment = { ok: false, label: "Comments are closed", lines: ["This state closes the record at the hearing. You can still write to the commission."] };
   } else if (decisionNext && openRule) {
     comment = { ok: true, label: "Send a comment before the decision", lines: how };
-  } else if (decisionNext) {
-    comment = { ok: null, label: "Comments have probably closed", lines: ["The hearing is over. You can still write to the commission."] };
   } else if (openRule) {
     comment = { ok: true, label: "Send a comment before the decision", lines: how };
   } else if (closedRule && p.hearings.length > 0) {
@@ -88,22 +91,19 @@ const ruleFor = (p: AdvocacyProject): StateCommentRule | undefined => {
   return codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
 };
 
-// "Possibly open" means we genuinely don't know either way, as opposed to a
-// hearing having already probably closed the record.
-const isMaybeOpen = (acts: { comment: ActionRow }) => acts.comment.ok === null && acts.comment.label.startsWith("Maybe");
-
-// 0 = confirmed closed, 1 = probably closed, 2 = possibly open, 3 = confirmed open.
+// 0 = confirmed closed (unlikely), 2 = genuinely unknown (maybe), 3 = confirmed
+// open. 1 is reserved for the "Unlikely" bucket label but nothing separate
+// scores into it: confirmed-closed is the whole of that bucket.
 function commentLikelihood(acts: { comment: ActionRow }): number {
   if (acts.comment.ok === true) return 3;
-  if (isMaybeOpen(acts)) return 2;
-  if (acts.comment.ok === null) return 1;
+  if (acts.comment.ok === null) return 2;
   return 0;
 }
 
-export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
+export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projects: AdvocacyProject[]; initialBucket?: number }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
-  const [bucket, setBucket] = useState(0);
+  const [bucket, setBucket] = useState(initialBucket);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -141,10 +141,6 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Projects awaiting a decision from state or federal regulators, largest first.
-      </p>
-
       <div className="flex flex-col gap-1.5 max-w-sm">
         <div className="flex items-center justify-between text-xs">
           <span className="font-medium">Likelihood of accepting comments</span>

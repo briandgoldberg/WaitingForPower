@@ -86,14 +86,13 @@ export default async function HomePage({
 
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex gap-1.5 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit">
-              <FeedTab href={state ? `/?state=${state}` : "/"} active={feed === "changes"}>
-                What&rsquo;s changing
-              </FeedTab>
-              <FeedTab href="/?feed=people" active={feed === "people"}>
-                What people think
-              </FeedTab>
-            </div>
+            <Link
+              href="/policies?tab=project&comments=confirmed"
+              className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+              style={{ color: "var(--accent)" }}
+            >
+              Advocate for Open Projects →
+            </Link>
             {feed === "changes" && (
               <div className="flex items-center gap-2 flex-wrap">
                 <StateFeedFilter state={state} />
@@ -116,20 +115,5 @@ export default async function HomePage({
         )}
       </div>
     </>
-  );
-}
-
-function FeedTab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-        active ? "bg-[var(--panel)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--text-secondary)]"
-      }`}
-      style={active ? { color: "var(--accent)" } : undefined}
-    >
-      {children}
-    </Link>
   );
 }

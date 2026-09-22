@@ -19,14 +19,20 @@ export const metadata: Metadata = {
 
 const TABS: AdvocacyTab[] = ["project", "state", "national"];
 
+// Lets a link elsewhere on the site (e.g. the home page) land directly on one
+// of the Projects tab's comment-likelihood buckets — see SHORT_LIKELIHOOD_LABELS
+// and BUCKET_SCORE in ProjectAdvocacySection for what each bucket shows.
+const COMMENT_BUCKETS: Record<string, number> = { all: 0, unlikely: 1, maybe: 2, confirmed: 3 };
+
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; comments?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, comments } = await searchParams;
   // The old Public Hearings tab was folded into Projects.
   const defaultTab = TABS.find((t) => t === tab) ?? "project";
+  const initialBucket = comments ? (COMMENT_BUCKETS[comments] ?? 0) : 0;
   const advocacyProjects = await getAdvocacyProjects();
 
   return (
@@ -35,7 +41,7 @@ export default async function PoliciesPage({
         defaultTab={defaultTab}
         nationalAdvocacy={<NationalAdvocacySection />}
         stateAdvocacy={<StateAdvocacySection />}
-        projectAdvocacy={<ProjectAdvocacySection projects={advocacyProjects} />}
+        projectAdvocacy={<ProjectAdvocacySection projects={advocacyProjects} initialBucket={initialBucket} />}
       />
     </div>
   );

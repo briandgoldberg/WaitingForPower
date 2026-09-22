@@ -23,13 +23,14 @@ const LIKELIHOOD_LEVELS = [
   { label: "Comments confirmed open" },
 ] as const;
 
-// Which commentLikelihood score each button (after "All") shows: exactly one
-// score per button, so a project is never shown under more than one.
-const BUCKET_SCORE = [null, 0, 2, 3] as const;
-
+// Which comment-likelihood score(s) each button (after "All") shows. Buttons
+// never overlap each other: "Unlikely" alone covers both 0 (confirmed closed)
+// and 1 (decision pending, no confirmed rule, leans closed), "Maybe" is
+// exactly 2, "Confirmed" is exactly 3.
 function matchesBucket(button: number, score: number): boolean {
-  const want = BUCKET_SCORE[button];
-  return want === null || score === want;
+  if (button === 0) return true;
+  if (button === 1) return score <= 1;
+  return score === button;
 }
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -42,9 +43,11 @@ interface ActionRow {
 
 // What a resident can do on this project, stated as actions: whether they can
 // attend and speak, and whether they can send a comment. `ok: null` means we
-// cannot tell (shown as "maybe"). `attend` is null when there is nothing to
-// show at all (no public hearing) rather than a row saying so.
-function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow | null; comment: ActionRow } {
+// cannot tell. `attend` is null when there is nothing to show at all (no
+// public hearing) rather than a row saying so. `score` is the comment
+// likelihood tier (see matchesBucket): 0 confirmed closed, 1 decision pending
+// with no confirmed rule (leans closed), 2 genuinely unknown, 3 confirmed open.
+function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow | null; comment: ActionRow; score: number } {
   const pub = p.hearings.filter(isPublicHearing);
   const closedRule = rule?.recordRule === "closes_at_hearing";
   const openRule = rule?.recordRule === "open_until_decision";
@@ -57,27 +60,35 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
       ? { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) }
       : null;
 
-  // Being past the hearing (decisionNext) says only that the hearing is
-  // over, not whether comments are still accepted — so it only counts here
-  // when the state's own rule confirms an answer either way. Everywhere else
-  // (including a decision-pending case in an unconfirmed state) falls through
-  // to "maybe": we genuinely don't know, not "probably closed".
   let comment: ActionRow;
+  let score: number;
   const how = rule?.howToComment ? [rule.howToComment] : [];
   if (p.commentDeadline) {
     comment = { ok: true, label: `Send a comment by ${fmtShort(p.commentDeadline)}`, lines: how };
+    score = 3;
   } else if (decisionNext && closedRule) {
-    comment = { ok: false, label: "Comments are closed", lines: ["This state closes the record at the hearing. You can still write to the commission."] };
+    comment = { ok: false, label: "Comments are closed", lines: [] };
+    score = 0;
   } else if (decisionNext && openRule) {
     comment = { ok: true, label: "Send a comment before the decision", lines: how };
+    score = 3;
+  } else if (decisionNext) {
+    // The hearing being over says nothing about whether comments are still
+    // accepted, only that a decision is next — so this leans closed rather
+    // than counting as fully unknown, but without claiming to know why.
+    comment = { ok: null, label: "Unlikely to accept comments", lines: [] };
+    score = 1;
   } else if (openRule) {
     comment = { ok: true, label: "Send a comment before the decision", lines: how };
+    score = 3;
   } else if (closedRule && p.hearings.length > 0) {
     comment = { ok: true, label: "Send a comment before the hearing", lines: how };
+    score = 3;
   } else {
-    comment = { ok: null, label: "Maybe accepting comments", lines: ["Check the docket for how and when."] };
+    comment = { ok: null, label: "Maybe accepting comments", lines: [] };
+    score = 2;
   }
-  return { attend, comment };
+  return { attend, comment, score };
 }
 
 // A hearing the public can speak at, as opposed to an evidentiary hearing where
@@ -91,15 +102,6 @@ const ruleFor = (p: AdvocacyProject): StateCommentRule | undefined => {
   return codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
 };
 
-// 0 = confirmed closed (unlikely), 2 = genuinely unknown (maybe), 3 = confirmed
-// open. 1 is reserved for the "Unlikely" bucket label but nothing separate
-// scores into it: confirmed-closed is the whole of that bucket.
-function commentLikelihood(acts: { comment: ActionRow }): number {
-  if (acts.comment.ok === true) return 3;
-  if (acts.comment.ok === null) return 2;
-  return 0;
-}
-
 export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projects: AdvocacyProject[]; initialBucket?: number }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
@@ -110,8 +112,8 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
     () =>
       projects.map((p) => {
         const rule = ruleFor(p);
-        const acts = actionsFor(p, rule);
-        return { p, rule, acts, score: commentLikelihood(acts) };
+        const { attend, comment, score } = actionsFor(p, rule);
+        return { p, rule, acts: { attend, comment }, score };
       }),
     [projects],
   );
@@ -142,10 +144,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5 max-w-sm">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-medium">Likelihood of accepting comments</span>
-          <span className="text-[var(--muted)]">{filtered.length} projects</span>
-        </div>
+        <span className="text-xs font-medium">Likelihood of accepting comments</span>
         <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting comments">
           <div
             aria-hidden
@@ -201,6 +200,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             </option>
           ))}
         </select>
+        <span className="text-xs text-[var(--muted)] self-center">{filtered.length} projects</span>
       </div>
 
       <div className="flex flex-col gap-3">

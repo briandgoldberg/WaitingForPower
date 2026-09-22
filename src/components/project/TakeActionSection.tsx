@@ -93,56 +93,58 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
 
         {contactColumn}
 
-        <Column title="Hearings and comment deadlines">
+        <Column title="Comments and hearings">
           <p className="text-sm font-medium">{commentStatusText(score, p.commentDeadline)}</p>
           {rule?.commentUrl && (
             <p className="text-sm mt-1">
               <ExternalLink href={rule.commentUrl}>How to comment</ExternalLink>
             </p>
           )}
-          {p.hearings.length > 0 ? (
-            <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)] mt-2">
-              {p.hearings.map((h, i) => {
-                const past = new Date(h.endDate ?? h.date).getTime() < nowMs;
-                return (
-                  <li key={i} className={past ? "opacity-60" : undefined}>
-                    <div>
-                      {fmt(h.date)}
-                      {h.endDate && ` – ${fmt(h.endDate)}`}
-                      {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
-                      {h.label && (
-                        <span className={isPublicHearing(h) ? "text-[var(--accent)]" : "text-[var(--muted)]"}>
-                          {" "}
-                          · {isPublicHearing(h) ? "public can speak" : "parties only"}
-                        </span>
-                      )}
-                      {past && <span className="text-[var(--muted)]"> · past</span>}
-                    </div>
-                    {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-[var(--text-secondary)] mt-2">None on file.</p>
-          )}
-          {p.hearingDetailsLink && (
-            <p className="text-sm mt-2">
-              {/^https?:\/\//.test(p.hearingDetailsLink) ? (
-                <ExternalLink href={p.hearingDetailsLink}>Hearing details</ExternalLink>
-              ) : (
-                <>
-                  <span className="text-[var(--muted)]">Hearing details: </span>
-                  {p.hearingDetailsLink}
-                </>
-              )}
+
+          <div className="mt-3 pt-3 border-t border-[var(--border)]">
+            <h4 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-1">Hearings</h4>
+            {p.hearings.length > 0 ? (
+              <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
+                {p.hearings.map((h, i) => {
+                  const past = new Date(h.endDate ?? h.date).getTime() < nowMs;
+                  return (
+                    <li key={i} className={past ? "opacity-60" : undefined}>
+                      <div>
+                        {fmt(h.date)}
+                        {h.endDate && ` – ${fmt(h.endDate)}`}
+                        {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
+                        {h.label && (
+                          <span className={isPublicHearing(h) ? "text-[var(--accent)]" : "text-[var(--muted)]"}>
+                            {" "}
+                            · {isPublicHearing(h) ? "public can speak" : "parties only"}
+                          </span>
+                        )}
+                        {past && <span className="text-[var(--muted)]"> · past</span>}
+                      </div>
+                      {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-[var(--text-secondary)]">No hearing dates on file yet.</p>
+            )}
+            {p.hearingDetailsLink && (
+              <p className="text-sm mt-2">
+                {/^https?:\/\//.test(p.hearingDetailsLink) ? (
+                  <ExternalLink href={p.hearingDetailsLink}>Hearing details</ExternalLink>
+                ) : (
+                  <>
+                    <span className="text-[var(--muted)]">Hearing details: </span>
+                    {p.hearingDetailsLink}
+                  </>
+                )}
+              </p>
+            )}
+            <p className="text-xs text-[var(--muted)] mt-1">
+              {p.hearings.length > 0 || p.hearingDetailsLink ? "Pulled from this project’s docket source." : "Check the docket directly for hearing dates."}
             </p>
-          )}
-          <p className="text-xs text-[var(--muted)] mt-1">
-            {p.hearings.length > 0 || p.hearingDetailsLink
-              ? "Pulled from this project’s docket source."
-              : "Not available from this project’s data source yet. Check the docket directly."}
-          </p>
+          </div>
         </Column>
       </div>
   );

@@ -22,6 +22,12 @@ export async function getRecentChanges(
     capacityValue: true,
     capacityUnit: true,
     isAggregateExample: true,
+    // For the feed's "Maybe/Accepting comments" line — see
+    // src/lib/advocacyActions.ts commentScore, the same scoring the
+    // Advocate > Projects tab and a project's own Take action pill use.
+    commentDeadline: true,
+    reviewStep: true,
+    hearings: { where: { date: { gte: new Date() } }, select: { id: true } },
   } as const;
 
   // Project.state can hold multiple comma-joined codes (a multi-state
@@ -56,6 +62,9 @@ export async function getRecentChanges(
         fuelType: r.project.fuelType as FuelType,
         capacityValue: r.project.capacityValue,
         capacityUnit: r.project.capacityUnit,
+        commentDeadline: r.project.commentDeadline ? r.project.commentDeadline.toISOString() : null,
+        reviewStep: r.project.reviewStep,
+        hearingCount: r.project.hearings.length,
       },
     }));
     return { changes, hasMore };
@@ -97,6 +106,9 @@ export async function getRecentChanges(
         fuelType: r.project.fuelType as FuelType,
         capacityValue: r.project.capacityValue,
         capacityUnit: r.project.capacityUnit,
+        commentDeadline: r.project.commentDeadline ? r.project.commentDeadline.toISOString() : null,
+        reviewStep: r.project.reviewStep,
+        hearingCount: r.project.hearings.length,
       },
     }));
 

@@ -127,6 +127,10 @@ export interface ProjectChangeDTO {
     fuelType: FuelType;
     capacityValue: number | null;
     capacityUnit: string | null;
+    // For the feed's comment-likelihood line — see src/lib/advocacyActions.ts.
+    commentDeadline: string | null;
+    reviewStep: string | null;
+    hearingCount: number;
   };
 }
 

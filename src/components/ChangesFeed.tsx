@@ -6,6 +6,7 @@ import type { ProjectChangeDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { stateName } from "@/lib/data/usStates";
 import { relativeTime, groupByDate } from "@/lib/feedTime";
+import { ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
 
 // Bundled changeTypes are shown as one card — this picks which single
 // badge/color represents the whole bundle when more than one fired in the
@@ -44,6 +45,18 @@ function badgeFor(changeTypes: string[], newStage: string | null): Badge {
 function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number }) {
   const badge = badgeFor(change.changeTypes, change.newStage);
   const fuel = FUEL_TYPE_BY_VALUE[change.project.fuelType];
+  // A resolved project (approved/cancelled/complete) is no longer awaiting a
+  // decision, so it never gets an "advocate for this" line. Otherwise, same
+  // scoring the Advocate > Projects tab uses (see src/lib/advocacyActions.ts)
+  // — only "Maybe" and "Accepting" are worth surfacing here; "Unlikely" is
+  // left off entirely rather than told to a reader as a reason not to bother.
+  const isResolved = change.changeTypes.includes("resolved");
+  const score = isResolved
+    ? -1
+    : commentScore(
+        { commentDeadline: change.project.commentDeadline, reviewStep: change.project.reviewStep, hearingCount: change.project.hearingCount },
+        ruleForState(change.project.state),
+      );
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors">
       <Link href={`/project/${change.project.slug}`} className="flex gap-3">
@@ -67,6 +80,14 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
           </div>
         </div>
       </Link>
+      {score >= 2 && (
+        <p className="text-xs text-[var(--muted)] mt-1.5 pl-[22px]">
+          {commentStatusText(score, change.project.commentDeadline)}{" "}
+          <Link href={`/project/${change.project.slug}#take-action`} className="text-[var(--accent)] underline">
+            Advocate for project
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

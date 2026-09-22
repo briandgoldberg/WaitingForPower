@@ -21,13 +21,16 @@ export function AdvocacyTabs({
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-3 gap-1 rounded-2xl sm:flex sm:gap-1.5 sm:rounded-full bg-black/5 dark:bg-white/10 p-1 w-full sm:w-fit sm:max-w-full sm:overflow-x-auto">
         <TabButton active={tab === "project"} onClick={() => setTab("project")}>
-          Project Advocacy
+          <span className="sm:hidden">Projects</span>
+          <span className="hidden sm:inline">Project Advocacy</span>
         </TabButton>
         <TabButton active={tab === "state"} onClick={() => setTab("state")}>
-          State Advocacy
+          <span className="sm:hidden">States</span>
+          <span className="hidden sm:inline">State Advocacy</span>
         </TabButton>
         <TabButton active={tab === "national"} onClick={() => setTab("national")}>
-          National Advocacy
+          <span className="sm:hidden">National</span>
+          <span className="hidden sm:inline">National Advocacy</span>
         </TabButton>
       </div>
 

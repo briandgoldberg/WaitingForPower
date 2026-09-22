@@ -60,7 +60,7 @@ export function StateAdvocacySection() {
               ))}
             </ul>
             {STATE_COMMENT_RULES[code] && (STATE_COMMENT_RULES[code].commentUrl || RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]) && (
-              <div className="mt-2 pt-2 border-t border-[var(--border)] text-xs flex items-center gap-3">
+              <div className="mt-2 pt-2 border-t border-[var(--border)] text-xs flex flex-wrap items-center gap-x-3 gap-y-1">
                 {STATE_COMMENT_RULES[code].commentUrl && (
                   <a href={STATE_COMMENT_RULES[code].commentUrl} target="_blank" rel="noreferrer" className="font-medium text-[var(--accent)] underline shrink-0">
                     How to comment

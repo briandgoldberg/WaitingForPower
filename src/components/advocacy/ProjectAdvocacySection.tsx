@@ -10,17 +10,27 @@ import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateComm
 
 const PAGE_SIZE = 20;
 
-// How likely a project is to still be accepting comments, least to most
-// likely. The slider filters to this tier or higher; results are always
-// shown largest project first (MW), not by likelihood or date.
+// Four exclusive views: the first is every project on this page (all of them
+// are, literally, awaiting a decision); the other three partition the rest by
+// comment likelihood, so a project appears under exactly one of them, never
+// more than one. Results are always shown largest project first (MW).
+const SHORT_LIKELIHOOD_LABELS = ["All", "Closed", "Maybe", "Confirmed"] as const;
+
 const LIKELIHOOD_LEVELS = [
-  { min: 0, label: "Any status" },
-  { min: 1, label: "Not confirmed closed" },
-  { min: 2, label: "Possibly or confirmed open" },
-  { min: 3, label: "Confirmed open only" },
+  { label: "Every project awaiting a decision" },
+  { label: "Comments likely closed" },
+  { label: "Comments possibly open, not confirmed" },
+  { label: "Comments confirmed open" },
 ] as const;
 
-const SHORT_LIKELIHOOD_LABELS = ["Any", "Maybe", "Likely", "Confirmed"] as const;
+// Which likelihood tier (see commentLikelihood) each of the four buttons
+// covers. Button 0 covers everything; 1 through 3 partition tiers 0-3 with no
+// overlap: 1 takes the two "closed" tiers together, 2 and 3 take one each.
+function matchesBucket(button: number, score: number): boolean {
+  if (button === 0) return true;
+  if (button === 1) return score <= 1;
+  return score === button + 1;
+}
 
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -93,7 +103,7 @@ function commentLikelihood(acts: { comment: ActionRow }): number {
 export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
-  const [minLikelihood, setMinLikelihood] = useState(0);
+  const [bucket, setBucket] = useState(0);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -122,10 +132,10 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [rows, query, state]);
 
   const filtered = useMemo(() => {
-    const list = inScope.filter((r) => r.score >= minLikelihood);
+    const list = inScope.filter((r) => matchesBucket(bucket, r.score));
     // Always largest project first, regardless of likelihood or date.
     return [...list].sort((a, b) => (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1));
-  }, [inScope, minLikelihood]);
+  }, [inScope, bucket]);
 
   const reset = () => setVisible(PAGE_SIZE);
 
@@ -144,27 +154,27 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
           <div
             aria-hidden
             className="absolute top-1 bottom-1 rounded-full bg-[var(--accent)] transition-[left] duration-200 ease-out"
-            style={{ left: `calc(${minLikelihood} * 25% + 3px)`, width: "calc(25% - 6px)" }}
+            style={{ left: `calc(${bucket} * 25% + 3px)`, width: "calc(25% - 6px)" }}
           />
           {LIKELIHOOD_LEVELS.map((lvl, i) => (
             <button
               key={lvl.label}
               type="button"
               role="radio"
-              aria-checked={minLikelihood === i}
+              aria-checked={bucket === i}
               onClick={() => {
-                setMinLikelihood(i);
+                setBucket(i);
                 reset();
               }}
               className={`relative z-10 rounded-full py-1.5 text-[11px] sm:text-xs font-medium transition-colors ${
-                minLikelihood === i ? "text-white" : "text-[var(--text-secondary)]"
+                bucket === i ? "text-white" : "text-[var(--text-secondary)]"
               }`}
             >
               {SHORT_LIKELIHOOD_LABELS[i]}
             </button>
           ))}
         </div>
-        <span className="text-xs text-[var(--muted)]">{LIKELIHOOD_LEVELS[minLikelihood].label}</span>
+        <span className="text-xs text-[var(--muted)]">{LIKELIHOOD_LEVELS[bucket].label}</span>
       </div>
 
       <div className="flex flex-wrap gap-2">

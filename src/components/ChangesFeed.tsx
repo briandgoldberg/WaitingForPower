@@ -84,8 +84,10 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
         </div>
       </Link>
       {score >= 2 && (
-        <p className="text-xs text-[var(--muted)] mt-1.5 pl-[22px]">
-          {commentStatusText(score, change.project.commentDeadline)}{" "}
+        <p className="text-xs mt-1.5 pl-[22px]">
+          <span className={score === 3 ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-amber-600 dark:text-amber-400 font-medium"}>
+            {commentStatusText(score, change.project.commentDeadline)}
+          </span>{" "}
           <Link href={`/project/${change.project.slug}#take-action`} className="text-[var(--accent)] underline">
             Advocate for project
           </Link>

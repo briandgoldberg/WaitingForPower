@@ -131,10 +131,11 @@ export interface ProjectChangeDTO {
     commentDeadline: string | null;
     reviewStep: string | null;
     hearingCount: number;
-    // Whether this project's CURRENT stage is resolved (approved/cancelled/
-    // complete) — not the same as this change's own changeTypes, which only
-    // marks the run that made it so. An already-decided project never
-    // accepts comments, no matter what this particular change was about.
+    // Whether this project is currently resolved (approved/cancelled/
+    // complete) or no longer being reported by its source — not the same
+    // as this change's own changeTypes, which only marks the run that made
+    // it so. Neither case accepts comments, no matter what this particular
+    // change was about.
     resolved: boolean;
   };
 }

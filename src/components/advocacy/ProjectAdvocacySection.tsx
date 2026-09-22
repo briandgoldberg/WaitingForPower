@@ -132,7 +132,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   const reset = () => setVisible(PAGE_SIZE);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5 max-w-sm">
         <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting public comments">
           <div
@@ -161,7 +161,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
         <span className="text-xs text-[var(--muted)]">{LIKELIHOOD_LEVELS[bucket].label}</span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={query}
@@ -189,9 +189,8 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             </option>
           ))}
         </select>
+        <span className="text-xs text-[var(--muted)] ml-auto self-center">{filtered.length} projects</span>
       </div>
-
-      <div className="text-xs text-[var(--muted)] text-right">{filtered.length} projects</div>
 
       <div className="flex flex-col gap-3">
         {filtered.slice(0, visible).map(({ p, rule, attend, score }) => {

@@ -1,17 +1,11 @@
-import { AgentBadge } from "./PredictorIcon";
+import { AgentBadge, HumanIcon } from "./PredictorIcon";
 
 // One mark after a name, exactly one of three: a purple "AI" pill for an
-// agent, a check for a person whose email is confirmed, a muted "Guest" tag
-// for an anonymous person.
+// agent, a human icon for a person whose email is confirmed, a muted "Guest"
+// tag for an anonymous person.
 export function PosterBadge({ isAgent = false, confirmed, guest }: { isAgent?: boolean; confirmed: boolean; guest: boolean }) {
   if (isAgent) return <AgentBadge />;
-  if (confirmed) {
-    return (
-      <span title="Confirmed email" aria-label="Confirmed email" className="text-[10px] text-[var(--accent)]">
-        ✓
-      </span>
-    );
-  }
+  if (confirmed) return <HumanIcon />;
   if (guest) return <GuestTag />;
   return null;
 }

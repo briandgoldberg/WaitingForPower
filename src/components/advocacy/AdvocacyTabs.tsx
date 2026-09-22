@@ -22,7 +22,7 @@ export function AdvocacyTabs({
       {/* Underlined page tabs, deliberately not another pill/segmented control —
           the Projects tab has its own pill filter below, and stacking two
           pill controls read as one confusing double slider. */}
-      <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)] overflow-x-auto" role="tablist">
+      <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)]" role="tablist">
         <TabButton active={tab === "project"} onClick={() => setTab("project")}>
           <span className="sm:hidden">Projects</span>
           <span className="hidden sm:inline">Project Advocacy</span>

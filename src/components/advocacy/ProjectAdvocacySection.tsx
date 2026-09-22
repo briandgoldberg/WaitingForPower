@@ -201,7 +201,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Link href={`/project/${p.slug}#take-action`} className="font-semibold text-sm hover:underline">
+                  <Link href={`/project/${p.slug}`} className="font-semibold text-sm text-[var(--accent)] underline">
                     {p.name}
                   </Link>
                   <p className="text-xs text-[var(--muted)] mt-0.5">
@@ -256,9 +256,6 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
                     Contact regulator
                   </a>
                 )}
-                <Link href={`/project/${p.slug}#take-action`} className="font-semibold text-[var(--accent)] underline">
-                  Project page
-                </Link>
               </div>
             </div>
           );

@@ -20,6 +20,8 @@ const LIKELIHOOD_LEVELS = [
   { min: 3, label: "Confirmed open only" },
 ] as const;
 
+const SHORT_LIKELIHOOD_LABELS = ["Any", "Maybe", "Likely", "Confirmed"] as const;
+
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 interface ActionRow {
@@ -30,21 +32,20 @@ interface ActionRow {
 
 // What a resident can do on this project, stated as actions: whether they can
 // attend and speak, and whether they can send a comment. `ok: null` means we
-// cannot tell (shown as "maybe").
-function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow; comment: ActionRow } {
+// cannot tell (shown as "maybe"). `attend` is null when there is nothing to
+// show at all (no public hearing) rather than a row saying so.
+function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow | null; comment: ActionRow } {
   const pub = p.hearings.filter(isPublicHearing);
   const closedRule = rule?.recordRule === "closes_at_hearing";
   const openRule = rule?.recordRule === "open_until_decision";
   const decisionNext = p.reviewStep === "Awaiting commission order";
 
-  let attend: ActionRow;
-  if (pub.length > 0) {
-    attend = { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) };
-  } else {
-    // Hearings closed to the public (evidentiary, parties only) are left off
-    // here; they stay on the project page.
-    attend = { ok: false, label: "No public hearing scheduled", lines: [] };
-  }
+  // Hearings closed to the public (evidentiary, parties only) stay off this
+  // page entirely; they're still on the project's own page.
+  const attend: ActionRow | null =
+    pub.length > 0
+      ? { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) }
+      : null;
 
   let comment: ActionRow;
   const how = rule?.howToComment ? [rule.howToComment] : [];
@@ -136,24 +137,33 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
 
       <div className="flex flex-col gap-1.5 max-w-sm">
         <div className="flex items-center justify-between text-xs">
-          <label htmlFor="likelihood" className="font-medium">
-            Likelihood of accepting comments
-          </label>
+          <span className="font-medium">Likelihood of accepting comments</span>
           <span className="text-[var(--muted)]">{filtered.length} projects</span>
         </div>
-        <input
-          id="likelihood"
-          type="range"
-          min={0}
-          max={LIKELIHOOD_LEVELS.length - 1}
-          step={1}
-          value={minLikelihood}
-          onChange={(e) => {
-            setMinLikelihood(Number(e.target.value));
-            reset();
-          }}
-          className="w-full accent-[var(--accent)]"
-        />
+        <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting comments">
+          <div
+            aria-hidden
+            className="absolute top-1 bottom-1 rounded-full bg-[var(--accent)] transition-[left] duration-200 ease-out"
+            style={{ left: `calc(${minLikelihood} * 25% + 3px)`, width: "calc(25% - 6px)" }}
+          />
+          {LIKELIHOOD_LEVELS.map((lvl, i) => (
+            <button
+              key={lvl.label}
+              type="button"
+              role="radio"
+              aria-checked={minLikelihood === i}
+              onClick={() => {
+                setMinLikelihood(i);
+                reset();
+              }}
+              className={`relative z-10 rounded-full py-1.5 text-[11px] sm:text-xs font-medium transition-colors ${
+                minLikelihood === i ? "text-white" : "text-[var(--text-secondary)]"
+              }`}
+            >
+              {SHORT_LIKELIHOOD_LABELS[i]}
+            </button>
+          ))}
+        </div>
         <span className="text-xs text-[var(--muted)]">{LIKELIHOOD_LEVELS[minLikelihood].label}</span>
       </div>
 
@@ -212,29 +222,37 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
               </div>
 
               <div className="rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-3 py-2.5 flex flex-col gap-2.5 text-xs">
-                {(
-                  [
-                    ["Attend", acts.attend],
-                    ["Comment", acts.comment],
-                  ] as const
-                ).map(([title, row]) => (
-                  <div key={title} className="flex gap-2.5">
-                    <span
-                      aria-hidden
-                      className={`w-4 shrink-0 text-center font-bold ${row.ok ? "text-emerald-600 dark:text-emerald-400" : row.ok === false ? "text-[var(--muted)]" : "text-amber-600 dark:text-amber-400"}`}
-                    >
-                      {row.ok ? "✓" : row.ok === false ? "✕" : "?"}
+                {acts.attend && (
+                  <div className="flex gap-2.5">
+                    <span aria-hidden className="w-4 shrink-0 text-center">
+                      📅
                     </span>
                     <div className="min-w-0">
-                      <div className={row.ok === false ? "text-[var(--muted)]" : "font-semibold"}>{row.label}</div>
-                      {row.lines.map((l, i) => (
+                      <div className="font-semibold">{acts.attend.label}</div>
+                      {acts.attend.lines.map((l, i) => (
                         <div key={i} className="text-[var(--muted)]">
                           {l}
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
+                )}
+                <div className="flex gap-2.5">
+                  <span
+                    aria-hidden
+                    className={`w-4 shrink-0 text-center font-bold ${acts.comment.ok ? "text-emerald-600 dark:text-emerald-400" : acts.comment.ok === false ? "text-[var(--muted)]" : "text-amber-600 dark:text-amber-400"}`}
+                  >
+                    {acts.comment.ok ? "✓" : acts.comment.ok === false ? "✕" : "?"}
+                  </span>
+                  <div className="min-w-0">
+                    <div className={acts.comment.ok === false ? "text-[var(--muted)]" : "font-semibold"}>{acts.comment.label}</div>
+                    {acts.comment.lines.map((l, i) => (
+                      <div key={i} className="text-[var(--muted)]">
+                        {l}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">

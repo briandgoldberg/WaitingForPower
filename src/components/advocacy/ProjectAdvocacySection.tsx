@@ -14,7 +14,7 @@ const PAGE_SIZE = 20;
 // are, literally, awaiting a decision); the other three partition the rest by
 // comment likelihood, so a project appears under exactly one of them, never
 // more than one. Results are always shown largest project first (MW).
-const SHORT_LIKELIHOOD_LABELS = ["All", "Public Unlikely", "Public Maybe", "Public Confirmed"] as const;
+const SHORT_LIKELIHOOD_LABELS = ["All", "Unlikely", "Maybe", "Confirmed"] as const;
 
 const LIKELIHOOD_LEVELS = [
   { label: "Every project awaiting a decision" },
@@ -41,13 +41,13 @@ interface ActionRow {
   lines: string[];
 }
 
-// What a resident can do on this project, stated as actions: whether they can
-// attend and speak, and whether they can send a comment. `ok: null` means we
-// cannot tell. `attend` is null when there is nothing to show at all (no
-// public hearing) rather than a row saying so. `score` is the comment
-// likelihood tier (see matchesBucket): 0 confirmed closed, 1 decision pending
-// with no confirmed rule (leans closed), 2 genuinely unknown, 3 confirmed open.
-function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow | null; comment: ActionRow; score: number } {
+// What a resident can do on this project: whether they can attend and speak
+// at a hearing, and a comment-likelihood score (see matchesBucket): 0
+// confirmed closed, 1 decision pending with no confirmed rule (leans
+// closed), 2 genuinely unknown, 3 confirmed open. `attend` is null when
+// there is nothing to show at all (no public hearing) rather than a row
+// saying so.
+function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow | null; score: number } {
   const pub = p.hearings.filter(isPublicHearing);
   const closedRule = rule?.recordRule === "closes_at_hearing";
   const openRule = rule?.recordRule === "open_until_decision";
@@ -60,35 +60,25 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
       ? { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) }
       : null;
 
-  let comment: ActionRow;
   let score: number;
-  const how = rule?.howToComment ? [rule.howToComment] : [];
-  if (p.commentDeadline) {
-    comment = { ok: true, label: `Send a comment by ${fmtShort(p.commentDeadline)}`, lines: how };
-    score = 3;
-  } else if (decisionNext && closedRule) {
-    comment = { ok: false, label: "Comments are closed", lines: [] };
-    score = 0;
-  } else if (decisionNext && openRule) {
-    comment = { ok: true, label: "Send a comment before the decision", lines: how };
-    score = 3;
-  } else if (decisionNext) {
-    // The hearing being over says nothing about whether comments are still
-    // accepted, only that a decision is next — so this leans closed rather
-    // than counting as fully unknown, but without claiming to know why.
-    comment = { ok: null, label: "Unlikely to accept comments", lines: [] };
-    score = 1;
-  } else if (openRule) {
-    comment = { ok: true, label: "Send a comment before the decision", lines: how };
-    score = 3;
-  } else if (closedRule && p.hearings.length > 0) {
-    comment = { ok: true, label: "Send a comment before the hearing", lines: how };
-    score = 3;
-  } else {
-    comment = { ok: null, label: "Maybe accepting comments", lines: [] };
-    score = 2;
-  }
-  return { attend, comment, score };
+  if (p.commentDeadline) score = 3;
+  else if (decisionNext && closedRule) score = 0;
+  else if (decisionNext && openRule) score = 3;
+  // The hearing being over says nothing about whether comments are still
+  // accepted, only that a decision is next — so this leans closed rather
+  // than counting as fully unknown, but without claiming to know why.
+  else if (decisionNext) score = 1;
+  else if (openRule) score = 3;
+  else if (closedRule && p.hearings.length > 0) score = 3;
+  else score = 2;
+  return { attend, score };
+}
+
+// The three-tier status shown next to a project's size: nothing else, no icon.
+function commentStatus(score: number, deadline: string | null): string {
+  if (score === 3) return deadline ? `Accepting comments · due ${fmtShort(deadline)}` : "Accepting comments";
+  if (score === 2) return "Maybe accepting comments";
+  return "Unlikely to accept comments";
 }
 
 // A hearing the public can speak at, as opposed to an evidentiary hearing where
@@ -112,8 +102,8 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
     () =>
       projects.map((p) => {
         const rule = ruleFor(p);
-        const { attend, comment, score } = actionsFor(p, rule);
-        return { p, rule, acts: { attend, comment }, score };
+        const { attend, score } = actionsFor(p, rule);
+        return { p, rule, attend, score };
       }),
     [projects],
   );
@@ -204,7 +194,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
       <div className="text-xs text-[var(--muted)] text-right">{filtered.length} projects</div>
 
       <div className="flex flex-col gap-3">
-        {filtered.slice(0, visible).map(({ p, rule, acts }) => {
+        {filtered.slice(0, visible).map(({ p, rule, attend, score }) => {
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
@@ -220,46 +210,31 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
                     {p.yearsWaiting != null && <> · Waiting {p.yearsWaiting.toFixed(1)} yrs</>}
                   </p>
                 </div>
-                {p.capacityValue != null && (
-                  <span className="shrink-0 text-xs font-semibold rounded-full px-2 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)]">
-                    {formatCapacity(p.capacityValue, p.capacityUnit)}
-                  </span>
-                )}
+                <div className="shrink-0 flex flex-col items-end gap-1 text-right">
+                  {p.capacityValue != null && (
+                    <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)]">
+                      {formatCapacity(p.capacityValue, p.capacityUnit)}
+                    </span>
+                  )}
+                  <span className="text-xs text-[var(--text-secondary)]">{commentStatus(score, p.commentDeadline)}</span>
+                </div>
               </div>
 
-              <div className="rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-3 py-2.5 flex flex-col gap-2.5 text-xs">
-                {acts.attend && (
-                  <div className="flex gap-2.5">
-                    <span aria-hidden className="w-4 shrink-0 text-center">
-                      📅
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-semibold">{acts.attend.label}</div>
-                      {acts.attend.lines.map((l, i) => (
-                        <div key={i} className="text-[var(--muted)]">
-                          {l}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="flex gap-2.5">
-                  <span
-                    aria-hidden
-                    className={`w-4 shrink-0 text-center font-bold ${acts.comment.ok ? "text-emerald-600 dark:text-emerald-400" : acts.comment.ok === false ? "text-[var(--muted)]" : "text-amber-600 dark:text-amber-400"}`}
-                  >
-                    {acts.comment.ok ? "✓" : acts.comment.ok === false ? "✕" : "?"}
+              {attend && (
+                <div className="rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-3 py-2.5 flex gap-2.5 text-xs">
+                  <span aria-hidden className="w-4 shrink-0 text-center">
+                    📅
                   </span>
                   <div className="min-w-0">
-                    <div className={acts.comment.ok === false ? "text-[var(--muted)]" : "font-semibold"}>{acts.comment.label}</div>
-                    {acts.comment.lines.map((l, i) => (
+                    <div className="font-semibold">{attend.label}</div>
+                    {attend.lines.map((l, i) => (
                       <div key={i} className="text-[var(--muted)]">
                         {l}
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                 {rule?.commentUrl && (

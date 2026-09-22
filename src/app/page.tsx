@@ -72,7 +72,7 @@ export default async function HomePage({
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
       />
-      <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
+      <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-3">
         {alertMessage && (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm">
             {alertMessage}
@@ -84,20 +84,22 @@ export default async function HomePage({
           </h1>
         </div>
 
-        <Link
-          href="/policies?tab=project&comments=confirmed"
-          className="shrink-0 self-start text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-          style={{ color: "var(--accent)" }}
-        >
-          Advocate for Open Projects →
-        </Link>
+        <div className="flex flex-col gap-2">
+          <Link
+            href="/policies?tab=project&comments=confirmed"
+            className="shrink-0 self-start text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
+            style={{ color: "var(--accent)" }}
+          >
+            Advocate for Open Projects →
+          </Link>
 
-        {feed === "changes" && (
-          <div className="flex items-center justify-end gap-2 flex-wrap">
-            <StateFeedFilter state={state} />
-            <FeedSubscribeBox state={state} />
-          </div>
-        )}
+          {feed === "changes" && (
+            <div className="flex items-center justify-end gap-2 flex-wrap">
+              <StateFeedFilter state={state} />
+              <FeedSubscribeBox state={state} />
+            </div>
+          )}
+        </div>
 
         {feed === "changes" ? (
           /* key={state}: ChangesFeed seeds its own state from initialChanges

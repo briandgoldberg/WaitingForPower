@@ -46,12 +46,15 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
   const badge = badgeFor(change.changeTypes, change.newStage);
   const fuel = FUEL_TYPE_BY_VALUE[change.project.fuelType];
   // A resolved project (approved/cancelled/complete) is no longer awaiting a
-  // decision, so it never gets an "advocate for this" line. Otherwise, same
+  // decision, so it never gets an "advocate for this" line — checked against
+  // the project's actual current stage (change.project.resolved), not just
+  // whether this particular change bundle happened to be the one that
+  // resolved it; a later, unrelated change on an already-resolved project
+  // (e.g. a capacity correction) must still hide the line. Otherwise, same
   // scoring the Advocate > Projects tab uses (see src/lib/advocacyActions.ts)
   // — only "Maybe" and "Accepting" are worth surfacing here; "Unlikely" is
   // left off entirely rather than told to a reader as a reason not to bother.
-  const isResolved = change.changeTypes.includes("resolved");
-  const score = isResolved
+  const score = change.project.resolved
     ? -1
     : commentScore(
         { commentDeadline: change.project.commentDeadline, reviewStep: change.project.reviewStep, hearingCount: change.project.hearingCount },

@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/db";
 import type { ProjectChangeDTO } from "@/lib/types";
-import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { RESOLVED_STAGES, type FuelType, type ProjectStage, type ProjectType } from "@/lib/data/taxonomies";
 import { splitStateCodes } from "@/lib/data/usStates";
 
 export async function getRecentChanges(
@@ -22,6 +22,13 @@ export async function getRecentChanges(
     capacityValue: true,
     capacityUnit: true,
     isAggregateExample: true,
+    // Whether THIS project is currently resolved (approved/cancelled/
+    // complete) — not the same as this change bundle's own changeTypes,
+    // which only says "resolved" fired on the run that made it so. A later,
+    // unrelated change (e.g. a capacity revision) on an already-resolved
+    // project has no "resolved" changeType of its own but the project is
+    // still resolved, and an already-decided project never accepts comments.
+    currentStage: true,
     // For the feed's "Maybe/Accepting comments" line — see
     // src/lib/advocacyActions.ts commentScore, the same scoring the
     // Advocate > Projects tab and a project's own Take action pill use.
@@ -65,6 +72,7 @@ export async function getRecentChanges(
         commentDeadline: r.project.commentDeadline ? r.project.commentDeadline.toISOString() : null,
         reviewStep: r.project.reviewStep,
         hearingCount: r.project.hearings.length,
+        resolved: RESOLVED_STAGES.includes(r.project.currentStage as ProjectStage),
       },
     }));
     return { changes, hasMore };
@@ -109,6 +117,7 @@ export async function getRecentChanges(
         commentDeadline: r.project.commentDeadline ? r.project.commentDeadline.toISOString() : null,
         reviewStep: r.project.reviewStep,
         hearingCount: r.project.hearings.length,
+        resolved: RESOLVED_STAGES.includes(r.project.currentStage as ProjectStage),
       },
     }));
 

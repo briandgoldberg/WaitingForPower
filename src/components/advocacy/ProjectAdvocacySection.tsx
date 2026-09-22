@@ -141,8 +141,8 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             setQuery(e.target.value);
             reset();
           }}
-          placeholder="Search all open projects"
-          aria-label="Search all open projects"
+          placeholder="Search all projects awaiting a decision"
+          aria-label="Search all projects awaiting a decision"
           className="flex-1 min-w-[160px] sm:max-w-xs rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
         />
         <select

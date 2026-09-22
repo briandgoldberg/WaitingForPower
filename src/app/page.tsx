@@ -84,9 +84,12 @@ export default async function HomePage({
         </div>
 
         {feed === "changes" && (
-          <div className="flex items-center justify-end gap-2 flex-wrap">
-            <StateFeedFilter state={state} />
-            <FeedSubscribeBox state={state} />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold">Recent changes</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <StateFeedFilter state={state} />
+              <FeedSubscribeBox state={state} />
+            </div>
           </div>
         )}
 

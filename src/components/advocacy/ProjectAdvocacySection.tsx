@@ -266,16 +266,16 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
                   </a>
                 )}
                 {p.hearingLink && /^https?:\/\//.test(p.hearingLink) && (
-                  <a href={p.hearingLink} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                  <a href={p.hearingLink} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
                     Hearing details
                   </a>
                 )}
                 {regulator && (
-                  <a href={regulator.contactUrl ?? regulator.website} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                  <a href={regulator.contactUrl ?? regulator.website} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
                     Contact regulator
                   </a>
                 )}
-                <Link href={`/project/${p.slug}#take-action`} className="text-[var(--muted)] underline">
+                <Link href={`/project/${p.slug}#take-action`} className="font-semibold text-[var(--accent)] underline">
                   Project page
                 </Link>
               </div>

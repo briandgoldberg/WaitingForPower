@@ -62,29 +62,26 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
       );
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors">
-      <Link href={`/project/${change.project.slug}`} className="flex gap-3">
-        <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: fuel?.color ?? "#6b7280" }} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <span className="font-medium text-sm truncate min-w-0 flex-1">{change.project.name}</span>
-            <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${badge.className}`}>
-              {badge.label}
-            </span>
-          </div>
-          <p className="text-xs text-[var(--muted)] mt-0.5">{change.summary}</p>
-          <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-1.5">
-            {change.project.state && <span>{stateName(change.project.state)}</span>}
-            <span aria-hidden>·</span>
-            <span>{fuel?.label ?? change.project.fuelType}</span>
-            <span aria-hidden>·</span>
-            <span>{formatCapacity(change.project.capacityValue, change.project.capacityUnit)}</span>
-            <span aria-hidden>·</span>
-            <span>{relativeTime(change.createdAt, nowMs)}</span>
-          </div>
+      <Link href={`/project/${change.project.slug}`} className="block">
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-medium text-sm truncate min-w-0 flex-1">{change.project.name}</span>
+          <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${badge.className}`}>
+            {badge.label}
+          </span>
+        </div>
+        <p className="text-xs text-[var(--muted)] mt-0.5">{change.summary}</p>
+        <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-1.5">
+          {change.project.state && <span>{stateName(change.project.state)}</span>}
+          <span aria-hidden>·</span>
+          <span>{fuel?.label ?? change.project.fuelType}</span>
+          <span aria-hidden>·</span>
+          <span>{formatCapacity(change.project.capacityValue, change.project.capacityUnit)}</span>
+          <span aria-hidden>·</span>
+          <span>{relativeTime(change.createdAt, nowMs)}</span>
         </div>
       </Link>
       {score >= 2 && (
-        <p className="text-xs mt-1.5 pl-[22px]">
+        <p className="text-xs mt-1.5">
           <span className={score === 3 ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-amber-600 dark:text-amber-400 font-medium"}>
             {commentStatusText(score, change.project.commentDeadline)}
           </span>{" "}

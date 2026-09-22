@@ -24,10 +24,6 @@ export function StateAdvocacySection() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Your state regulator decides most energy permits. Find yours, read what it is reviewing, and tell it what you think.
-      </p>
-
       <input
         type="search"
         value={query}

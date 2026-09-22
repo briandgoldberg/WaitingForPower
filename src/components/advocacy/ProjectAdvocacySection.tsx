@@ -14,13 +14,13 @@ const PAGE_SIZE = 20;
 // are, literally, awaiting a decision); the other three partition the rest by
 // comment likelihood, so a project appears under exactly one of them, never
 // more than one. Results are always shown largest project first (MW).
-const SHORT_LIKELIHOOD_LABELS = ["All", "Unlikely", "Maybe", "Confirmed"] as const;
+const SHORT_LIKELIHOOD_LABELS = ["All", "Public Unlikely", "Public Maybe", "Public Confirmed"] as const;
 
 const LIKELIHOOD_LEVELS = [
   { label: "Every project awaiting a decision" },
-  { label: "Comments unlikely to be accepted" },
-  { label: "Comments possibly open, not confirmed" },
-  { label: "Comments confirmed open" },
+  { label: "Public comments unlikely to be accepted" },
+  { label: "Public comments possibly open, not confirmed" },
+  { label: "Public comments confirmed open" },
 ] as const;
 
 // Which comment-likelihood score(s) each button (after "All") shows. Buttons
@@ -144,7 +144,6 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5 max-w-sm">
-        <span className="text-xs font-medium">Likelihood of accepting public comments</span>
         <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting public comments">
           <div
             aria-hidden
@@ -161,7 +160,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
                 setBucket(i);
                 reset();
               }}
-              className={`relative z-10 rounded-full py-1.5 text-[11px] sm:text-xs font-medium transition-colors ${
+              className={`relative z-10 rounded-full px-1 py-1.5 text-[11px] sm:text-xs font-medium leading-tight text-center transition-colors ${
                 bucket === i ? "text-white" : "text-[var(--text-secondary)]"
               }`}
             >
@@ -200,8 +199,9 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             </option>
           ))}
         </select>
-        <span className="text-xs text-[var(--muted)] self-center">{filtered.length} projects</span>
       </div>
+
+      <div className="text-xs text-[var(--muted)] text-right">{filtered.length} projects</div>
 
       <div className="flex flex-col gap-3">
         {filtered.slice(0, visible).map(({ p, rule, acts }) => {

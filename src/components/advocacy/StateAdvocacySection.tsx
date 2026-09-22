@@ -6,11 +6,11 @@ import { STATE_NAMES } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 import { STATE_COMMENT_RULES, type RecordRule } from "@/lib/data/stateCommentRules";
 
-const RULE_LABEL: Record<RecordRule, string> = {
+// "varies" and "unknown" say nothing a reader can act on, so only these two
+// get a label; the state card shows just the "How to comment" link otherwise.
+const RULE_LABEL: Partial<Record<RecordRule, string>> = {
   closes_at_hearing: "Comments close at the hearing",
   open_until_decision: "Comments open until the decision",
-  varies: "Rules vary by case",
-  unknown: "Comment rules not confirmed",
 };
 
 const STATES = Object.entries(STATE_NAMES)
@@ -59,13 +59,15 @@ export function StateAdvocacySection() {
                 </li>
               ))}
             </ul>
-            {STATE_COMMENT_RULES[code] && (
+            {STATE_COMMENT_RULES[code] && (STATE_COMMENT_RULES[code].commentUrl || RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]) && (
               <div className="mt-2 pt-2 border-t border-[var(--border)] text-xs flex items-center gap-3">
-                <span className="font-medium">{RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]}</span>
                 {STATE_COMMENT_RULES[code].commentUrl && (
-                  <a href={STATE_COMMENT_RULES[code].commentUrl} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline shrink-0">
+                  <a href={STATE_COMMENT_RULES[code].commentUrl} target="_blank" rel="noreferrer" className="font-medium text-[var(--accent)] underline shrink-0">
                     How to comment
                   </a>
+                )}
+                {RULE_LABEL[STATE_COMMENT_RULES[code].recordRule] && (
+                  <span className="text-[var(--text-secondary)]">{RULE_LABEL[STATE_COMMENT_RULES[code].recordRule]}</span>
                 )}
               </div>
             )}

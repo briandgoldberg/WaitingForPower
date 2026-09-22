@@ -6,7 +6,8 @@ import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
-import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateCommentRules";
+import type { StateCommentRule } from "@/lib/data/stateCommentRules";
+import { isPublicHearing, ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
 
 const PAGE_SIZE = 20;
 
@@ -49,9 +50,6 @@ interface ActionRow {
 // saying so.
 function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { attend: ActionRow | null; score: number } {
   const pub = p.hearings.filter(isPublicHearing);
-  const closedRule = rule?.recordRule === "closes_at_hearing";
-  const openRule = rule?.recordRule === "open_until_decision";
-  const decisionNext = p.reviewStep === "Awaiting commission order";
 
   // Hearings closed to the public (evidentiary, parties only) stay off this
   // page entirely; they're still on the project's own page.
@@ -60,37 +58,9 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
       ? { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) }
       : null;
 
-  let score: number;
-  if (p.commentDeadline) score = 3;
-  else if (decisionNext && closedRule) score = 0;
-  else if (decisionNext && openRule) score = 3;
-  // The hearing being over says nothing about whether comments are still
-  // accepted, only that a decision is next — so this leans closed rather
-  // than counting as fully unknown, but without claiming to know why.
-  else if (decisionNext) score = 1;
-  else if (openRule) score = 3;
-  else if (closedRule && p.hearings.length > 0) score = 3;
-  else score = 2;
+  const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
   return { attend, score };
 }
-
-// The three-tier status shown next to a project's size: nothing else, no icon.
-function commentStatus(score: number, deadline: string | null): string {
-  if (score === 3) return deadline ? `Accepting comments · due ${fmtShort(deadline)}` : "Accepting comments";
-  if (score === 2) return "Maybe accepting comments";
-  return "Unlikely to accept comments";
-}
-
-// A hearing the public can speak at, as opposed to an evidentiary hearing where
-// the parties present testimony. Judged from the label the source gives.
-const PUBLIC_HEARING_RE = /public|comment|input|listening|town hall/i;
-const PARTIES_ONLY_RE = /evidentiary|party session|siting committee|contested|prehearing|technical|settlement/i;
-const isPublicHearing = (h: { label: string | null }) => !!h.label && PUBLIC_HEARING_RE.test(h.label) && !PARTIES_ONLY_RE.test(h.label);
-
-const ruleFor = (p: AdvocacyProject): StateCommentRule | undefined => {
-  const codes = splitStateCodes(p.state);
-  return codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
-};
 
 export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projects: AdvocacyProject[]; initialBucket?: number }) {
   const [query, setQuery] = useState("");
@@ -101,7 +71,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   const rows = useMemo(
     () =>
       projects.map((p) => {
-        const rule = ruleFor(p);
+        const rule = ruleForState(p.state);
         const { attend, score } = actionsFor(p, rule);
         return { p, rule, attend, score };
       }),
@@ -215,7 +185,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
                       {formatCapacity(p.capacityValue, p.capacityUnit)}
                     </span>
                   )}
-                  <span className="text-xs text-[var(--text-secondary)]">{commentStatus(score, p.commentDeadline)}</span>
+                  <span className="text-xs text-[var(--text-secondary)]">{commentStatusText(score, p.commentDeadline)}</span>
                 </div>
               </div>
 

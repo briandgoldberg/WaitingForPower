@@ -1,6 +1,7 @@
 import type { ProjectDTO } from "@/lib/types";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
+import { isPublicHearing, ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
 
 const MAX_STATES_SHOWN = 4;
 
@@ -35,6 +36,10 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
     .slice(0, MAX_STATES_SHOWN);
+  // Same scoring the Advocate > Projects tab uses, so a project reads the
+  // same way in both places — see src/lib/advocacyActions.ts.
+  const rule = ruleForState(p.state);
+  const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
 
   const docketColumn = (
     <Column title="Official docket">
@@ -89,8 +94,14 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
         {contactColumn}
 
         <Column title="Hearings and comment deadlines">
+          <p className="text-sm font-medium">{commentStatusText(score, p.commentDeadline)}</p>
+          {rule?.commentUrl && (
+            <p className="text-sm mt-1">
+              <ExternalLink href={rule.commentUrl}>How to comment</ExternalLink>
+            </p>
+          )}
           {p.hearings.length > 0 ? (
-            <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
+            <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)] mt-2">
               {p.hearings.map((h, i) => {
                 const past = new Date(h.endDate ?? h.date).getTime() < nowMs;
                 return (
@@ -99,6 +110,12 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
                       {fmt(h.date)}
                       {h.endDate && ` – ${fmt(h.endDate)}`}
                       {h.label && <span className="text-[var(--muted)]"> · {h.label}</span>}
+                      {h.label && (
+                        <span className={isPublicHearing(h) ? "text-[var(--accent)]" : "text-[var(--muted)]"}>
+                          {" "}
+                          · {isPublicHearing(h) ? "public can speak" : "parties only"}
+                        </span>
+                      )}
                       {past && <span className="text-[var(--muted)]"> · past</span>}
                     </div>
                     {h.location && <div className="text-xs text-[var(--muted)] mt-0.5">Where: {h.location}</div>}
@@ -107,7 +124,7 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
               })}
             </ul>
           ) : (
-            <p className="text-sm text-[var(--text-secondary)]">None on file.</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-2">None on file.</p>
           )}
           {p.hearingDetailsLink && (
             <p className="text-sm mt-2">

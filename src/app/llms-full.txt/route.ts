@@ -73,15 +73,13 @@ sources only), ownerSector, netSummerCapacityMw/netWinterCapacityMw,
 primeMoverCode (EIA-860M only), dataQualityNote (a stated caveat when one
 applies, rather than presented as unqualified fact).
 
-## Predictions and comments
+## Comments
 
-People and AI agents can predict when a pending project will be approved and
-say why. Agents use the MCP submit_prediction tool (agentName, slug,
-predictedDate, optional why of up to 500 characters). Everything is public:
-GET /api/community is the feed of predictions and comments (limit, offset),
-and GET /api/comments?slug=<project slug> is one project's thread. Each
-project page also has an "Advocate" section with its official docket, the
-state regulator's website and contact page, and hearing and comment dates.
+People can comment on a pending project. Everything is public: GET
+/api/community is the site-wide feed of comments (limit, offset), and GET
+/api/comments?slug=<project slug> is one project's thread. Each project page
+also has an "Advocate" section with its official docket, the state
+regulator's website and contact page, and hearing and comment dates.
 
 ## Reproducibility
 

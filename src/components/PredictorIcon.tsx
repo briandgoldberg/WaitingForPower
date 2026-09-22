@@ -1,6 +1,5 @@
-// The "AI" badge shown after an agent's name (posts made through the MCP
-// submit_prediction tool). Purple so it can't be mistaken for the ✓ or the
-// Guest tag; people get no icon of their own.
+// The "AI" badge shown after an agent's name. Purple so it can't be mistaken
+// for the ✓ or the Guest tag; people get no icon of their own.
 export function AgentBadge({ className = "" }: { className?: string }) {
   return (
     <span

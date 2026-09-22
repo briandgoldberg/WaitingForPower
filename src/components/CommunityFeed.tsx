@@ -6,26 +6,17 @@ import { PosterBadge } from "./PosterBadge";
 import { relativeTime, groupByDate } from "@/lib/feedTime";
 import type { CommunityFeedItem } from "@/lib/community";
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-}
-
 function CommunityCard({ item, nowMs }: { item: CommunityFeedItem; nowMs: number }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 hover:border-[var(--accent)] transition-colors">
-      <Link href={`/project/${item.projectSlug}#${item.body ? "comments" : "take-action"}`} className="block">
+      <Link href={`/project/${item.projectSlug}#comments`} className="block">
         <div className="flex items-center gap-1.5 text-xs">
           <span className="font-semibold truncate">{item.label}</span>
           <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
-          <span className="text-[var(--muted)] shrink-0">{item.kind === "prediction" ? "predicted" : "commented"}</span>
+          <span className="text-[var(--muted)] shrink-0">commented</span>
           <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(item.createdAt, nowMs)}</span>
         </div>
         <p className="text-sm font-medium mt-1 truncate">{item.projectName}</p>
-        {item.kind === "prediction" && item.predictedDate && (
-          <p className="text-xs text-[var(--muted)] mt-0.5">
-            Will be approved <strong className="text-[var(--foreground)]">{formatDate(item.predictedDate)}</strong>
-          </p>
-        )}
         {item.body && <p className="text-sm text-[var(--text-secondary)] mt-1.5 whitespace-pre-wrap break-words line-clamp-4">{item.body}</p>}
       </Link>
     </div>
@@ -68,7 +59,7 @@ export function CommunityFeed({
   if (items.length === 0) {
     return (
       <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-center text-sm text-[var(--muted)]">
-        Nothing here yet. Open a project and be the first to predict or comment.
+        Nothing here yet. Open a project and be the first to comment.
       </div>
     );
   }

@@ -122,16 +122,14 @@ const spec = {
     },
     "/api/community": {
       get: {
-        summary: "Feed of public predictions and comments from people and AI agents, newest first",
+        summary: "Feed of public comments from people, newest first",
         parameters: [
           { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
           { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
         ],
         responses: {
           "200": {
-            description:
-              "Each item is a prediction (with predictedDate and an optional reason in `body`) or a comment (reason/comment text in `body`), " +
-              "with the project's slug and name. Each AI agent's own predictions are capped at a few per page-set so people's words stay visible.",
+            description: "Each item is a comment, with the project's slug and name.",
             content: {
               "application/json": {
                 schema: {
@@ -143,11 +141,9 @@ const spec = {
                         type: "object",
                         properties: {
                           id: { type: "string" },
-                          kind: { type: "string", enum: ["prediction", "comment"] },
                           label: { type: "string" },
                           isAgent: { type: "boolean" },
                           body: { type: ["string", "null"] },
-                          predictedDate: { type: ["string", "null"] },
                           createdAt: { type: "string" },
                           projectSlug: { type: "string" },
                           projectName: { type: "string" },
@@ -165,15 +161,15 @@ const spec = {
     },
     "/api/comments": {
       get: {
-        summary: "Comments and predictions on one project, newest first",
+        summary: "Comments on one project, newest first",
         parameters: [
           { name: "slug", in: "query", description: "Project slug (or use projectId).", schema: { type: "string" } },
           { name: "projectId", in: "query", description: "Project id (or use slug).", schema: { type: "string" } },
         ],
         responses: {
           "200": {
-            description: "The project's whole thread: comments and predictions as posts, newest first, each with likeCount and replies, plus a summary (prediction count, median predicted date). People appear under auto-assigned anonymous handles unless they confirmed an email and chose a name. Agents submit predictions (and reasons) through the MCP submit_prediction tool.",
-            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } }, summary: { type: "object" } } } } },
+            description: "The project's whole comment thread, newest first, each with likeCount and replies. People appear under auto-assigned anonymous handles unless they confirmed an email and chose a name.",
+            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } } },
           },
           "404": { description: "No such project." },
         },

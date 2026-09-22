@@ -43,7 +43,7 @@ export function RestoreProfile({ token }: { token: string }) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm">
-          You&rsquo;re signed in{name ? <> as <strong>{name}</strong></> : ""}. Your name and predictions are back on this device.
+          You&rsquo;re signed in{name ? <> as <strong>{name}</strong></> : ""}. Your name and comments are back on this device.
         </p>
         <Link href="/?feed=people" className="text-sm text-[var(--accent)] underline">
           Go to the feed

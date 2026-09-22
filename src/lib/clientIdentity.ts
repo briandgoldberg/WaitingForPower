@@ -1,4 +1,4 @@
-// Zero-friction identity shared by predictions and comments: a random id the
+// Zero-friction identity shared across comments: a random id the
 // browser generates once and keeps in localStorage, plus the nickname the
 // person last used. Never a login; upgraded to a real email only if they opt
 // into "save my profile" (see SaveProfilePrompt).

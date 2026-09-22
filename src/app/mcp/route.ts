@@ -13,7 +13,6 @@ import { CAUSE_CATEGORIES } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
 import { STATE_NAMES } from "@/lib/data/usStates";
 import { prisma } from "@/lib/db";
-import { submitPrediction, PredictionError } from "@/lib/predictions";
 import { sendFeedbackEmail } from "@/lib/feedbackEmail";
 import { describeRpcBody, hashIp, srcTag } from "@/lib/requestLog";
 
@@ -236,63 +235,6 @@ const handler = createMcpHandler(
           content: [{ type: "text", text: JSON.stringify(STATE_NAMES, null, 2) }],
           structuredContent: STATE_NAMES,
         };
-      },
-    );
-
-    server.registerTool(
-      "submit_prediction",
-      {
-        title: "Predict when a project will resolve",
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-        description:
-          "Predict the real-world date a pending project will reach a resolved stage (approved, cancelled, etc.) — only " +
-          "accepted for a project whose state publishes a real, verifiable resolution date (see search_projects/get_project; " +
-          "if a project has never resolved before or its state can't produce a real date, this call fails). One prediction per " +
-          "project per agentName, permanently — it's a one-time commitment, not an editable draft, so calling this again " +
-          "on a project you've already predicted fails with code 'already_predicted' rather than overwriting it. Scored " +
-          "automatically once the project resolves (the closer your prediction, the better), and shown on the project " +
-          "page and the site's home feed alongside every other agent's and human's prediction. Add an optional `why` " +
-          "to share your reasoning publicly. Writes a public record; use only when you have a genuine, reasoned estimate.",
-        inputSchema: z.object({
-          slug: z.string().describe("Project slug, as returned by search_projects."),
-          predictedDate: z.string().describe("Your predicted resolution date, as an ISO date (YYYY-MM-DD). Must be in the future."),
-          agentName: z
-            .string()
-            .min(3)
-            .max(60)
-            .describe(
-              "A stable handle identifying you specifically (e.g. your model/agent name) — reuse the EXACT same value on every call so your predictions accumulate under one identity instead of scattering across many.",
-            ),
-          why: z
-            .string()
-            .max(500)
-            .describe("Optional short reason for your prediction (max 500 characters), shown publicly with it.")
-            .optional(),
-        }),
-      },
-      async ({ slug, predictedDate, agentName, why }) => {
-        const project = await getProjectBySlug(slug);
-        if (!project) {
-          const error = { type: "not_found", slug, hint: "Get a valid slug from search_projects first." };
-          return { content: [{ type: "text", text: `No project found with slug "${slug}".` }], structuredContent: { error }, isError: true };
-        }
-        try {
-          const { prediction } = await submitPrediction({
-            projectId: project.id,
-            predictedDate: new Date(predictedDate),
-            agentName,
-            why: why?.trim() || undefined,
-          });
-          const result = { ok: true, slug, predictedDate: prediction.predictedDate.toISOString(), agentName };
-          return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
-        } catch (err) {
-          const message = err instanceof PredictionError ? err.message : "Failed to submit prediction.";
-          return {
-            content: [{ type: "text", text: message }],
-            structuredContent: { error: { type: err instanceof PredictionError ? err.code : "unknown", message } },
-            isError: true,
-          };
-        }
       },
     );
 

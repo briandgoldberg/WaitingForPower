@@ -12,7 +12,6 @@ import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
-import { isPredictionEligibleState } from "@/lib/data/predictionEligibleStates";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { SectionPills, type PillSection } from "@/components/project/SectionPills";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
@@ -83,7 +82,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (p.slug !== id) permanentRedirect(`/project/${p.slug}`);
 
   const fuel = FUEL_TYPE_BY_VALUE[p.fuelType];
-  const canPredict = !p.isAggregateExample && !RESOLVED_STAGES.includes(p.currentStage) && isPredictionEligibleState(p.state);
   const outcome = outcomeOf(p);
   const resolved = isResolved(outcome);
   // When we first saw the project resolved, and the stage it was in before.
@@ -333,7 +331,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <SectionPills sections={sections} />
 
       <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
-        <ProjectDiscussion projectId={p.id} canPredict={canPredict} />
+        <ProjectDiscussion projectId={p.id} />
       </section>
     </div>
   );

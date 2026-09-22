@@ -4,8 +4,7 @@ import { submitComment, getProjectDiscussion, CommentError } from "@/lib/communi
 
 export const dynamic = "force-dynamic";
 
-// Human comment submission — same anonymous key + required nickname as
-// predictions (see /api/predictions). Never a login.
+// Human comment submission — anonymous key + optional nickname, never a login.
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -18,7 +17,6 @@ export async function POST(req: NextRequest) {
   const anonymousKey = String(body.anonymousKey ?? "").trim();
   const text = String(body.body ?? "");
   const parentCommentId = String(body.parentCommentId ?? "").trim() || undefined;
-  const replyToPredictionId = String(body.replyToPredictionId ?? "").trim() || undefined;
 
   if (!projectId || !anonymousKey || !text.trim()) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
@@ -33,7 +31,6 @@ export async function POST(req: NextRequest) {
       anonymousKey,
       body: text,
       parentCommentId,
-      replyToPredictionId,
     });
     return NextResponse.json({
       ok: true,
@@ -67,7 +64,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
   }
   // The optional header (not a query string, so it stays out of URLs and logs)
-  // lets the reply say which posts this visitor liked and what they predicted.
+  // lets the reply say which posts this visitor liked.
   const anonymousKey = req.headers.get("x-anonymous-key") ?? undefined;
   const discussion = await getProjectDiscussion(project.id, anonymousKey);
   return NextResponse.json(discussion);

@@ -17,26 +17,16 @@
   required. Tools: `search_projects` (filter + paginate, summarized for context budget),
   `get_project` (full detail by slug — sources, milestone timeline), `get_stats` (aggregate
   numbers, same filters as search), `list_causes`, `list_policies`, `list_states`,
-  `submit_prediction` (see Predictions below), `submit_feedback` (report bugs, confusing
-  data, or a missing capability — read directly by a human, not published anywhere).
+  `submit_feedback` (report bugs, confusing data, or a missing capability — read directly
+  by a human, not published anywhere).
 
-## Predictions
+## Comments
 
-- Any agent can predict the real-world date a pending project will resolve (approved,
-  cancelled, etc.) via the `submit_prediction` MCP tool — no signup, no API key, just a stable
-  `agentName` you reuse across calls. Only accepted for projects in a state that publishes a
-  real, verifiable resolution date (33 of the 41 tracked states currently qualify — call
-  `get_project` and check for a `resolutionDate` field, or just try the call, which fails
-  cleanly with a typed error if the project doesn't qualify). One prediction per project, permanent
-  once submitted — no revising it later, so commit intentionally. Scored automatically the
-  moment the real project resolves: `daysOff` = absolute difference between your predicted date
-  and the real one. Add an optional `why` (up to 500 characters) to share your reasoning: it
-  shows publicly on the project page and in the home page's
-  [What people think](https://waitingforpower.com/?feed=people) feed, next to humans'
-  predictions (humans predict through a no-signup form on each project page). Read them with
-  `GET /api/community` (the feed) and `GET /api/comments?slug=<project slug>` (one project's
-  thread). Each project page also has a "Take action" section: the official docket, the state
-  regulator's website and contact page, and hearing and comment dates.
+- People can comment on a pending project through a no-signup form on each project page.
+  Read them with `GET /api/community` (the site-wide feed) and
+  `GET /api/comments?slug=<project slug>` (one project's thread). Each project page also
+  has an "Advocate" section: the official docket, the state regulator's website and
+  contact page, and hearing and comment dates.
 
 ## API
 
@@ -74,7 +64,7 @@
 
 ## Advocacy
 
-- [Advocacy](https://waitingforpower.com/policies) — two tabs: National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus links to contact your House member and senators) and Public Hearings (every real upcoming public hearing across all tracked projects — dates, venues, and a link to hearing details — grouped by project, soonest first).
+- [Advocacy](https://waitingforpower.com/policies) — three tabs: Project Advocacy (every open project, filterable by how likely it is to be accepting public comments, with a docket link, hearing dates, and a state regulator contact for each), State Advocacy (every state's regulator and its public-comment rules), and National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus links to contact your House member and senators).
 - [Public Hearings RSS feed](https://waitingforpower.com/hearings.rss): the same upcoming-hearings data as an RSS 2.0 feed, one item per hearing, refreshed on every request. Usable directly by feed readers, Zapier's "New Item in Feed" trigger, or IFTTT's RSS applet.
 
 ## Docs

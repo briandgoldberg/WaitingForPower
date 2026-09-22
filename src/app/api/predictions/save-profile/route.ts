@@ -5,11 +5,10 @@ import { sendPredictorVerificationEmail } from "@/lib/predictorEmail";
 
 export const dynamic = "force-dynamic";
 
-// Step 2 of the two-step predict flow (see ProjectDiscussion.tsx): the human has
-// already submitted a real prediction under their anonymousKey — this just
-// asks whether they want that history to survive a device change. Never
-// required to participate; only ever offered after a real prediction is
-// already locked in.
+// Step 2 of the post-then-optionally-save-email flow (see
+// ProjectDiscussion.tsx): the human has already posted a comment under
+// their anonymousKey — this just asks whether they want that history to
+// survive a device change. Never required to participate.
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -28,13 +27,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
   }
 
-  // The predictor row is created the moment someone submits their first
-  // real prediction (see submitPrediction in src/lib/predictions.ts) — if
-  // it's missing here, they've never actually predicted on anything yet,
-  // which the UI shouldn't allow reaching this step for.
+  // The predictor row is created the moment someone posts their first
+  // comment (see getOrCreateHumanPredictor in src/lib/predictions.ts) — if
+  // it's missing here, they've never actually posted anything yet, which
+  // the UI shouldn't allow reaching this step for.
   const predictor = await prisma.predictor.findUnique({ where: { anonymousKey } });
   if (!predictor) {
-    return NextResponse.json({ error: "Post a prediction or comment first." }, { status: 400 });
+    return NextResponse.json({ error: "Post a comment first." }, { status: 400 });
   }
 
   const existingOwner = await prisma.predictor.findUnique({ where: { email } });

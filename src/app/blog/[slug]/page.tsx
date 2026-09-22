@@ -7,14 +7,12 @@ import { LeastEfficientStatesForPermitting } from "@/components/blog/posts/Least
 import { FortEdwardSolarApproved } from "@/components/blog/posts/FortEdwardSolarApproved";
 import { GasTakingOverNewFilings } from "@/components/blog/posts/GasTakingOverNewFilings";
 import { InterconnectionQueueCrisis } from "@/components/blog/posts/InterconnectionQueueCrisis";
-import { PredictionsLaunch } from "@/components/blog/posts/PredictionsLaunch";
 
 export const dynamic = "force-dynamic";
 
 // Maps a post's slug to its body component — see src/lib/data/blogPosts.ts
 // for the listing metadata (title/excerpt/date) these pair with.
 const POST_COMPONENTS: Record<string, React.ComponentType> = {
-  "predictions-for-agents-and-humans": PredictionsLaunch,
   "interconnection-queue-crisis": InterconnectionQueueCrisis,
   "gas-taking-over-new-filings": GasTakingOverNewFilings,
   "least-efficient-states-for-permitting": LeastEfficientStatesForPermitting,

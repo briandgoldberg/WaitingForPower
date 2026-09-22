@@ -14,31 +14,20 @@ import { relativeTime } from "@/lib/feedTime";
 import type { Discussion, ReplyItem } from "@/lib/community";
 
 const MAX_COMMENT = 1000;
-const MAX_PREDICTION_TEXT = 500;
 const POSTS_PER_PAGE = 10;
 const REPLIES_COLLAPSED = 2;
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-}
-
-function predictionKey(projectId: string): string {
-  return `wfp_prediction_${projectId}`;
-}
 
 interface ReplyTarget {
   threadKey: string;
   toLabel: string;
-  payload: { parentCommentId?: string; replyToPredictionId?: string };
+  payload: { parentCommentId?: string };
 }
 
-// The whole conversation about a project, in one place, like the comments
-// under a news article: predictions and comments are the same kind of post,
-// so both can be liked and replied to. One composer writes either: a plain
-// comment, or a comment with a predicted date attached (which is a
-// prediction). Identity is the same as everywhere else on the site: an
-// anonymous browser key plus a name asked for once and then locked.
-export function ProjectDiscussion({ projectId, canPredict }: { projectId: string; canPredict: boolean }) {
+// The whole conversation about a project, like the comments under a news
+// article: one composer, one flat reply level, likes on everything.
+// Identity is the same as everywhere else on the site: an anonymous browser
+// key plus a name asked for once and then locked.
+export function ProjectDiscussion({ projectId }: { projectId: string }) {
   const [data, setData] = useState<Discussion | null>(null);
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [key, setKey] = useState<string | null>(null);
@@ -48,8 +37,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
 
   const [text, setText] = useState("");
-  const [predictOn, setPredictOn] = useState(false);
-  const [date, setDate] = useState("");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,12 +58,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
             setNowMs(Date.now());
           }
         })
-        .catch(() =>
-          setData(
-            (prev) =>
-              prev ?? { items: [], summary: { predictionCount: 0, peopleCount: 0, agentCount: 0, medianDate: null }, myPredictedDate: null, me: null },
-          ),
-        );
+        .catch(() => setData((prev) => prev ?? { items: [], me: null }));
     },
     [projectId, key],
   );
@@ -102,46 +84,31 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
     return items;
   }, [data, sort]);
 
-  const myPredictedDate = data?.myPredictedDate ?? null;
   const me = data?.me ?? null;
   const myLabel = me?.label ?? "";
-  const showPredictOption = canPredict && !myPredictedDate;
 
   async function handlePost(e: React.FormEvent) {
     e.preventDefault();
     if (!key) return;
     const body = text.trim();
-    if (predictOn && !date) {
-      setError("Pick the date you expect approval.");
-      return;
-    }
-    if (!predictOn && !body) {
+    if (!body) {
       setError("Write something first.");
       return;
     }
     setPosting(true);
     setError(null);
     try {
-      const res = predictOn
-        ? await fetch("/api/predictions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId, predictedDate: date, anonymousKey: key, why: body }),
-          })
-        : await fetch("/api/comments", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId, anonymousKey: key, body }),
-          });
+      const res = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, anonymousKey: key, body }),
+      });
       const result = await res.json();
       if (!res.ok) {
         setError(result.error ?? "Something went wrong.");
         return;
       }
-      if (predictOn) localStorage.setItem(predictionKey(projectId), result.predictedDate);
       setText("");
-      setDate("");
-      setPredictOn(false);
       setSort("new");
       window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
     } catch {
@@ -183,7 +150,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
 
   // Optimistic like: flip the heart immediately, then settle to the server's
   // count (or roll back on failure).
-  async function handleLike(kind: "comment" | "prediction", id: string, current: { liked: boolean; count: number }) {
+  async function handleLike(id: string, current: { liked: boolean; count: number }) {
     if (!key) return;
     const apply = (liked: boolean, count: number) =>
       setData((prev) =>
@@ -191,11 +158,8 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
           ? {
               ...prev,
               items: prev.items.map((it) => {
-                if (kind === it.kind && it.rawId === id) return { ...it, likedByMe: liked, likeCount: count };
-                return {
-                  ...it,
-                  replies: it.replies.map((r) => (kind === "comment" && r.id === id ? { ...r, likedByMe: liked, likeCount: count } : r)),
-                };
+                if (it.rawId === id) return { ...it, likedByMe: liked, likeCount: count };
+                return { ...it, replies: it.replies.map((r) => (r.id === id ? { ...r, likedByMe: liked, likeCount: count } : r)) };
               }),
             }
           : prev,
@@ -205,7 +169,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
       const res = await fetch("/api/likes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anonymousKey: key, kind, targetId: id }),
+        body: JSON.stringify({ anonymousKey: key, targetId: id }),
       });
       if (!res.ok) throw new Error("like failed");
       const result = await res.json();
@@ -222,7 +186,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
   }
 
   const total = data ? data.items.length + data.items.reduce((n, i) => n + i.replies.length, 0) : 0;
-  const summary = data?.summary;
 
   return (
     <div>
@@ -244,14 +207,6 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
         )}
       </div>
 
-      {summary && summary.predictionCount > 0 && summary.medianDate && (
-        <p className="text-xs text-[var(--muted)] mb-3">
-          🔮 {summary.predictionCount} prediction{summary.predictionCount === 1 ? "" : "s"}
-          {summary.peopleCount > 0 && summary.agentCount > 0 ? ` (${summary.peopleCount} people, ${summary.agentCount} AI)` : ""} · median{" "}
-          <strong className="text-[var(--foreground)]">{formatDate(summary.medianDate)}</strong>
-        </p>
-      )}
-
       {me && !me.decided && key ? (
         <IdentityDecision
           anonymousKey={key}
@@ -264,50 +219,13 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            maxLength={predictOn ? MAX_PREDICTION_TEXT : MAX_COMMENT}
+            maxLength={MAX_COMMENT}
             rows={3}
             aria-label="Add to the discussion"
             placeholder="Share what you think or know"
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm resize-none"
           />
           <div className="flex items-center gap-2 flex-wrap">
-            {showPredictOption &&
-              (predictOn ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/5 pl-2.5 pr-1 py-0.5 text-xs">
-                  🔮 Predict approval
-                  <input
-                    type="date"
-                    aria-label="Predicted approval date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="rounded border border-[var(--border)] bg-[var(--background)] px-1.5 py-0.5 text-xs"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Remove prediction"
-                    onClick={() => {
-                      setPredictOn(false);
-                      setDate("");
-                    }}
-                    className="px-1.5 text-[var(--muted)] hover:text-[var(--foreground)]"
-                  >
-                    ✕
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPredictOn(true)}
-                  className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs hover:border-[var(--accent)]"
-                >
-                  🔮 Add a prediction
-                </button>
-              ))}
-            {myPredictedDate && (
-              <span className="text-xs text-[var(--muted)]">
-                You predicted <strong className="text-[var(--foreground)]">{formatDate(myPredictedDate)}</strong>
-              </span>
-            )}
             <span className="flex-1" />
             {!me && <SignInLink />}
             <button
@@ -315,7 +233,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
               disabled={posting}
               className="rounded-md bg-[var(--accent)] text-white px-4 py-1.5 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
             >
-              {posting ? "…" : predictOn ? "Post prediction" : "Post"}
+              {posting ? "…" : "Post"}
             </button>
           </div>
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -343,7 +261,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
       {data && sorted.length > 0 && (
         <ul className="mt-4 pt-4 border-t border-[var(--border)] flex flex-col gap-5">
           {sorted.slice(0, visible).map((post) => {
-            const threadKey = `${post.kind}_${post.rawId}`;
+            const threadKey = post.rawId;
             const showAll = expandedReplies.has(threadKey) || post.replies.length <= REPLIES_COLLAPSED;
             const shownReplies = showAll ? post.replies : post.replies.slice(0, REPLIES_COLLAPSED);
             return (
@@ -358,27 +276,16 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
                   nowMs={nowMs}
                   isMe={!!myLabel && post.label === myLabel}
                 />
-                {post.kind === "prediction" && post.predictedDate && (
-                  <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] px-2 py-0.5 text-xs font-medium">
-                    🔮 Predicts approval {formatDate(post.predictedDate)}
-                  </span>
-                )}
                 {post.body && <p className="mt-1 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{post.body}</p>}
                 <div className="flex items-center gap-4 mt-1.5 text-xs">
                   <LikeButton
                     liked={post.likedByMe}
                     count={post.likeCount}
-                    onClick={() => handleLike(post.kind, post.rawId, { liked: post.likedByMe, count: post.likeCount })}
+                    onClick={() => handleLike(post.rawId, { liked: post.likedByMe, count: post.likeCount })}
                   />
                   <button
                     type="button"
-                    onClick={() =>
-                      startReply(
-                        threadKey,
-                        post.label,
-                        post.kind === "prediction" ? { replyToPredictionId: post.rawId } : { parentCommentId: post.rawId },
-                      )
-                    }
+                    onClick={() => startReply(threadKey, post.label, { parentCommentId: post.rawId })}
                     className="text-[var(--muted)] hover:text-[var(--foreground)]"
                   >
                     Reply{post.replies.length > 0 ? ` (${post.replies.length})` : ""}
@@ -393,7 +300,7 @@ export function ProjectDiscussion({ projectId, canPredict }: { projectId: string
                         reply={r}
                         nowMs={nowMs}
                         isMe={!!myLabel && r.label === myLabel}
-                        onLike={() => handleLike("comment", r.id, { liked: r.likedByMe, count: r.likeCount })}
+                        onLike={() => handleLike(r.id, { liked: r.likedByMe, count: r.likeCount })}
                         onReply={() => startReply(threadKey, r.label, { parentCommentId: r.id })}
                       />
                     ))}

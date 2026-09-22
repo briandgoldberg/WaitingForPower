@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 // are, literally, awaiting a decision); the other three partition the rest by
 // comment likelihood, so a project appears under exactly one of them, never
 // more than one. Results are always shown largest project first (MW).
-const SHORT_LIKELIHOOD_LABELS = ["All", "Unlikely", "Possibly", "Confirmed"] as const;
+const SHORT_LIKELIHOOD_LABELS = ["All", "Unlikely", "Maybe", "Confirmed"] as const;
 
 const LIKELIHOOD_LEVELS = [
   { label: "Projects awaiting a decision that may accept public comments" },

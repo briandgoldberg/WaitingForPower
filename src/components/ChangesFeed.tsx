@@ -6,7 +6,7 @@ import type { ProjectChangeDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { stateName } from "@/lib/data/usStates";
 import { relativeTime, groupByDate } from "@/lib/feedTime";
-import { ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
+import { ruleForState, commentScore } from "@/lib/advocacyActions";
 
 // Bundled changeTypes are shown as one card — this picks which single
 // badge/color represents the whole bundle when more than one fired in the
@@ -82,9 +82,6 @@ function ChangeCard({ change, nowMs }: { change: ProjectChangeDTO; nowMs: number
       </Link>
       {score >= 2 && (
         <p className="text-xs mt-1.5">
-          <span className={score === 3 ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-amber-600 dark:text-amber-400 font-medium"}>
-            {commentStatusText(score, change.project.commentDeadline)}
-          </span>{" "}
           <Link href={`/project/${change.project.slug}#take-action`} className="text-[var(--accent)] underline">
             Advocate for project
           </Link>

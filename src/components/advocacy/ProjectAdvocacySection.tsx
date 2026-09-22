@@ -161,7 +161,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             </option>
           ))}
         </select>
-        <span className="text-xs text-[var(--muted)] ml-auto self-center">{filtered.length} projects</span>
+        <span className="text-xs text-[var(--muted)] self-center">{filtered.length} projects</span>
       </div>
 
       <div className="flex flex-col gap-1.5 max-w-sm">

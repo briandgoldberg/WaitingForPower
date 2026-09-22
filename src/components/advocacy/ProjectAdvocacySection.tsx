@@ -133,8 +133,40 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            reset();
+          }}
+          placeholder="Search all open projects"
+          aria-label="Search all open projects"
+          className="flex-1 min-w-[160px] sm:max-w-xs rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        />
+        <select
+          value={state}
+          onChange={(e) => {
+            setState(e.target.value);
+            reset();
+          }}
+          aria-label="Filter by state"
+          className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        >
+          <option value="">All states</option>
+          {stateOptions.map((c) => (
+            <option key={c} value={c}>
+              {STATE_NAMES[c]}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-[var(--muted)] ml-auto self-center">{filtered.length} projects</span>
+      </div>
+
       <div className="flex flex-col gap-1.5 max-w-sm">
-        <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Likelihood of accepting public comments">
+        <span className="text-xs font-medium">Accepting comments?</span>
+        <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Accepting comments?">
           <div
             aria-hidden
             className="absolute top-1 bottom-1 rounded-full bg-[var(--accent)] transition-[left] duration-200 ease-out"
@@ -158,38 +190,6 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             </button>
           ))}
         </div>
-        <span className="text-xs text-[var(--muted)]">{LIKELIHOOD_LEVELS[bucket].label}</span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            reset();
-          }}
-          placeholder="Search projects"
-          aria-label="Search projects"
-          className="flex-1 min-w-[160px] sm:max-w-xs rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-        />
-        <select
-          value={state}
-          onChange={(e) => {
-            setState(e.target.value);
-            reset();
-          }}
-          aria-label="Filter by state"
-          className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-        >
-          <option value="">All states</option>
-          {stateOptions.map((c) => (
-            <option key={c} value={c}>
-              {STATE_NAMES[c]}
-            </option>
-          ))}
-        </select>
-        <span className="text-xs text-[var(--muted)] ml-auto self-center">{filtered.length} projects</span>
       </div>
 
       <div className="flex flex-col gap-3">

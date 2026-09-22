@@ -55,6 +55,6 @@ const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { mo
 // The three-tier status line: nothing else, no icon.
 export function commentStatusText(score: number, deadline: string | null): string {
   if (score === 3) return deadline ? `Accepting comments · due ${fmtShort(deadline)}` : "Accepting comments";
-  if (score === 2) return "Maybe accepting comments";
+  if (score === 2) return "Possibly accepting comments";
   return "Unlikely to accept comments";
 }

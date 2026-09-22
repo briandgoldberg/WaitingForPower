@@ -19,7 +19,10 @@ export function AdvocacyTabs({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-3 gap-1 rounded-2xl sm:flex sm:gap-1.5 sm:rounded-full bg-black/5 dark:bg-white/10 p-1 w-full sm:w-fit sm:max-w-full sm:overflow-x-auto">
+      {/* Underlined page tabs, deliberately not another pill/segmented control —
+          the Projects tab has its own pill filter below, and stacking two
+          pill controls read as one confusing double slider. */}
+      <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)] overflow-x-auto" role="tablist">
         <TabButton active={tab === "project"} onClick={() => setTab("project")}>
           <span className="sm:hidden">Projects</span>
           <span className="hidden sm:inline">Project Advocacy</span>
@@ -45,11 +48,13 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
-      className={`sm:shrink-0 px-2.5 sm:px-3.5 py-1.5 rounded-full text-sm font-medium text-center sm:whitespace-nowrap transition-colors ${
+      className={`shrink-0 -mb-px px-0.5 pb-2.5 pt-1 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
         active
-          ? "bg-[var(--panel)] shadow-sm"
-          : "text-[var(--muted)] hover:text-[var(--text-secondary)]"
+          ? "border-[var(--accent)]"
+          : "border-transparent text-[var(--muted)] hover:text-[var(--text-secondary)]"
       }`}
       style={active ? { color: "var(--accent)" } : undefined}
     >

@@ -150,7 +150,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Every project below is still awaiting a decision. Narrow to cases taking comments or with a hearing coming up.
+        Every project below is still waiting for a decision. Narrow to cases taking comments or with a hearing coming up.
       </p>
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">

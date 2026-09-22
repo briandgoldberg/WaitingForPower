@@ -10,13 +10,14 @@ import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateComm
 
 const PAGE_SIZE = 20;
 
-type FilterKey = "comment" | "hearing";
+type FilterKey = "comment" | "maybe" | "hearing";
 
 // Every project shown is an open case (awaiting a decision) by default. These
-// two narrow further and combine as "and": selecting both shows only cases
-// that are both taking comments and have a hearing coming up.
+// narrow further and combine as "and": selecting more than one shows only
+// cases that match all of them.
 const FILTERS: { value: FilterKey; label: string }[] = [
   { value: "comment", label: "Comments Open" },
+  { value: "maybe", label: "Comments Possibly Open" },
   { value: "hearing", label: "Hearing Coming Up" },
 ];
 
@@ -77,10 +78,14 @@ const ruleFor = (p: AdvocacyProject): StateCommentRule | undefined => {
   return codes.length === 1 ? STATE_COMMENT_RULES[codes[0]] : undefined;
 };
 
+// "Comments Possibly Open" means we genuinely don't know either way, as
+// opposed to a hearing having already probably closed the record.
+const isMaybeOpen = (acts: { comment: ActionRow }) => acts.comment.ok === null && acts.comment.label.startsWith("Maybe");
+
 // How worth acting on a case is: a confirmed comment window is worth most, then
 // a public hearing, then a "maybe". Closed or not-yet-open cases rank last.
 function likelihood(acts: { attend: ActionRow; comment: ActionRow }): number {
-  const c = acts.comment.ok === true ? 4 : acts.comment.ok === null ? (acts.comment.label.startsWith("Maybe") ? 2 : 1) : 0;
+  const c = acts.comment.ok === true ? 4 : isMaybeOpen(acts) ? 2 : acts.comment.ok === null ? 1 : 0;
   const a = acts.attend.ok === true ? 3 : 0;
   return c + a;
 }
@@ -120,9 +125,10 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [rows, query, state]);
 
   const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { comment: 0, hearing: 0 };
+    const c: Record<FilterKey, number> = { comment: 0, maybe: 0, hearing: 0 };
     for (const r of inScope) {
       if (r.acts.comment.ok === true) c.comment++;
+      if (isMaybeOpen(r.acts)) c.maybe++;
       if (r.acts.attend.ok === true) c.hearing++;
     }
     return c;
@@ -131,6 +137,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   const filtered = useMemo(() => {
     const list = inScope.filter((r) => {
       if (activeFilters.includes("comment") && r.acts.comment.ok !== true) return false;
+      if (activeFilters.includes("maybe") && !isMaybeOpen(r.acts)) return false;
       if (activeFilters.includes("hearing") && r.acts.attend.ok !== true) return false;
       return true;
     });

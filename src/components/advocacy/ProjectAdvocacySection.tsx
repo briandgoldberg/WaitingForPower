@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 const SHORT_LIKELIHOOD_LABELS = ["All", "Unlikely", "Maybe", "Confirmed"] as const;
 
 const LIKELIHOOD_LEVELS = [
-  { label: "Every project awaiting a decision" },
+  { label: "Every project awaiting a decision that might accept public comments" },
   { label: "Public comments unlikely to be accepted" },
   { label: "Public comments possibly open, not confirmed" },
   { label: "Public comments confirmed open" },

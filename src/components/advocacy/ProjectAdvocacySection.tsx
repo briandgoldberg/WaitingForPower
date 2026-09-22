@@ -10,12 +10,12 @@ import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateComm
 
 const PAGE_SIZE = 20;
 
-type Filter = "comment" | "hearing" | "open";
+type FilterKey = "comment" | "hearing";
 
-// A project shows under every filter it qualifies for: one that is taking
-// comments and has a public hearing appears under both.
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: "open", label: "Case Open" },
+// Every project shown is an open case (awaiting a decision) by default. These
+// two narrow further and combine as "and": selecting both shows only cases
+// that are both taking comments and have a hearing coming up.
+const FILTERS: { value: FilterKey; label: string }[] = [
   { value: "comment", label: "Comments Open" },
   { value: "hearing", label: "Hearing Coming Up" },
 ];
@@ -91,7 +91,7 @@ const soonestDate = (p: AdvocacyProject): string => [p.commentDeadline, p.hearin
 export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject[] }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
-  const [filter, setFilter] = useState<Filter>("open");
+  const [activeFilters, setActiveFilters] = useState<FilterKey[]>([]);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -120,7 +120,7 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [rows, query, state]);
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { comment: 0, hearing: 0, open: inScope.length };
+    const c: Record<FilterKey, number> = { comment: 0, hearing: 0 };
     for (const r of inScope) {
       if (r.acts.comment.ok === true) c.comment++;
       if (r.acts.attend.ok === true) c.hearing++;
@@ -129,7 +129,11 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
   }, [inScope]);
 
   const filtered = useMemo(() => {
-    const list = inScope.filter((r) => filter === "open" || (filter === "comment" ? r.acts.comment.ok === true : r.acts.attend.ok === true));
+    const list = inScope.filter((r) => {
+      if (activeFilters.includes("comment") && r.acts.comment.ok !== true) return false;
+      if (activeFilters.includes("hearing") && r.acts.attend.ok !== true) return false;
+      return true;
+    });
     // Soonest first: cases with a comment deadline or public hearing date, in date
     // order, then the rest with the likeliest to take comments ahead, larger first.
     return [...list].sort((a, b) => {
@@ -139,14 +143,14 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
       if (a.score !== b.score) return b.score - a.score;
       return (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1);
     });
-  }, [inScope, filter]);
+  }, [inScope, activeFilters]);
 
   const reset = () => setVisible(PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--muted)] max-w-2xl">
-        Pick a project and see what you can do: attend a hearing, send a comment, or both. Cases most likely to be taking comments are listed first.
+        Every project below has an open case: still awaiting a decision. Narrow to cases taking comments, with a hearing coming up, or both.
       </p>
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
@@ -155,12 +159,12 @@ export function ProjectAdvocacySection({ projects }: { projects: AdvocacyProject
             key={o.value}
             type="button"
             onClick={() => {
-              setFilter(o.value);
+              setActiveFilters((prev) => (prev.includes(o.value) ? prev.filter((v) => v !== o.value) : [...prev, o.value]));
               reset();
             }}
-            aria-pressed={filter === o.value}
+            aria-pressed={activeFilters.includes(o.value)}
             className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              filter === o.value
+              activeFilters.includes(o.value)
                 ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                 : "border-[var(--border)] bg-[var(--panel)] text-[var(--text-secondary)] hover:border-[var(--accent)]"
             }`}

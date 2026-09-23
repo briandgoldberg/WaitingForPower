@@ -7,6 +7,11 @@ import { getBlogPostMeta } from "@/lib/data/blogPosts";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+// Blog post content is effectively static per slug — cache the rendered
+// image instead of re-running Satori (and, for one post, recomputing the
+// state-efficiency map) on every request. See the project OG image route
+// for the matching change and why.
+export const revalidate = 86400;
 
 const CODE_BY_NAME = new Map(Object.entries(STATE_NAMES).map(([code, name]) => [name, code]));
 

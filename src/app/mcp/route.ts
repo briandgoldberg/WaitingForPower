@@ -15,6 +15,7 @@ import { STATE_NAMES } from "@/lib/data/usStates";
 import { prisma } from "@/lib/db";
 import { sendFeedbackEmail } from "@/lib/feedbackEmail";
 import { describeRpcBody, hashIp, srcTag } from "@/lib/requestLog";
+import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 
 const FUEL_TYPES = [
   "solar",
@@ -316,8 +317,16 @@ async function logMcpRequest(copy: Request) {
   }
 }
 
+// 60 requests/minute per caller — generous for a real agent working through
+// a session (this site's whole real traffic averages well under that), but
+// enough to stop a runaway loop or misconfigured client from burning Fluid
+// Active CPU indefinitely.
 async function loggedHandler(req: Request) {
+  const ipHash = hashIp(req);
   void logMcpRequest(req.clone());
+  if (await isRateLimited("mcp", ipHash, { windowMs: 60_000, max: 60 })) {
+    return rateLimitedResponse(60);
+  }
   return handler(req);
 }
 

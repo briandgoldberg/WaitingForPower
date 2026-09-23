@@ -3,6 +3,8 @@ import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import { projectsToCsv } from "@/lib/exportCsv";
 import type { StatusBucket } from "@/lib/data/taxonomies";
 import { prisma } from "@/lib/db";
+import { hashIp, srcTag } from "@/lib/requestLog";
+import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 
 // Bulk export — the full dataset in one request, for researchers/journalists
 // doing their own offline analysis rather than paging through /api/projects
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'format must be "json" or "csv"' }, { status: 400 });
   }
 
+  const ipHash = hashIp(request);
   prisma.apiRequestLog
     .create({
       data: {
@@ -40,9 +43,18 @@ export async function GET(request: Request) {
         method: "GET",
         userAgent: request.headers.get("user-agent"),
         query: searchParams.toString() || null,
+        ipHash,
+        src: srcTag(request),
       },
     })
     .catch((err) => console.error("Failed to log /api/export request:", err));
+
+  // Bulk export is heavier per call than /api/projects, so a tighter cap —
+  // this is meant for a researcher fetching the whole dataset occasionally,
+  // not a tight polling loop.
+  if (await isRateLimited("api_export", ipHash, { windowMs: 60_000, max: 20 })) {
+    return rateLimitedResponse(60, CORS_HEADERS);
+  }
 
   const status = searchParams.get("status") as StatusBucket | "all" | null;
   const filters = toFilterState({

@@ -3,6 +3,7 @@ import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import type { StatusBucket } from "@/lib/data/taxonomies";
 import { prisma } from "@/lib/db";
 import { hashIp, srcTag } from "@/lib/requestLog";
+import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 
 // Public, read-only, no key required — CORS is wide open on purpose so
 // external tools/agents can call this directly from the browser or a server.
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
   // See src/app/mcp/route.ts's matching ApiRequestLog write for why this
   // exists — no analytics package, and Vercel's CLI log retention here is
   // too short to ever answer "has this been used" without a durable row.
+  const ipHash = hashIp(request);
   prisma.apiRequestLog
     .create({
       data: {
@@ -51,11 +53,15 @@ export async function GET(request: Request) {
         method: "GET",
         userAgent: request.headers.get("user-agent"),
         query: searchParams.toString() || null,
-        ipHash: hashIp(request),
+        ipHash,
         src: srcTag(request),
       },
     })
     .catch((err) => console.error("Failed to log /api/projects request:", err));
+
+  if (await isRateLimited("api_projects", ipHash, { windowMs: 60_000, max: 60 })) {
+    return rateLimitedResponse(60, CORS_HEADERS);
+  }
 
   const status = searchParams.get("status") as StatusBucket | "all" | null;
   const filters = toFilterState({

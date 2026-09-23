@@ -5,6 +5,12 @@ import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE } from "@/li
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+// Regenerating this on every request (a DB fetch plus a Satori render) was
+// one of the top Fluid Active CPU consumers on the site — project data only
+// changes a handful of times a day via ingest crons, so an hour of staleness
+// on a social-preview image is free money. Next.js/Vercel caches the
+// rendered PNG at the edge for this long before recomputing it.
+export const revalidate = 3600;
 
 export default async function OgImage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

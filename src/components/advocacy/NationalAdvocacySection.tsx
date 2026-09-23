@@ -1,5 +1,6 @@
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
+import { LetterBuilder } from "./LetterBuilder";
 
 export function NationalAdvocacySection() {
   return (
@@ -34,6 +35,8 @@ export function NationalAdvocacySection() {
           Contact Your Senator →
         </a>
       </div>
+
+      <LetterBuilder />
 
       <nav className="flex flex-wrap gap-1.5">
         {POLICIES.map((policy) => {

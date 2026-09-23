@@ -2,8 +2,6 @@ import { getRecentChanges } from "@/lib/changes";
 import { ChangesFeed } from "@/components/ChangesFeed";
 import { CommunityFeed } from "@/components/CommunityFeed";
 import { getCommunityFeed } from "@/lib/community";
-import { StateFeedFilter } from "@/components/StateFeedFilter";
-import { FeedSubscribeBox } from "@/components/FeedSubscribeBox";
 import { STATE_NAMES } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
@@ -83,15 +81,7 @@ export default async function HomePage({
           </h1>
         </div>
 
-        {feed === "changes" && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-sm font-semibold">Recent changes</h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              <StateFeedFilter state={state} />
-              <FeedSubscribeBox state={state} />
-            </div>
-          </div>
-        )}
+        {feed === "changes" && <h2 className="text-sm font-semibold">Recent changes</h2>}
 
         {feed === "changes" ? (
           /* key={state}: ChangesFeed seeds its own state from initialChanges

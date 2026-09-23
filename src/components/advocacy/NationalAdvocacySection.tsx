@@ -15,27 +15,6 @@ export function NationalAdvocacySection() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <a
-          href="https://www.congress.gov/members/find-your-member"
-          target="_blank"
-          rel="noreferrer"
-          className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-          style={{ color: "var(--accent)" }}
-        >
-          Contact Your Representative →
-        </a>
-        <a
-          href="https://www.senate.gov/senators/senators-contact.htm"
-          target="_blank"
-          rel="noreferrer"
-          className="shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full bg-accent/10 hover:bg-accent/15 transition-colors whitespace-nowrap"
-          style={{ color: "var(--accent)" }}
-        >
-          Contact Your Senator →
-        </a>
-      </div>
-
       <LetterBuilder />
 
       <nav className="flex flex-wrap gap-1.5">

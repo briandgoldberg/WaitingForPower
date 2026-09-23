@@ -6,6 +6,29 @@ import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
 import { ORIENTATION_OPTIONS, buildLetter, letterSubject, type Orientation } from "@/lib/data/advocacyLetters";
 
+// A small on/off switch for "include this issue in my letter" — kept local
+// to this file since nothing else on the site needs a toggle yet.
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      className={`relative shrink-0 inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+        checked ? "bg-accent" : "bg-black/15 dark:bg-white/20"
+      }`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-4" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+
 // Picks one or more issues plus a political leaning and assembles a
 // pre-written letter to a member of Congress — see advocacyLetters.ts for
 // why nothing here is generated live. Every combination is a deterministic
@@ -71,29 +94,39 @@ export function LetterBuilder() {
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
           Which issues do you care about?
         </span>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {POLICIES.map((policy) => {
             const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
             const active = selected.has(policy.slug);
             return (
-              <button
+              <div
                 key={policy.slug}
-                type="button"
-                onClick={() => toggleCause(policy.slug)}
-                aria-pressed={active}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "text-white border-transparent"
-                    : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+                className={`rounded-xl border overflow-hidden transition-colors ${
+                  active ? "border-transparent" : "border-[var(--border)]"
                 }`}
-                style={active ? { backgroundColor: cause.color } : undefined}
+                style={active ? { boxShadow: `0 0 0 1.5px ${cause.color}` } : undefined}
               >
-                <span
-                  className="inline-block h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: active ? "white" : cause.color }}
-                />
-                {policy.badgeLabel ?? cause.shortLabel}
-              </button>
+                <div className="h-1.5" style={{ backgroundColor: cause.color }} />
+                <div className="p-3 flex flex-col gap-1.5 bg-[var(--background)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm leading-snug">{policy.title}</div>
+                      <p className="text-xs text-[var(--muted)] mt-0.5">{policy.oneLiner}</p>
+                    </div>
+                    <Toggle
+                      checked={active}
+                      onChange={() => toggleCause(policy.slug)}
+                      label={`Include ${policy.title} in your letter`}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3 mt-0.5">
+                    <a href={`#${policy.slug}`} className="text-xs font-medium text-[var(--accent)] underline">
+                      Learn more →
+                    </a>
+                    <span className="text-xs text-[var(--muted)]">{active ? "In your letter" : "Not included"}</span>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -153,8 +186,15 @@ export function LetterBuilder() {
             {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
           </div>
           <p className="text-xs text-[var(--muted)]">
-            Find your representative or senator using the links above, then paste this into their contact form or
-            email, filling in the brackets with your own details.
+            Paste this into their contact form or email, filling in the brackets with your own details.{" "}
+            <a
+              href="https://www.usa.gov/elected-officials"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[var(--accent)] underline font-medium"
+            >
+              Find your representative or senator →
+            </a>
           </p>
         </div>
       ) : (

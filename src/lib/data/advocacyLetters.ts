@@ -33,21 +33,21 @@ interface Framing {
 const FRAMING: Record<Orientation, Framing> = {
   liberal: {
     intro:
-      "I am writing as a constituent who wants to see America move past fossil fuels as quickly as we responsibly can. Clean energy is ready to build today. For far too many wind, solar, storage, and transmission projects, the holdup is not the technology or the money. It is a permitting system that leaves good projects waiting for years before anyone gives a real answer.",
+      "I am writing as a constituent who wants America to move past fossil fuels quickly and responsibly. Clean energy is ready to build today. Too often the holdup is not the technology or the money. It is a permitting system that leaves good projects waiting years for a real answer.",
     closing:
-      "None of this requires weakening environmental protection. It means giving agencies real deadlines, coordinating reviews that already have to happen anyway, and giving communities a real seat at the table early instead of only a lawsuit at the end. I would ask you to support the following changes.",
+      "None of this requires weakening environmental protection. It means real deadlines, coordinated reviews, and an early seat at the table for communities instead of only a lawsuit at the end. I would ask you to support the following.",
   },
   moderate: {
     intro:
-      "I am writing as a constituent about a problem that should not be a partisan one. Energy projects of every kind, including the power plants, transmission lines, and pipelines this country already depends on, sit stuck in permitting for years longer than the construction itself takes. That delay eventually shows up as a higher electric bill and a less reliable grid back home.",
+      "I am writing as a constituent about a problem that should not be partisan. Energy projects of every kind sit stuck in permitting for years longer than the construction itself takes. That delay eventually shows up as a higher electric bill and a less reliable grid back home.",
     closing:
-      "This is one of the few issues left where people who disagree about almost everything else can still agree on the fix. Keep the same standards, just put the process on a real clock. I would ask you to support the following changes.",
+      "This is one of the few issues left where people who disagree about almost everything else can still agree on the fix. Keep the same standards, just put the process on a real clock. I would ask you to support the following.",
   },
   conservative: {
     intro:
-      "I am writing as a constituent concerned about how much needless red tape stands between good projects and the energy this country needs. Whether it is a new pipeline, a power plant, or the transmission lines to move electricity where it is needed, the holdup is rarely the engineering or the private money ready to build it. It is a permitting process with no deadline, no accountability, and no end in sight.",
+      "I am writing as a constituent concerned about how much red tape stands between good projects and the energy this country needs. The holdup is rarely the engineering or the private money ready to build. It is a permitting process with no deadline and no accountability.",
     closing:
-      "This is not about cutting corners. It is about making government finally do its job on a reasonable timeline, the way any business is expected to. I would ask you to support the following changes.",
+      "This is not about cutting corners. It is about making government finally do its job on a reasonable timeline, the way any business is expected to. I would ask you to support the following.",
   },
 };
 
@@ -56,51 +56,51 @@ const FRAMING: Record<Orientation, Framing> = {
 const CAUSE_PARAGRAPHS: Partial<Record<CauseSlug, Partial<Record<Orientation, string>>>> = {
   interconnection_queue_backlog: {
     liberal:
-      "New solar, wind, and battery storage projects are being held back for years by a grid connection backlog, not by a lack of public support or private investment. A federal rule already on the books, Order No. 2023, calls for faster, first ready, first served studies. Please support fully enforcing it and giving grid operators the staff they need to actually clear the queue.",
+      "New solar, wind, and battery storage projects are held back for years by a grid connection backlog, not a lack of support or money. A federal rule, Order No. 2023, already calls for faster, first ready, first served studies. Please support fully enforcing it.",
     moderate:
-      "Thousands of energy projects of every kind are stuck for years waiting on a single grid connection study, often behind an unrelated project that never gets built. A rule already in federal law, Order No. 2023, calls for faster, first ready, first served studies with real deadlines. Please support fully enforcing it and funding the staff needed to meet those deadlines.",
+      "Thousands of energy projects sit for years waiting on a single grid connection study, often behind one unrelated project that never gets built. A federal rule, Order No. 2023, already calls for faster studies with real deadlines. Please support fully enforcing it.",
     conservative:
-      "A federal rule already on the books, Order No. 2023, calls for faster, first ready, first served grid connection studies with real deadlines. The problem is enforcement, not new law. Please support fully implementing it so that serious, fully financed projects are not left waiting behind paperwork for years at a time.",
+      "A federal rule, Order No. 2023, already calls for faster, first ready, first served grid connection studies with real deadlines. The problem is enforcement, not new law. Please support fully implementing it so funded, ready projects are not left waiting for years.",
   },
   environmental_review_nepa: {
     liberal:
-      "Environmental reviews for clean energy projects can take a decade before a shovel ever goes in the ground, often re studying impacts that are already well understood from similar projects nearby. A firm one to two year deadline, paired with real funding for agencies to meet it, would get good projects built faster without lowering the bar on what gets studied.",
+      "Environmental reviews for clean energy projects can take a decade, often re studying impacts already well understood. A firm one to two year deadline, with real funding to meet it, would get good projects built faster without lowering the bar.",
     moderate:
-      "Reviews under the National Environmental Policy Act now regularly take longer than building the project itself, with no real deadline forcing a decision either way. Congress already put reasonable time and page limits into law once, in 2023. Please support finishing that work with real agency funding so the deadline is more than just words on paper.",
+      "Reviews under the National Environmental Policy Act now often take longer than building the project itself, with no real deadline forcing a decision. Congress already set reasonable time and page limits in 2023. Please support fully funding and enforcing them.",
     conservative:
-      "Federal environmental reviews can drag on for a decade with no real deadline, adding years of cost and uncertainty to projects that are ready to build. Congress already set reasonable time and page limits in 2023. Please support fully funding and enforcing them, and back the bipartisan SPEED Act to finish the job.",
+      "Federal environmental reviews can drag on for a decade with no real deadline, adding years of cost and uncertainty. Congress already set reasonable time and page limits in 2023. Please support funding them and back the bipartisan SPEED Act to finish the job.",
   },
   multi_agency_permitting: {
     liberal:
-      "Clean energy and transmission projects often need sign off from several federal agencies, each running its own separate review on its own timeline, so the slowest one holds up everyone else's already finished work. Extending the One Federal Decision model, which already works today for a smaller set of projects, would keep every agency's voice while ending the pointless waiting.",
+      "Clean energy and transmission projects often need sign off from several federal agencies, each on its own timeline, so the slowest one holds up all the others. Extending the One Federal Decision model, which already works for some projects, would end the pointless waiting.",
     moderate:
-      "When a project needs approval from more than one federal agency, each one often reviews it separately and on its own schedule, so the slowest agency sets the pace for all the others. The One Federal Decision framework already fixes this for some projects by putting every agency on one shared schedule. Please support extending it more broadly.",
+      "When a project needs approval from more than one federal agency, each often reviews it separately, so the slowest agency sets the pace for everyone else. The One Federal Decision framework already fixes this for some projects. Please support extending it more broadly.",
     conservative:
-      "Energy projects that need sign off from multiple federal agencies are too often stuck waiting because each agency runs its own review on its own clock, with nobody accountable for the total delay. The One Federal Decision framework already applies this fix to some projects. Please support extending it further so government stops working against itself.",
+      "Projects that need sign off from multiple federal agencies are too often stuck because each runs its own review on its own clock, with nobody accountable for the delay. The One Federal Decision framework already fixes this for some projects. Please support extending it further.",
   },
   transmission_siting_land_rights: {
     liberal:
-      "A single state, or even one county, can block a major transmission line meant to serve an entire region and bring more clean power online, with no federal option if local approval stalls out for good. A federal backstop for lines of true national significance, the same approach already used for interstate gas pipelines, would keep local input while making sure one veto cannot end a project the whole region needs.",
+      "A single county can block a major transmission line meant to serve an entire region, with no federal option if local approval stalls. A federal backstop for lines of national significance, the same approach used for gas pipelines, would protect projects the whole region needs.",
     moderate:
-      "Large transmission lines that would serve an entire region can be blocked by a single state or county, with no federal path forward if local approval never comes. Interstate gas pipelines already have a federal backstop for exactly this reason. Please support giving major transmission lines the same option for projects of real national importance.",
+      "Large transmission lines that would serve an entire region can be blocked by a single state or county, with no federal path forward. Interstate gas pipelines already have a federal backstop for this reason. Please support the same option for lines of real national importance.",
     conservative:
-      "Big transmission projects that would strengthen grid reliability across an entire region can be killed by a single local objection, even when the rest of the region badly needs the power. Interstate gas pipelines already have a federal backstop precisely to prevent this. Please support extending that same, already proven approach to nationally significant transmission lines.",
+      "Transmission projects that would strengthen grid reliability across a region can be killed by a single local objection, even when the region badly needs the power. Interstate gas pipelines already have a federal backstop for this reason. Please support extending that approach to nationally significant lines.",
   },
   litigation_legal_challenge: {
     liberal:
-      "A fully approved clean energy project can still be tied up in court for years after every review is done, with no deadline to file a challenge and no deadline for a judge to decide it. A real, reasonable time limit on filing and deciding these cases would not take away anyone's right to sue. It would just make sure that right has an end date, the same for every project.",
+      "A fully approved clean energy project can still be tied up in court for years, with no deadline to file a challenge or decide it. A reasonable time limit would not take away anyone's right to sue. It would just give that right an end date.",
     moderate:
-      "A fully approved project of any kind can be re litigated for years today, with no real deadline to file a challenge or to decide it, adding cost and uncertainty that everyone eventually pays for. A shorter, clearly defined filing window and a faster court process would keep the right to challenge a project while finally giving it an end date.",
+      "A fully approved project can be re litigated for years today, with no real deadline to file or decide a challenge. A shorter filing window and a faster court process would keep the right to challenge while giving it an end date.",
     conservative:
-      "Even after a project clears every required review, it can still be stuck in court for years, since there is no real deadline today to file a legal challenge or to resolve one. Please support a much shorter filing window and a faster, single court process. It protects the right to sue while finally putting an end to open ended litigation risk.",
+      "Even after a project clears every review, it can sit in court for years, since there is no real deadline to file or resolve a challenge. A shorter filing window and a faster court process would end that open ended risk.",
   },
   local_state_opposition: {
     liberal:
-      "Communities near a proposed energy project usually only get a real voice after the site and design are already locked in, which turns every disagreement into an all or nothing fight instead of a conversation. Requiring real engagement and binding community benefit agreements earlier in the process would mean fewer late stage battles and a fairer deal for the people who live closest to these projects.",
+      "Communities near a proposed project usually only get a voice after the design is locked in, turning every disagreement into an all or nothing fight. Requiring real engagement and a binding community benefit agreement earlier would mean a fairer deal for nearby residents.",
     moderate:
-      "Local opposition to energy projects usually shows up only after the design is already finalized, by which point there is little room left to negotiate and every disagreement becomes a fight. Requiring real community engagement, and a binding community benefit agreement, earlier in the process would mean fewer late surprises and fewer projects that stall for years over concerns that could have been addressed from the start.",
+      "Local opposition usually shows up only after a project's design is finalized, when little room is left to negotiate. Requiring real engagement, and a binding community benefit agreement, earlier would mean fewer projects that stall for years over concerns raised too late.",
     conservative:
-      "Energy projects too often get derailed late in the process by local opposition that could have been addressed months or years earlier, if the community had actually been asked first. Requiring real, early engagement and a binding community benefit agreement protects local property owners and cuts down on the drawn out fights that waste everyone's time and money.",
+      "Energy projects too often get derailed late by local opposition that could have been addressed years earlier, if the community had actually been asked first. Requiring real, early engagement and a binding community benefit agreement protects property owners and cuts down on drawn out fights.",
   },
 };
 
@@ -126,8 +126,6 @@ export function buildLetter({ causeSlugs, orientation }: LetterInput): string {
     "Dear [Representative or Senator's name],",
     "",
     body,
-    "",
-    "Thank you for your time and your service to our district.",
     "",
     "Sincerely,",
     "[Your name]",

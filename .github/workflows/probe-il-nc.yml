@@ -31,4 +31,4 @@ jobs:
             console.log("P2023-0658 open?", openIds.has("P2023-0658"), " in all?", allIds.has("P2023-0658"));
           })().catch((e) => { console.error(e); process.exit(1); });
           TS
-          npx tsx --tsconfig tsconfig.json verify.ts
+          PRISMA_ACCELERATE_URL="postgresql://unused:unused@localhost:5432/unused" DATABASE_URL="postgresql://unused:unused@localhost:5432/unused" npx tsx --tsconfig tsconfig.json verify.ts

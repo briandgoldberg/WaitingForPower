@@ -30,6 +30,7 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
       <div className="flex items-center gap-1.5 text-xs">
         <span className="font-semibold truncate">{item.label}</span>
         <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
+        <span className="text-[var(--accent)] font-medium shrink-0">+{item.points}</span>
         <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(item.createdAt, nowMs)}</span>
       </div>
       <p className="text-sm mt-1">

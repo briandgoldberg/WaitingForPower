@@ -28,19 +28,8 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
   const inner = (
     <>
       <div className="flex items-center gap-1.5 text-xs">
-        {stanceInfo && (
-          <span
-            aria-label={stanceInfo.label}
-            title={stanceInfo.label}
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]"
-            style={{ backgroundColor: `${stanceInfo.color}1a` }}
-          >
-            {stanceInfo.icon}
-          </span>
-        )}
         <span className="font-semibold truncate">{item.label}</span>
         <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
-        <span className="text-[var(--accent)] font-medium shrink-0">+{item.points}</span>
         <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(item.createdAt, nowMs)}</span>
       </div>
       <p className="text-sm mt-1">

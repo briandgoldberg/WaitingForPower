@@ -304,7 +304,7 @@ function PostRow({ post, nowMs, onLike }: { post: DiscussionItem; nowMs: number 
       {description && (
         <p className="mt-1 text-[var(--text-secondary)]">
           {post.label} {description}
-          {stanceInfo ? `, ${stanceInfo.phrase}` : ""}.
+          {stanceInfo ? ` ${stanceInfo.phrase}` : ""}.
         </p>
       )}
       {post.body && <p className="mt-0.5 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{post.body}</p>}

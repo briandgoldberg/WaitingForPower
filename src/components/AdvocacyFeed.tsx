@@ -47,7 +47,7 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
         {item.kind === "project" ? (
           <>
             {describeAdvocacyEntry(item.advocacyType as AdvocacyType, item.hearingDate)}
-            {stanceInfo ? `, ${stanceInfo.phrase}` : ""} on <span className="font-medium">{item.projectName}</span>
+            {stanceInfo ? ` ${stanceInfo.phrase}` : ""} on <span className="font-medium">{item.projectName}</span>
           </>
         ) : (
           describeContact(item)

@@ -24,7 +24,7 @@ export function SiteNav() {
 
   return (
     <nav className="w-full sm:w-auto">
-      <div className="flex items-center justify-between sm:justify-start gap-1 text-sm">
+      <div className="flex items-center justify-between sm:justify-start gap-0.5 sm:gap-1 text-sm">
         {LINKS.map((link) => {
           const active = isActive(pathname, link.href);
           return (
@@ -32,7 +32,7 @@ export function SiteNav() {
               key={link.href}
               href={link.href}
               aria-current={active ? "page" : undefined}
-              className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 ${
+              className={`flex-1 sm:flex-none text-center px-1 min-[400px]:px-2 sm:px-3 py-1.5 rounded-md whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10 ${
                 active ? "bg-[var(--border)] font-medium" : ""
               }`}
             >

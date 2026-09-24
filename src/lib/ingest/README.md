@@ -23,7 +23,7 @@ sources that can be re-run and stay current on their own).
 | `azAccLineSiting.ts` | Arizona Corporation Commission (ACC) Line Siting Committee dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (20:30 UTC), `/api/cron/ingest-az-acc`. |
 | `waEfsecFacilities.ts` | Washington Energy Facility Site Evaluation Council (EFSEC) facility site-certifications | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (21:00 UTC), `/api/cron/ingest-wa-efsec`. |
 | `nmPrcDockets.ts` | New Mexico Public Regulation Commission (PRC) CCN dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (21:30 UTC), `/api/cron/ingest-nm-prc`. |
-| `ilIccDockets.ts` | Illinois Commerce Commission (ICC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron weekly, Wednesdays (22:00 UTC), `/api/cron/ingest-il-icc` — reduced from daily since every run currently errors (reCAPTCHA-blocked, see "2 states remain genuinely blocked" below). |
+| `ilIccDockets.ts` | Illinois Commerce Commission (ICC) CPCN dockets | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (22:00 UTC), `/api/cron/ingest-il-icc`. Per-docket pages are reCAPTCHA-gated; open/closed status comes from the ungated case search's `o=True` filter instead (see "2 states remain genuinely blocked" below). |
 | `flPscDockets.ts` | Florida PSC determination-of-need dockets + DEP siting applications | Yes — real JSON API (PSC) + server-rendered HTML (DEP), no auth | None (no auth) | Cron daily (22:30 UTC), `/api/cron/ingest-fl-psc`. |
 | `nyDpsDockets.ts` | New York DPS Article VII (transmission) + Article VIII/94-c (renewable siting) dockets | Yes — real JSON API, no auth | None (no auth) | Cron daily (23:00 UTC), `/api/cron/ingest-ny-dps`. |
 | `nvPucnDockets.ts` | Nevada PUCN Utility Environmental Protection Act (UEPA) permit dockets | Yes — legacy ASP.NET WebForms + real JSON API (OnBase), no auth | None (no auth) | Cron daily (23:30 UTC), `/api/cron/ingest-nv-pucn`. |
@@ -239,13 +239,20 @@ sit behind bot-defense (a Google reCAPTCHA on every Illinois per-docket
 page, confirmed added after this module was first built; the same
 Cloudflare wall on North Carolina's Orders portal this module's own header
 already documented) that this project's rules don't attempt to solve or
-bypass. **Illinois is worse than just unresolved**: the same reCAPTCHA gate
-blocks this module's own pre-existing granted/denied status check, so
-Illinois ingestion is confirmed broken in production right now (0
-upserted, every real candidate erroring) — a real regression unrelated to
-this task, flagged separately rather than fixed here, since the actual fix
-(a non-CAPTCHA path to the same status data, if one exists at all) is a
-different problem than resolution-date extraction.
+bypass. The same reCAPTCHA gate also broke Illinois's open/closed status
+check (0 upserted, every candidate erroring). That part is fixed as of
+2026-09-24: the ungated case-search endpoint's own `o=True` ("only opened")
+filter now supplies open/closed status with no per-docket request (see the
+module's OPEN-ONLY SEARCH header note). Illinois's resolution *date* is
+still undetermined. One untested lead: the legacy
+`/e-Docket/reports/browse/rssreader.aspx?id=<internal id>` page is ungated
+and lists a docket's full filing history with dates (e.g. "Order Entered -
+Interim, Mar 18, 2020"), but it's keyed by an internal numeric id, not the
+case number, and no way to map one to the other has been found yet. North
+Carolina ingestion is still broken: every `starw1.ncuc.gov` page (Dockets,
+Orders, DocketDetails) serves Cloudflare's JS challenge, and the ungated
+www.ncuc.gov site has no docket data of its own, only links into `starw1`
+(checked 2026-09-24).
 
 ## Open questions (flagged, not guessed at)
 

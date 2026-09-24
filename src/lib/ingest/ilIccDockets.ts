@@ -5,12 +5,13 @@
 // module found, Grain Belt Express, is handled via manualOverrides.csv —
 // see the CROSS-SOURCE DUPLICATE note below, not a candidate-level skip.)
 //
-// STATUS: a reCAPTCHA gate was added to icc.illinois.gov after this module
-// was built (see prisma/../ingest/README.md "2 states remain genuinely
-// blocked") — every run currently errors, 0 upserted. Moved from daily to
-// weekly (see vercel.json) rather than paused outright, so this keeps
-// checking whether the block ever lifts without burning daily Fluid Active
-// CPU on a guaranteed failure in the meantime.
+// STATUS (2026-09-24): a reCAPTCHA gate was added to every per-docket page
+// on icc.illinois.gov after this module was built, which broke the original
+// CaseStatus lookup (see STATUS below). Fixed without touching the gated
+// pages: the case-search results endpoint this module already used for
+// candidates has its own `o` ("only opened") filter, and that endpoint is
+// still ungated. Open/closed now comes from which dockets appear in the
+// `o=True` result set (see OPEN-ONLY SEARCH below).
 //
 // FETCHING: icc.illinois.gov's public eDocket case-search is a plain
 // server-rendered ASP.NET MVC site. There IS a CAPTCHA ("I'm not a robot")
@@ -44,11 +45,12 @@
 //     — a business-licensing certificate for a solar installer *company*,
 //     unrelated to any specific generation project siting. Excluded.
 //   - Detail: GET /docket/{P-prefixed docket id, e.g. P2026-0156} (the id
-//     in each search result's own href) is a plain case-details page with a
-//     `id="CaseStatus"` field — see STATUS. No separate documents/orders
-//     endpoint exists; the docket's 5 sub-pages are Case Details, Docket
-//     Sheet, Staff Assigned, Service List, Schedule (confirmed from the
-//     sidebar nav — no distinct "Orders" or "Documents" listing endpoint).
+//     in each search result's own href) is a case-details page with a
+//     `id="CaseStatus"` field — but now reCAPTCHA-gated, so no longer
+//     fetched (see OPEN-ONLY SEARCH). The docket's 5 sub-pages are Case
+//     Details, Docket Sheet, Staff Assigned, Service List, Schedule.
+//   - `o` query param: `o=False` returns every matching case, `o=True`
+//     only the still-open ones — see OPEN-ONLY SEARCH.
 // No HTML-parsing dependency added, same discipline as this series' other
 // regex-based sources — each extractor throws if the expected structure
 // isn't found.
@@ -96,7 +98,9 @@
 // changes), but expect this source to read almost entirely as transmission.
 //
 // STATUS: same lesson as South Carolina/Arizona, independently
-// re-confirmed here — but with an unusually reassuring result. ICC's own
+// re-confirmed here — but with an unusually reassuring result. (This
+// paragraph documents the original per-docket CaseStatus check, which is
+// now reCAPTCHA-gated; see OPEN-ONLY SEARCH below for what replaced it.) ICC's own
 // `CaseStatus` field on the detail page (e.g. "Initial - Heard & Taken" vs.
 // "Initial - Closed") turned out, after deliberately trying to catch it
 // lying, to be reliable: cross-checked CaseStatus against each docket's own
@@ -137,20 +141,23 @@
 // rules prohibit solving or bypassing CAPTCHAs, so the Docket Sheet (and any
 // linked order document) could not be inspected this session — resolution
 // left genuinely undetermined, not implemented, and not worked around.
-//   This is a bigger problem than just resolutionDate: fetchDetail's own
-// CaseStatus lookup (see STATUS above) hits the exact same now-CAPTCHA'd
-// `/docket/{id}` page, so this module's EXISTING granted/denied/still-open
-// determination — not just this new resolutionDate work — is confirmed
-// broken in production as of this finding (parseDetail's own "structure
-// likely changed" error fires on every real candidate today, since
-// CASE_STATUS_RE can no longer match). The search-results endpoint itself
-// (`/docket/search/cases/results?...`, used by searchCandidates) is
-// confirmed still open, no CAPTCHA — only the per-docket sub-pages are
-// gated. Flagged as a separate, out-of-scope production issue (see the
-// spawn_task filed alongside this change) rather than patched here, since
-// fixing it is a materially different problem (and may not be fixable at
-// all without solving a CAPTCHA, which this project does not do) from the
-// resolutionDate investigation this header section documents.
+//
+// OPEN-ONLY SEARCH (2026-09-24): the same reCAPTCHA gate also broke the
+// original CaseStatus lookup, which fetched `/docket/{id}` (every real
+// candidate errored, 0 upserted). Replacement: the ungated case-search
+// results endpoint takes an `o` param, and `o=True` returns only open
+// cases. Confirmed live 2026-09-24 from a fresh runner (no cookies, no
+// prior request): with this module's own ct/st filters, `o=False` returned
+// 64 cases and `o=True` returned 2 (P2025-0923 and P2026-0156). That matches
+// what the CaseStatus check had found before the gate: P2026-0156 (GRIT) is
+// the one open candidate (see HEARING SCHEDULE below). P2023-0658, a known
+// closed docket, was absent from the `o=True` set. P2025-0923, the Section
+// 8-509 eminent-domain petition, is excluded by CPCN_RE anyway (see
+// SCOPING). So "resolved" is now just "in the full set but not in the open
+// set" — the same closed-or-not granularity the CaseStatus check gave,
+// from a different field of ICC's own data. searchCandidates cross-checks
+// that every `o=True` id is also in the `o=False` set, and throws rather
+// than guessing if the filter's meaning ever appears to change.
 //
 // FUEL/PROJECT TYPE & CAPACITY: not structured fields. Captions are
 // consistent enough to regex (same style as TX/SC/AZ): county names appear
@@ -200,10 +207,12 @@
 // Only the earliest still-future, non-"Cancelled" entry is kept (a real
 // live example of a cancelled entry was confirmed on this same docket: "Jun
 // - 2026 25 ... Cancelled"). Fetched only for candidates not already known
-// resolved via CaseStatus (see fetchDetail/parseDetail), matching this
-// module's existing one-detail-fetch-per-open-candidate cost discipline —
-// a closed docket's schedule is all in the past by construction and isn't
-// worth the extra request. Every event type past the Deadline exclusion is
+// resolved via the open-only search (see OPEN-ONLY SEARCH) — a closed
+// docket's schedule is all in the past by construction and isn't worth
+// the extra request. NOTE: the Schedule sub-page sits behind the same
+// reCAPTCHA as every other per-docket page since 2026-09, so today this
+// yields no hearings (the gate page has no event cards and parses to []
+// rather than erroring); kept so it resumes working if the gate lifts. Every event type past the Deadline exclusion is
 // kept as a public hearing/conference (Evidentiary, Status, Prehearing,
 // Oral Argument, and any other real type confirmed on other dockets —
 // Briefs/Testimony/Rebuttal/Motion/Proposed Order/Exceptions to Proposed
@@ -227,10 +236,10 @@
 // hearing's location. Captured as-is (ALJ name plus any room note,
 // exactly as published) rather than guessed at further.
 //
-// Wired to Vercel Cron weekly, 22:00 UTC Sundays (see vercel.json and
+// Wired to Vercel Cron daily, 22:00 UTC (see vercel.json and
 // src/app/api/cron/ingest-il-icc/route.ts) — a real run's timing was
 // measured (64 candidates, 59 real applications) before scheduling this.
-// Also politeness-delayed between per-candidate detail requests.
+// Also politeness-delayed between requests.
 
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
@@ -388,34 +397,26 @@ interface DocketDetail {
   resolved: boolean;
 }
 
-const CASE_STATUS_RE = /<pre class="soi-icc-pre" id="CaseStatus">([^<]*)<\/pre>/;
+function searchUrl(onlyOpen: boolean): string {
+  return `${BASE_URL}/docket/search/cases/results?ct=${CASE_TYPES}&st=${SERVICE_TYPES}&o=${onlyOpen ? "True" : "False"}`;
+}
 
-export function parseDetail(html: string): DocketDetail {
-  const m = CASE_STATUS_RE.exec(html);
-  if (!m) {
+// See module header OPEN-ONLY SEARCH: two requests to the same ungated
+// endpoint — every matching case, then only the open ones. Deliberately
+// just "closed or not" (see STATUS): finer-grained granted/denied
+// classification from filing-history keywords proved unreliable.
+async function searchCandidates(): Promise<{ all: DocketSearchResult[]; openIds: Set<string> }> {
+  const all = parseSearchResults(await fetchText(searchUrl(false)));
+  await sleep(REQUEST_DELAY_MS);
+  const open = parseSearchResults(await fetchText(searchUrl(true)));
+  const allIds = new Set(all.map((r) => r.docketId));
+  const stray = open.filter((r) => !allIds.has(r.docketId));
+  if (stray.length > 0) {
     throw new Error(
-      "IL ICC docket detail page didn't contain the expected CaseStatus field — the page structure likely changed. Check parseDetail in src/lib/ingest/ilIccDockets.ts against a fresh response.",
+      `IL ICC open-only search (o=True) returned dockets missing from the full search (o=False): ${stray.map((r) => r.docketId).join(", ")} — the "o" filter's meaning may have changed. Check searchCandidates in src/lib/ingest/ilIccDockets.ts against fresh responses.`,
     );
   }
-  const status = decodeHtmlEntities(m[1]);
-  // See module header STATUS: deliberately just "closed or not" — every
-  // "*Closed" status observed corresponds to a final Commission order per
-  // the docket's own filing history, and finer-grained granted/denied
-  // classification from filing-history keywords proved unreliable (a real
-  // "DENIED" entry turned out to be about an intervenor's rehearing
-  // request, not the underlying certificate).
-  return { resolved: /\bclosed\b/i.test(status) };
-}
-
-async function searchCandidates(): Promise<DocketSearchResult[]> {
-  const url = `${BASE_URL}/docket/search/cases/results?ct=${CASE_TYPES}&st=${SERVICE_TYPES}&o=False`;
-  const html = await fetchText(url);
-  return parseSearchResults(html);
-}
-
-async function fetchDetail(docketId: string): Promise<DocketDetail> {
-  const html = await fetchText(`${BASE_URL}/docket/${docketId}`);
-  return parseDetail(html);
+  return { all, openIds: new Set(open.map((r) => r.docketId)) };
 }
 
 // Requires the actual CPCN phrase (handles Illinois's case-type bucket
@@ -529,7 +530,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, heari
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Illinois Commerce Commission's public eDocket case search.",
-    'This docket\'s "still waiting" determination is based on whether the ICC\'s own Case Status field for this docket contains "Closed" (cross-checked against real dockets\' filing histories, which show a final "Order Entered - Final" entry exactly when Case Status reads closed) — but this source cannot reliably distinguish a granted certificate from a denied, withdrawn, or dismissed one; see the ingestion module header for a real case (docket 23-0658) where keyword-scanning the filing history for "denied" would have produced a false signal.',
+    'This docket\'s "still waiting" determination is based on whether it appears in the ICC case search\'s own open-cases-only results — but this source cannot reliably distinguish a granted certificate from a denied, withdrawn, or dismissed one; see the ingestion module header for a real case (docket 23-0658) where keyword-scanning the filing history for "denied" would have produced a false signal.',
   ];
   if (voltageKv != null) {
     dataQualityNoteParts.push("Voltage figure (kV, not MW) is parsed from the docket caption text, not a structured field — not independently verified.");
@@ -585,7 +586,7 @@ export interface IngestSummary {
 }
 
 export async function ingestIlIccDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
-  const allCandidates = await searchCandidates();
+  const { all: allCandidates, openIds } = await searchCandidates();
   const candidates = selectWithRotation(
     allCandidates.filter((c) => CPCN_RE.test(c.description) && !DECLARATORY_RE.test(c.description)),
     maxCandidates,
@@ -600,18 +601,21 @@ export async function ingestIlIccDockets(maxCandidates = MAX_CANDIDATES): Promis
 
   for (const candidate of candidates) {
     try {
-      const detail = await fetchDetail(candidate.docketId);
+      const detail: DocketDetail = { resolved: !openIds.has(candidate.docketId) };
       // See module header HEARING SCHEDULE — a closed docket's schedule is
       // all in the past by construction, so the extra request is skipped
       // for candidates already known resolved.
-      const hearings = detail.resolved ? [] : await fetchScheduledEvents(candidate.docketId).catch(() => []);
+      let hearings: UpcomingHearing[] = [];
+      if (!detail.resolved) {
+        hearings = await fetchScheduledEvents(candidate.docketId).catch(() => []);
+        await sleep(REQUEST_DELAY_MS);
+      }
       const normalized = normalizeDocket(candidate, detail, hearings);
       toUpsert.push(normalized);
       if (rotatingTier.has(candidate)) rotatingMatchKeys.add(normalized.matchKey);
     } catch (err) {
       errors.push({ matchKey: candidate.docketNumber, message: String(err) });
     }
-    await sleep(REQUEST_DELAY_MS);
   }
 
   // See markVanished's wasCapped doc in common.ts: once this cap actually

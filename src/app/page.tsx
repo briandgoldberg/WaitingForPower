@@ -92,7 +92,7 @@ export default async function HomePage({
           </div>
         )}
         <div className="flex flex-col gap-3">
-          <h1 className="text-base sm:text-lg font-semibold tracking-tight max-w-2xl">
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
             America&rsquo;s energy projects are stuck in permitting, some for years. Every year of delay means
             higher bills, more pollution, and a country that can&rsquo;t build fast enough. We track every
             project and push for faster permitting decisions.

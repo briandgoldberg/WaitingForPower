@@ -33,7 +33,7 @@ export const ADVOCACY_TYPE_INFO: Record<AdvocacyType, AdvocacyTypeInfo> = {
   period_closed: {
     value: "period_closed",
     label: "I tried to comment, but the period was closed",
-    pastLabel: "found the comment period closed",
+    pastLabel: "helped confirm the comment period is closed",
     points: 1,
   },
   attended_hearing: {

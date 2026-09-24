@@ -51,7 +51,7 @@ const ALERT_MESSAGES: Record<string, string> = {
 type HomeFeed = "changes" | "advocating" | "leaders";
 const TABS: { value: HomeFeed; label: string; shortLabel: string }[] = [
   { value: "changes", label: "Project changes", shortLabel: "Changes" },
-  { value: "advocating", label: "What people are advocating for", shortLabel: "Advocating" },
+  { value: "advocating", label: "Advocacy activity", shortLabel: "Advocating" },
   { value: "leaders", label: "Top advocates", shortLabel: "Leaders" },
 ];
 
@@ -96,7 +96,8 @@ export default async function HomePage({
             Track America&rsquo;s energy permitting in real time.
           </h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            Projects wait years for a yes or no. That&rsquo;s not a technology problem, it&rsquo;s a paperwork problem.{" "}
+            Every year of delay means higher electric bills, more climate pollution, and a country that can&rsquo;t
+            build the power it needs to compete.{" "}
             <Link href="/policies" className="font-semibold text-[var(--accent)] underline whitespace-nowrap">
               Advocate now →
             </Link>

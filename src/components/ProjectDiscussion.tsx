@@ -230,9 +230,6 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
                 </select>
               )}
 
-              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Were you advocating to approve or deny it?
-              </span>
               <div className="grid grid-cols-2 gap-1.5">
                 {STANCES.map((s) => (
                   <button

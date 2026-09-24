@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { AdvocacyContactForm } from "./AdvocacyContactForm";
 
-export type AdvocacyTab = "project" | "state" | "national";
+export type AdvocacyTab = "project" | "state" | "national" | "contact";
 
 export function AdvocacyTabs({
   defaultTab,
@@ -19,10 +20,13 @@ export function AdvocacyTabs({
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Underlined page tabs, deliberately not another pill/segmented control —
-          the Projects tab has its own pill filter below, and stacking two
-          pill controls read as one confusing double slider. */}
-      <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)]" role="tablist">
+      {/* Underlined page tabs for the three content sections, deliberately
+          not another pill/segmented control — the Projects tab has its own
+          pill filter below, and stacking two pill controls read as one
+          confusing double slider. "I Reached Out!" is a colored pill
+          instead, on purpose: it's an action, not a content section, and
+          should look different from the three it sits next to. */}
+      <div className="flex items-center gap-4 sm:gap-6 border-b border-[var(--border)] flex-wrap" role="tablist">
         <TabButton active={tab === "national"} onClick={() => setTab("national")}>
           <span className="sm:hidden">National</span>
           <span className="hidden sm:inline">National Advocacy</span>
@@ -35,11 +39,27 @@ export function AdvocacyTabs({
           <span className="sm:hidden">States</span>
           <span className="hidden sm:inline">State Advocacy</span>
         </TabButton>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "contact"}
+          onClick={() => setTab("contact")}
+          className={`shrink-0 mb-2 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+            tab === "contact"
+              ? "bg-amber-500 text-white shadow-sm"
+              : "bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
+          }`}
+        >
+          I Reached Out!
+        </button>
       </div>
 
       <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
       <div hidden={tab !== "project"}>{projectAdvocacy}</div>
       <div hidden={tab !== "state"}>{stateAdvocacy}</div>
+      <div hidden={tab !== "contact"}>
+        <AdvocacyContactForm />
+      </div>
     </div>
   );
 }

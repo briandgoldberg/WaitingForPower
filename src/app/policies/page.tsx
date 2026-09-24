@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
 };
 
-const TABS: AdvocacyTab[] = ["project", "state", "national"];
+const TABS: AdvocacyTab[] = ["project", "state", "national", "contact"];
 
 // Lets a link elsewhere on the site (e.g. the home page) land directly on one
 // of the Projects tab's comment-likelihood buckets — see SHORT_LIKELIHOOD_LABELS

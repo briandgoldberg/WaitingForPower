@@ -172,7 +172,5 @@ export function buildLetter({ causeSlugs, orientation }: LetterInput): string {
   }
 
   const closing = `${framing.closing} ${closingAsk(causeSlugs)}`;
-  const body = [framing.intro, ...issueParagraphs, closing].join("\n\n");
-
-  return ["Dear [Representative or Senator's name],", "", body].join("\n");
+  return [framing.intro, ...issueParagraphs, closing].join("\n\n");
 }

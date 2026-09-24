@@ -6,7 +6,7 @@
 // stuck.)
 import { prisma } from "@/lib/db";
 import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
-import { ADVOCACY_TYPES, HEARING_LOOKBACK_DAYS, type AdvocacyType } from "@/lib/data/advocacyPoints";
+import { ADVOCACY_TYPES, HEARING_LOOKBACK_DAYS, STANCES, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
 
 export interface IdentityStatus {
   label: string;
@@ -62,6 +62,7 @@ export interface ReplyItem {
   body: string;
   advocacyType: AdvocacyType | null;
   hearingDate: string | null;
+  stance: Stance | null;
   createdAt: string;
   likeCount: number;
   likedByMe: boolean;
@@ -81,6 +82,7 @@ export interface DiscussionItem {
   body: string | null;
   advocacyType: AdvocacyType | null;
   hearingDate: string | null;
+  stance: Stance | null;
   createdAt: string;
   likeCount: number;
   likedByMe: boolean;
@@ -91,6 +93,9 @@ export interface Discussion {
   items: DiscussionItem[];
   // Who the caller is on this site, when they have posted before.
   me: { label: string; emailConfirmed: boolean; nameChosen: boolean; decided: boolean } | null;
+  // Tally across every visible entry with a stance — the project page's
+  // approve/deny summary bar (see ProjectDiscussion.tsx).
+  stanceTally: { approve: number; deny: number };
 }
 
 export interface CommunityFeedItem {
@@ -102,6 +107,7 @@ export interface CommunityFeedItem {
   body: string | null;
   advocacyType: AdvocacyType | null;
   hearingDate: string | null;
+  stance: Stance | null;
   createdAt: string;
   projectSlug: string;
   projectName: string;
@@ -129,6 +135,7 @@ export async function submitComment(params: {
   parentCommentId?: string;
   advocacyType?: AdvocacyType;
   hearingDate?: string;
+  stance?: Stance;
 }) {
   const body = params.body.trim();
   const advocacyType = params.advocacyType;
@@ -138,6 +145,10 @@ export async function submitComment(params: {
   if (advocacyType && !ADVOCACY_TYPES.includes(advocacyType)) {
     throw new CommentError("invalid", "That's not a valid advocacy type.");
   }
+  // Every structured entry must say which way it's advocating — that's the
+  // whole point of logging it.
+  if (advocacyType && !params.stance) throw new CommentError("missing_stance", "Say whether you support approving or denying this.");
+  if (params.stance && !STANCES.includes(params.stance)) throw new CommentError("invalid_stance", "That's not a valid stance.");
   if (body.length > MAX_COMMENT_LENGTH) {
     throw new CommentError("too_long", `Comments are limited to ${MAX_COMMENT_LENGTH} characters.`);
   }
@@ -203,7 +214,7 @@ export async function submitComment(params: {
   }
 
   const comment = await prisma.projectComment.create({
-    data: { projectId: project.id, predictorId: predictor.id, body, parentId, advocacyType, hearingDate },
+    data: { projectId: project.id, predictorId: predictor.id, body, parentId, advocacyType, hearingDate, stance: params.stance },
   });
   return { comment, predictor };
 }
@@ -280,6 +291,7 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
     body: c.body,
     advocacyType: c.advocacyType as AdvocacyType | null,
     hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
+    stance: c.stance as Stance | null,
     createdAt: c.createdAt.toISOString(),
     likeCount: commentLikes.get(c.id) ?? 0,
     likedByMe: likedComments.has(c.id),
@@ -301,6 +313,7 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
       body: c.body,
       advocacyType: c.advocacyType as AdvocacyType | null,
       hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
+      stance: c.stance as Stance | null,
       createdAt: c.createdAt.toISOString(),
       likeCount: commentLikes.get(c.id) ?? 0,
       likedByMe: likedComments.has(c.id),
@@ -308,8 +321,15 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
     }));
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+  const stanceTally = { approve: 0, deny: 0 };
+  for (const c of comments) {
+    if (c.stance === "approve") stanceTally.approve++;
+    else if (c.stance === "deny") stanceTally.deny++;
+  }
+
   return {
     items,
+    stanceTally,
     me: me
       ? {
           label: me.displayName ?? "Anonymous",
@@ -347,6 +367,7 @@ export async function getCommunityFeed(offset = 0, limit = 20): Promise<{ items:
     body: c.body,
     advocacyType: c.advocacyType as AdvocacyType | null,
     hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
+    stance: c.stance as Stance | null,
     createdAt: c.createdAt.toISOString(),
     projectSlug: c.project.slug,
     projectName: c.project.name,

@@ -59,6 +59,29 @@ export function describeAdvocacyEntry(type: AdvocacyType, hearingDate?: string |
   return ADVOCACY_TYPE_INFO[type].pastLabel;
 }
 
+// The position behind a project's "I Advocated" entry — which way they
+// were actually advocating, not just that they showed up. Required
+// alongside advocacyType (see ProjectDiscussion.tsx) and shown as a small
+// thumbs icon/color on both the log entry and the project's own summary.
+export type Stance = "approve" | "deny";
+
+export interface StanceInfo {
+  value: Stance;
+  label: string;
+  // Tacked onto the entry description, e.g. "submitted a comment, in
+  // support of approval".
+  phrase: string;
+  icon: string;
+  color: string;
+}
+
+export const STANCE_INFO: Record<Stance, StanceInfo> = {
+  approve: { value: "approve", label: "Support approval", phrase: "in support of approval", icon: "👍", color: "#16a34a" },
+  deny: { value: "deny", label: "Support denial", phrase: "in support of denial", icon: "👎", color: "#dc2626" },
+};
+
+export const STANCES: Stance[] = ["approve", "deny"];
+
 // AdvocacyContact (src/lib/advocacyContacts.ts) is a separate table since,
 // unlike the three above, it isn't tied to one project — same leaderboard,
 // flat point value since every contact is real outreach to an elected

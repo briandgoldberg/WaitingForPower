@@ -9,7 +9,16 @@ import { PosterBadge } from "./PosterBadge";
 import { DISCUSSION_CHANGED_EVENT, getOrCreatePredictorKey } from "@/lib/clientIdentity";
 import { relativeTime } from "@/lib/feedTime";
 import type { Discussion, DiscussionItem } from "@/lib/community";
-import { ADVOCACY_TYPES, ADVOCACY_TYPE_INFO, HEARING_LOOKBACK_DAYS, describeAdvocacyEntry, type AdvocacyType } from "@/lib/data/advocacyPoints";
+import {
+  ADVOCACY_TYPES,
+  ADVOCACY_TYPE_INFO,
+  HEARING_LOOKBACK_DAYS,
+  describeAdvocacyEntry,
+  STANCES,
+  STANCE_INFO,
+  type AdvocacyType,
+  type Stance,
+} from "@/lib/data/advocacyPoints";
 
 const MAX_NOTE = 500;
 const POSTS_PER_PAGE = 10;
@@ -33,6 +42,7 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
 
   const [formOpen, setFormOpen] = useState(false);
   const [advocacyType, setAdvocacyType] = useState<AdvocacyType | null>(null);
+  const [stance, setStance] = useState<Stance | null>(null);
   const [hearingDate, setHearingDate] = useState("");
   const [note, setNote] = useState("");
   const [posting, setPosting] = useState(false);
@@ -63,7 +73,7 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
             setNowMs(Date.now());
           }
         })
-        .catch(() => setData((prev) => prev ?? { items: [], me: null }));
+        .catch(() => setData((prev) => prev ?? { items: [], me: null, stanceTally: { approve: 0, deny: 0 } }));
     },
     [projectId, key],
   );
@@ -90,6 +100,7 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
 
   function resetForm() {
     setAdvocacyType(null);
+    setStance(null);
     setHearingDate("");
     setNote("");
     setError(null);
@@ -98,6 +109,10 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!key || !advocacyType) return;
+    if (!stance) {
+      setError("Say whether you support approving or denying this.");
+      return;
+    }
     if (advocacyType === "attended_hearing" && !hearingDate) {
       setError("Pick which hearing you attended.");
       return;
@@ -113,6 +128,7 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
           anonymousKey: key,
           body: note.trim(),
           advocacyType,
+          stance,
           hearingDate: advocacyType === "attended_hearing" ? hearingDate : undefined,
         }),
       });
@@ -161,6 +177,8 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
         <h2 className="text-base font-semibold text-[var(--accent)]">Advocacy{sorted.length > 0 ? ` (${sorted.length})` : ""}</h2>
       </div>
+
+      {data && (data.stanceTally.approve > 0 || data.stanceTally.deny > 0) && <StanceTallyBar tally={data.stanceTally} />}
 
       {me && !me.decided && key ? (
         <IdentityDecision anonymousKey={key} label={me.label} onDecided={() => window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT))} />
@@ -212,6 +230,27 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
                 </select>
               )}
 
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Were you advocating to approve or deny it?
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {STANCES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStance(s)}
+                    aria-pressed={stance === s}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                      stance === s ? "text-white border-transparent" : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+                    }`}
+                    style={stance === s ? { backgroundColor: STANCE_INFO[s].color } : undefined}
+                  >
+                    <span aria-hidden>{STANCE_INFO[s].icon}</span>
+                    {STANCE_INFO[s].label}
+                  </button>
+                ))}
+              </div>
+
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -237,7 +276,7 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
                 </button>
                 <button
                   type="submit"
-                  disabled={posting || !advocacyType}
+                  disabled={posting || !advocacyType || !stance}
                   className="rounded-md bg-[var(--accent)] text-white px-4 py-1.5 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                 >
                   {posting ? "…" : "Log it"}
@@ -289,11 +328,41 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
   );
 }
 
+// Approve/deny split across every entry with a stance on this project —
+// a proportional two-color bar, same idea as a vote tally.
+function StanceTallyBar({ tally }: { tally: { approve: number; deny: number } }) {
+  const total = tally.approve + tally.deny;
+  const approvePct = total > 0 ? (tally.approve / total) * 100 : 50;
+  return (
+    <div className="mb-3">
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+        <div style={{ width: `${approvePct}%`, backgroundColor: STANCE_INFO.approve.color }} />
+        <div style={{ width: `${100 - approvePct}%`, backgroundColor: STANCE_INFO.deny.color }} />
+      </div>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        <span aria-hidden>{STANCE_INFO.approve.icon}</span> {tally.approve} advocated to approve ·{" "}
+        <span aria-hidden>{STANCE_INFO.deny.icon}</span> {tally.deny} to deny
+      </p>
+    </div>
+  );
+}
+
 function PostRow({ post, nowMs, onLike }: { post: DiscussionItem; nowMs: number | null; onLike: () => void }) {
   const description = post.advocacyType ? describeAdvocacyEntry(post.advocacyType, post.hearingDate) : null;
+  const stanceInfo = post.stance ? STANCE_INFO[post.stance] : null;
   return (
     <li className="text-sm">
       <div className="flex items-center gap-1.5 text-xs">
+        {stanceInfo && (
+          <span
+            aria-label={stanceInfo.label}
+            title={stanceInfo.label}
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]"
+            style={{ backgroundColor: `${stanceInfo.color}1a` }}
+          >
+            {stanceInfo.icon}
+          </span>
+        )}
         <span className="font-semibold truncate">{post.label}</span>
         <PosterBadge isAgent={post.isAgent} confirmed={post.confirmed} guest={post.guest} />
         {post.pending && (
@@ -301,7 +370,12 @@ function PostRow({ post, nowMs, onLike }: { post: DiscussionItem; nowMs: number 
         )}
         {nowMs != null && <span className="text-[var(--muted)]">· {relativeTime(post.createdAt, nowMs)}</span>}
       </div>
-      {description && <p className="mt-1 text-[var(--text-secondary)]">{post.label} {description}.</p>}
+      {description && (
+        <p className="mt-1 text-[var(--text-secondary)]">
+          {post.label} {description}
+          {stanceInfo ? `, ${stanceInfo.phrase}` : ""}.
+        </p>
+      )}
       {post.body && <p className="mt-0.5 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{post.body}</p>}
       <div className="flex items-center gap-4 mt-1.5 text-xs">
         <LikeButton liked={post.likedByMe} count={post.likeCount} onClick={onLike} />

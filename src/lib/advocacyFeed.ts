@@ -8,7 +8,7 @@
 
 import { prisma } from "@/lib/db";
 import { labelOf, flagsOf, isHeld } from "@/lib/community";
-import { pointsFor, CONTACT_POINTS, type AdvocacyType } from "@/lib/data/advocacyPoints";
+import { pointsFor, CONTACT_POINTS, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
 import type { ContactTargetType } from "@/lib/data/advocacyPoints";
 
 export interface AdvocacyFeedItem {
@@ -25,6 +25,7 @@ export interface AdvocacyFeedItem {
   // "project" entries only
   advocacyType?: AdvocacyType;
   hearingDate?: string | null;
+  stance?: Stance | null;
   projectSlug?: string;
   projectName?: string;
   // "contact" entries only
@@ -70,6 +71,7 @@ export async function getAdvocacyFeed(offset = 0, limit = 20): Promise<{ items: 
       note: c.body || null,
       advocacyType,
       hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
+      stance: c.stance as Stance | null,
       projectSlug: c.project.slug,
       projectName: c.project.name,
     };

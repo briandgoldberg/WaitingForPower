@@ -662,6 +662,10 @@ model ProjectComment {
   // recent, past hearing — not free text).
   advocacyType String?
   hearingDate  DateTime?
+  // "approve" | "deny" — the position behind that advocacy, e.g. "I
+  // submitted a comment supporting approval". Set alongside advocacyType;
+  // null on the same legacy rows advocacyType is null on.
+  stance       String?
 
   // A reply is a comment with a parent: either another comment (one level
   // deep, replies to replies attach to the top comment) or a prediction.

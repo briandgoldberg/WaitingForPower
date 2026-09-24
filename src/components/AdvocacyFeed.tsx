@@ -7,7 +7,7 @@ import { relativeTime, groupByDate } from "@/lib/feedTime";
 import { STATE_NAMES } from "@/lib/data/usStates";
 import { POLICIES } from "@/lib/data/policies";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
-import { describeAdvocacyEntry, type AdvocacyType } from "@/lib/data/advocacyPoints";
+import { describeAdvocacyEntry, STANCE_INFO, type AdvocacyType } from "@/lib/data/advocacyPoints";
 import type { AdvocacyFeedItem } from "@/lib/advocacyFeed";
 
 function issueLabel(slug: string): string {
@@ -24,9 +24,20 @@ function describeContact(item: AdvocacyFeedItem): string {
 }
 
 function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }) {
+  const stanceInfo = item.kind === "project" && item.stance ? STANCE_INFO[item.stance] : null;
   const inner = (
     <>
       <div className="flex items-center gap-1.5 text-xs">
+        {stanceInfo && (
+          <span
+            aria-label={stanceInfo.label}
+            title={stanceInfo.label}
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]"
+            style={{ backgroundColor: `${stanceInfo.color}1a` }}
+          >
+            {stanceInfo.icon}
+          </span>
+        )}
         <span className="font-semibold truncate">{item.label}</span>
         <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
         <span className="text-[var(--accent)] font-medium shrink-0">+{item.points}</span>
@@ -35,8 +46,8 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
       <p className="text-sm mt-1">
         {item.kind === "project" ? (
           <>
-            {describeAdvocacyEntry(item.advocacyType as AdvocacyType, item.hearingDate)} on{" "}
-            <span className="font-medium">{item.projectName}</span>
+            {describeAdvocacyEntry(item.advocacyType as AdvocacyType, item.hearingDate)}
+            {stanceInfo ? `, ${stanceInfo.phrase}` : ""} on <span className="font-medium">{item.projectName}</span>
           </>
         ) : (
           describeContact(item)

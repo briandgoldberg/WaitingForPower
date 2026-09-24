@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { submitAdvocacyContact, AdvocacyContactError } from "@/lib/advocacyContacts";
 import { CONTACT_POINTS } from "@/lib/data/advocacyPoints";
+import { hashIp } from "@/lib/requestLog";
+import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 // Logging a contact with a state regulator or a member of Congress — see
 // src/lib/advocacyContacts.ts. Same anonymous-key identity as comments,
-// never a login.
+// never a login, and never exposed as an MCP tool or a documented API — see
+// the comment on /api/comments for why this also has an IP-based limit on
+// top of the per-predictor one inside submitAdvocacyContact.
 export async function POST(req: NextRequest) {
+  const ipHash = hashIp(req);
+  if (await isRateLimited("api_advocacy_contacts", ipHash, { windowMs: 60_000, max: 10 })) {
+    return rateLimitedResponse(60);
+  }
+  void prisma.apiRequestLog
+    .create({ data: { endpoint: "api_advocacy_contacts", method: "POST", userAgent: req.headers.get("user-agent"), ipHash } })
+    .catch((err) => console.error("Failed to log /api/advocacy-contacts write:", err));
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();

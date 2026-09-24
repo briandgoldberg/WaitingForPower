@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { submitComment, getProjectDiscussion, CommentError } from "@/lib/community";
-import { ADVOCACY_TYPES, pointsFor, type AdvocacyType } from "@/lib/data/advocacyPoints";
+import { ADVOCACY_TYPES, STANCES, pointsFor, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
+import { hashIp } from "@/lib/requestLog";
+import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-// Human comment submission — anonymous key + optional nickname, never a login.
+// Human comment submission — anonymous key + optional nickname, never a
+// login, and never exposed as an MCP tool or in the public API docs — see
+// src/app/mcp/route.ts and openapi.json, which only ever document GET here.
+// The per-predictor rate limit inside submitComment stops one identity from
+// spamming; this IP check (mirroring /mcp's) stops a script from getting
+// around that by minting unlimited fresh anonymous keys.
 export async function POST(req: NextRequest) {
+  const ipHash = hashIp(req);
+  if (await isRateLimited("api_comments_write", ipHash, { windowMs: 60_000, max: 20 })) {
+    return rateLimitedResponse(60);
+  }
+  void prisma.apiRequestLog
+    .create({ data: { endpoint: "api_comments_write", method: "POST", userAgent: req.headers.get("user-agent"), ipHash } })
+    .catch((err) => console.error("Failed to log /api/comments write:", err));
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -21,6 +36,8 @@ export async function POST(req: NextRequest) {
   const advocacyTypeRaw = String(body.advocacyType ?? "").trim();
   const advocacyType = ADVOCACY_TYPES.includes(advocacyTypeRaw as AdvocacyType) ? (advocacyTypeRaw as AdvocacyType) : undefined;
   const hearingDate = String(body.hearingDate ?? "").trim() || undefined;
+  const stanceRaw = String(body.stance ?? "").trim();
+  const stance = STANCES.includes(stanceRaw as Stance) ? (stanceRaw as Stance) : undefined;
 
   // Text is required for a plain post; a structured "I Advocated" entry
   // (advocacyType set) can be submitted with no note at all.
@@ -39,6 +56,7 @@ export async function POST(req: NextRequest) {
       parentCommentId,
       advocacyType,
       hearingDate,
+      stance,
     });
     return NextResponse.json({
       ok: true,

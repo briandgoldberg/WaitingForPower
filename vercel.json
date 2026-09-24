@@ -75,7 +75,7 @@
     },
     {
       "path": "/api/cron/ingest-il-icc",
-      "schedule": "0 22 * * *"
+      "schedule": "0 22 * * 3"
     },
     {
       "path": "/api/cron/ingest-fl-psc",
@@ -195,7 +195,7 @@
     },
     {
       "path": "/api/cron/ingest-nc-ncuc",
-      "schedule": "30 13 * * *"
+      "schedule": "30 13 * * 3"
     },
     {
       "path": "/api/cron/ingest-wy-isc",

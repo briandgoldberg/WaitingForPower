@@ -8,6 +8,12 @@
 // (see the STATUS/SCOPING gotchas) needed real correction, not just
 // confirmation.
 //
+// STATUS: the Orders portal's Cloudflare wall (see ingest/README.md "2
+// states remain genuinely blocked") means every run currently errors, 0
+// upserted. Moved from daily to weekly (see vercel.json) rather than paused
+// outright, so this keeps checking whether the block ever lifts without
+// burning daily Fluid Active CPU on a guaranteed failure in the meantime.
+//
 // FETCHING: starw1.ncuc.gov is a classic ASP.NET WebForms site behind
 // Cloudflare, with no public JSON API (unlike AZ). Two portal pages matter:
 //   - Dockets: POST /NCUC/page/Dockets/portal.aspx — a real docket search

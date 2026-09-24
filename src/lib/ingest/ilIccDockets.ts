@@ -5,6 +5,13 @@
 // module found, Grain Belt Express, is handled via manualOverrides.csv —
 // see the CROSS-SOURCE DUPLICATE note below, not a candidate-level skip.)
 //
+// STATUS: a reCAPTCHA gate was added to icc.illinois.gov after this module
+// was built (see prisma/../ingest/README.md "2 states remain genuinely
+// blocked") — every run currently errors, 0 upserted. Moved from daily to
+// weekly (see vercel.json) rather than paused outright, so this keeps
+// checking whether the block ever lifts without burning daily Fluid Active
+// CPU on a guaranteed failure in the meantime.
+//
 // FETCHING: icc.illinois.gov's public eDocket case-search is a plain
 // server-rendered ASP.NET MVC site. There IS a CAPTCHA ("I'm not a robot")
 // in front of the single-docket-number lookup form at /Docket/Search — but

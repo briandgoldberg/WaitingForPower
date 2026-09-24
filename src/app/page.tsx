@@ -92,13 +92,10 @@ export default async function HomePage({
           </div>
         )}
         <div className="flex flex-col gap-3">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight max-w-2xl">
-            Track America&rsquo;s energy permitting. Help fix it.
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
+            Track America&rsquo;s energy permitting. Help fix it. Every year of delay means higher bills, more
+            climate pollution, and a country that can&rsquo;t build the power it needs.
           </h1>
-          <p className="text-sm text-[var(--text-secondary)] max-w-xl">
-            Every year of delay means higher bills, more climate pollution, and a country that can&rsquo;t build the
-            power it needs.
-          </p>
           <Link
             href="/policies"
             className="flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[48px] rounded-full bg-accent px-6 text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"

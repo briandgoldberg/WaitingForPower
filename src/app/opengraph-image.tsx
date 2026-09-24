@@ -35,7 +35,7 @@ export default function OgImage() {
           America&rsquo;s energy projects are stuck in permitting.
         </div>
         <div style={{ display: "flex", fontSize: 38, color: "#f4f4f2", marginTop: 6, fontWeight: 500, lineHeight: 1.3, maxWidth: 980 }}>
-          Track every one and advocate for a faster decision.
+          Track every one and advocate for faster decisions.
         </div>
       </div>
     ),

@@ -91,17 +91,21 @@ export default async function HomePage({
             {alertMessage}
           </div>
         )}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Track America&rsquo;s energy permitting. Then help fix it.
+            Track America&rsquo;s energy permitting. Help build it faster.
           </h1>
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="text-sm text-[var(--text-secondary)] max-w-xl">
             Every year of delay means higher bills, more climate pollution, and a country that can&rsquo;t build the
-            power it needs.{" "}
-            <Link href="/policies" className="font-semibold text-[var(--accent)] underline whitespace-nowrap">
-              Advocate now →
-            </Link>
+            power it needs.
           </p>
+          <Link
+            href="/policies"
+            className="flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[48px] rounded-full bg-accent px-6 text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"
+            style={{ color: "white" }}
+          >
+            Write to Congress →
+          </Link>
         </div>
 
         <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)]" role="tablist">

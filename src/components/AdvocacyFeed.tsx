@@ -18,9 +18,16 @@ function issueLabel(slug: string): string {
 
 function describeContact(item: AdvocacyFeedItem): string {
   const stateName = STATE_NAMES[item.state ?? ""] ?? item.state ?? "";
-  if (item.targetType === "state_regulator") return `contacted ${item.targetName ?? "their state regulator"}`;
+  if (item.targetType === "state_regulator") return `Contacted ${item.targetName ?? "their state regulator"}`;
   const chamber = item.targetType === "house" ? "U.S. Representative" : "U.S. Senator";
-  return `contacted their ${chamber} for ${stateName}${item.targetName ? ` (${item.targetName})` : ""}`;
+  return `Contacted their ${chamber} for ${stateName}${item.targetName ? ` (${item.targetName})` : ""}`;
+}
+
+// describeAdvocacyEntry returns a lowercase-first fragment meant to follow a
+// name ("Brian submitted a comment...") on project pages — here it opens its
+// own sentence instead, so it needs a capital.
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }) {
@@ -30,13 +37,13 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
       <div className="flex items-center gap-1.5 text-xs">
         <span className="font-semibold truncate">{item.label}</span>
         <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
-        <span className="text-[var(--accent)] font-medium shrink-0">+{item.points}</span>
+        <span className="text-[var(--accent)] font-medium shrink-0">+{item.points} pts</span>
         <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(item.createdAt, nowMs)}</span>
       </div>
       <p className="text-sm mt-1">
         {item.kind === "project" ? (
           <>
-            {describeAdvocacyEntry(item.advocacyType as AdvocacyType, item.hearingDate)}
+            {capitalize(describeAdvocacyEntry(item.advocacyType as AdvocacyType, item.hearingDate))}
             {stanceInfo ? ` ${stanceInfo.phrase}` : ""} on <span className="font-medium">{item.projectName}</span>
           </>
         ) : (

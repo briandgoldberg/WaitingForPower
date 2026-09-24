@@ -8,6 +8,34 @@ import { prisma } from "@/lib/db";
 import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
 import { ADVOCACY_TYPES, HEARING_LOOKBACK_DAYS, type AdvocacyType } from "@/lib/data/advocacyPoints";
 
+export interface IdentityStatus {
+  label: string;
+  emailConfirmed: boolean;
+  nameChosen: boolean;
+  decided: boolean;
+}
+
+// The same "who is posting, and have they decided how to appear" check
+// Discussion.me computes inline below, factored out so any UGC surface that
+// isn't scoped to one project (e.g. AdvocacyContactForm) can ask the same
+// question via GET /api/identity. Never creates a Predictor row — only
+// actually posting does that (see submitComment/submitAdvocacyContact) — so
+// a first-time visitor who hasn't posted anything yet gets null, not a
+// freshly minted row.
+export async function getIdentityStatus(anonymousKey: string): Promise<IdentityStatus | null> {
+  const me = await prisma.predictor.findUnique({
+    where: { anonymousKey },
+    select: { displayName: true, email: true, nameChosenAt: true, identityDecidedAt: true },
+  });
+  if (!me) return null;
+  return {
+    label: me.displayName ?? "Anonymous",
+    emailConfirmed: me.email != null,
+    nameChosen: me.nameChosenAt != null,
+    decided: me.identityDecidedAt != null,
+  };
+}
+
 export const MAX_COMMENT_LENGTH = 1000;
 const MAX_COMMENTS_PER_HOUR = 10;
 const MAX_LIKES_PER_HOUR = 60;

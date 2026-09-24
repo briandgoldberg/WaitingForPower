@@ -5,6 +5,8 @@
 // (src/lib/community.ts, src/lib/leaderboard.ts) use the exact same labels
 // and weights, never two copies that can drift apart.
 
+import { STATE_NAMES } from "./usStates";
+
 export type AdvocacyType = "submitted_comment" | "period_closed" | "attended_hearing";
 
 export const ADVOCACY_TYPES: AdvocacyType[] = ["submitted_comment", "period_closed", "attended_hearing"];
@@ -95,4 +97,16 @@ export const CONTACT_TARGET_TYPES: { value: ContactTargetType; label: string }[]
 ];
 
 export const CONTACT_POINTS = 3;
+
+// Third-person description for an "I Reached Out!" entry, e.g. "contacted
+// California Public Utilities Commission" or "contacted their U.S.
+// Representative for Oregon". Lowercase-first, like describeAdvocacyEntry,
+// so it can follow a name ("Brian contacted...") or be capitalized by the
+// caller when it opens its own sentence.
+export function describeContactTarget(item: { targetType: ContactTargetType; state: string; targetName: string | null }): string {
+  const stateName = STATE_NAMES[item.state] ?? item.state;
+  if (item.targetType === "state_regulator") return `contacted ${item.targetName ?? "their state regulator"}`;
+  const chamber = item.targetType === "house" ? "U.S. Representative" : "U.S. Senator";
+  return `contacted their ${chamber} for ${stateName}${item.targetName ? ` (${item.targetName})` : ""}`;
+}
 

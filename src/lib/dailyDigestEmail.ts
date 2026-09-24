@@ -28,24 +28,25 @@ export interface DailyDigestData {
   // scope is already the human label ("California" or "All states") — see
   // src/app/api/cron/daily-digest/route.ts.
   newSubscriptions: { scope: string; email: string; confirmed: boolean }[];
-  // Everything people posted: predictions, comments, replies. AI agents' bulk
-  // predictions are only counted (agentPredictionCount), not listed.
+  // Everything real people and guests actually did: project "I Advocated"
+  // entries and site-wide "I Reached Out!" official-contact entries.
   newPosts: {
-    kind: "prediction" | "comment" | "reply";
+    kind: "project" | "contact";
     label: string;
     isAgent: boolean;
     // An anonymous person (no confirmed email); agents are never guests.
     guest: boolean;
     // Not public yet: the poster hasn't chosen how to appear.
     held: boolean;
-    projectName: string;
+    // null for a "contact" entry — it isn't tied to one project.
+    projectName: string | null;
     url: string;
-    predictedDate?: string;
+    // Precomputed human-readable description, e.g. "submitted a comment in
+    // support of approval" or "contacted their U.S. Senator for Oregon".
+    actionText: string;
     body: string | null;
   }[];
-  agentPredictionCount: number;
   newLikeCount: number;
-  newlyScored: { label: string; isAgent: boolean; projectName: string; daysOff: number }[];
   newPredictorEmails: { email: string; label: string }[];
 }
 
@@ -93,17 +94,14 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
           .map((s) => `<li>${escapeHtml(s.email)} — ${escapeHtml(s.scope)}${s.confirmed ? "" : " (unconfirmed)"}</li>`)
           .join("")}</ul>`;
 
-  const shortDate = (iso: string) =>
-    new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  const postAction = (p: DailyDigestData["newPosts"][number]) =>
-    p.kind === "prediction" ? `predicted ${p.predictedDate ? shortDate(p.predictedDate) : ""}` : p.kind === "reply" ? "replied" : "commented";
   const postWho = (p: DailyDigestData["newPosts"][number]) =>
     `${p.isAgent ? "🤖" : "🙂"} ${p.label}${p.guest ? " (guest)" : ""}${p.held ? " [held, not public yet]" : ""}`;
+  const postTarget = (p: DailyDigestData["newPosts"][number]) =>
+    p.projectName ? ` on <a href="${escapeHtml(p.url)}"><strong>${escapeHtml(p.projectName)}</strong></a>` : "";
 
-  const postsExtraLines = [
-    data.agentPredictionCount > 0 ? `${data.agentPredictionCount} prediction${data.agentPredictionCount === 1 ? "" : "s"} by AI agents (not listed)` : null,
-    data.newLikeCount > 0 ? `${data.newLikeCount} new like${data.newLikeCount === 1 ? "" : "s"}` : null,
-  ].filter((x): x is string => x != null);
+  const postsExtraLines = [data.newLikeCount > 0 ? `${data.newLikeCount} new like${data.newLikeCount === 1 ? "" : "s"}` : null].filter(
+    (x): x is string => x != null,
+  );
 
   const postsSectionHtml =
     data.newPosts.length === 0 && postsExtraLines.length === 0
@@ -113,21 +111,11 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
             ? `<ul>${data.newPosts
                 .map(
                   (p) =>
-                    `<li>${escapeHtml(postWho(p))} ${escapeHtml(postAction(p))} on <a href="${escapeHtml(p.url)}"><strong>${escapeHtml(p.projectName)}</strong></a>${p.body ? `<br><span style="color:#444;font-size:13px;">${escapeHtml(p.body)}</span>` : ""}</li>`,
+                    `<li>${escapeHtml(postWho(p))} ${escapeHtml(p.actionText)}${postTarget(p)}${p.body ? `<br><span style="color:#444;font-size:13px;">${escapeHtml(p.body)}</span>` : ""}</li>`,
                 )
                 .join("")}</ul>`
             : ""
         }${postsExtraLines.length > 0 ? `<p style="color:#666;font-size:13px;">${escapeHtml(postsExtraLines.join(" · "))}</p>` : ""}`;
-
-  const scoredSectionHtml =
-    data.newlyScored.length === 0
-      ? "<p>None.</p>"
-      : `<ul>${data.newlyScored
-          .map(
-            (p) =>
-              `<li>${p.isAgent ? "🤖" : "🙂"} ${escapeHtml(p.label)} on <strong>${escapeHtml(p.projectName)}</strong>: ${p.daysOff} day${p.daysOff === 1 ? "" : "s"} off</li>`,
-          )
-          .join("")}</ul>`;
 
   const predictorEmailsSectionHtml =
     data.newPredictorEmails.length === 0
@@ -139,8 +127,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     ${section("Bot / MCP / API calls", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
     ${section("New feed subscriptions", subsSectionHtml)}
-    ${section(`New posts (${data.newPosts.length})`, postsSectionHtml)}
-    ${section("Newly scored predictions", scoredSectionHtml)}
+    ${section(`Advocacy activity (${data.newPosts.length})`, postsSectionHtml)}
     ${section("Predictor profiles confirmed via magic link", predictorEmailsSectionHtml)}
   `;
 
@@ -165,20 +152,15 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
       ? "None."
       : data.newSubscriptions.map((s) => `- ${s.email} — ${s.scope}${s.confirmed ? "" : " (unconfirmed)"}`).join("\n"),
     "",
-    `NEW POSTS (${data.newPosts.length})`,
+    `ADVOCACY ACTIVITY (${data.newPosts.length})`,
     data.newPosts.length === 0 && postsExtraLines.length === 0
       ? "None."
       : [
-          ...data.newPosts.map((p) => `- ${postWho(p)} ${postAction(p)} on ${p.projectName}\n  ${p.url}${p.body ? `\n  ${p.body}` : ""}`),
+          ...data.newPosts.map(
+            (p) => `- ${postWho(p)} ${p.actionText}${p.projectName ? ` on ${p.projectName}` : ""}\n  ${p.url}${p.body ? `\n  ${p.body}` : ""}`,
+          ),
           ...postsExtraLines.map((l) => `- ${l}`),
         ].join("\n"),
-    "",
-    "NEWLY SCORED PREDICTIONS",
-    data.newlyScored.length === 0
-      ? "None."
-      : data.newlyScored
-          .map((p) => `- [${p.isAgent ? "agent" : "human"}] ${p.label} on ${p.projectName}: ${p.daysOff} day${p.daysOff === 1 ? "" : "s"} off`)
-          .join("\n"),
     "",
     "PREDICTOR PROFILES CONFIRMED VIA MAGIC LINK",
     data.newPredictorEmails.length === 0

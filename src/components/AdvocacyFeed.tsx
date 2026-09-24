@@ -4,10 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { PosterBadge } from "./PosterBadge";
 import { relativeTime, groupByDate } from "@/lib/feedTime";
-import { STATE_NAMES } from "@/lib/data/usStates";
 import { POLICIES } from "@/lib/data/policies";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
-import { describeAdvocacyEntry, STANCE_INFO, type AdvocacyType } from "@/lib/data/advocacyPoints";
+import { describeAdvocacyEntry, describeContactTarget, STANCE_INFO, type AdvocacyType, type ContactTargetType } from "@/lib/data/advocacyPoints";
 import type { AdvocacyFeedItem } from "@/lib/advocacyFeed";
 
 function issueLabel(slug: string): string {
@@ -16,14 +15,7 @@ function issueLabel(slug: string): string {
   return policy?.badgeLabel ?? CAUSE_CATEGORY_BY_SLUG[slug as keyof typeof CAUSE_CATEGORY_BY_SLUG]?.shortLabel ?? slug;
 }
 
-function describeContact(item: AdvocacyFeedItem): string {
-  const stateName = STATE_NAMES[item.state ?? ""] ?? item.state ?? "";
-  if (item.targetType === "state_regulator") return `Contacted ${item.targetName ?? "their state regulator"}`;
-  const chamber = item.targetType === "house" ? "U.S. Representative" : "U.S. Senator";
-  return `Contacted their ${chamber} for ${stateName}${item.targetName ? ` (${item.targetName})` : ""}`;
-}
-
-// describeAdvocacyEntry returns a lowercase-first fragment meant to follow a
+// describeAdvocacyEntry/describeContactTarget return a lowercase-first fragment meant to follow a
 // name ("Brian submitted a comment...") on project pages — here it opens its
 // own sentence instead, so it needs a capital.
 function capitalize(s: string): string {
@@ -47,7 +39,7 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
             {stanceInfo ? ` ${stanceInfo.phrase}` : ""} on <span className="font-medium">{item.projectName}</span>
           </>
         ) : (
-          describeContact(item)
+          capitalize(describeContactTarget(item as { targetType: ContactTargetType; state: string; targetName: string | null }))
         )}
       </p>
       {item.kind === "contact" && item.issues && item.issues.length > 0 && (

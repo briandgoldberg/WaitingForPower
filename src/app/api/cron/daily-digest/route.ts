@@ -16,6 +16,7 @@ import { prisma } from "@/lib/db";
 import { sendDailyDigestEmail } from "@/lib/dailyDigestEmail";
 import { stateName } from "@/lib/data/usStates";
 import { classifyUserAgent } from "@/lib/classifyUserAgent";
+import { describeAdvocacyEntry, describeContactTarget, STANCE_INFO, type AdvocacyType, type ContactTargetType, type Stance } from "@/lib/data/advocacyPoints";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, newSubscriptions, newPredictions, newlyScored, newPredictorEmails, newComments, newLikeCount] = await Promise.all([
+  const [apiLogs, feedbackRows, newSubscriptions, newPredictorEmails, newComments, newContacts, newLikeCount] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -43,31 +44,14 @@ export async function GET(req: NextRequest) {
       select: { email: true, confirmed: true, state: true },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.prediction.findMany({
-      where: { submittedAt: { gte: since } },
-      select: {
-        predictedDate: true,
-        why: true,
-        submittedAt: true,
-        predictor: { select: { displayName: true, agentName: true, email: true, identityDecidedAt: true } },
-        project: { select: { name: true, slug: true } },
-      },
-      orderBy: { submittedAt: "asc" },
-    }),
-    prisma.prediction.findMany({
-      where: { scoredAt: { gte: since } },
-      select: {
-        daysOff: true,
-        predictor: { select: { displayName: true, agentName: true } },
-        project: { select: { name: true } },
-      },
-      orderBy: { scoredAt: "asc" },
-    }),
     prisma.predictorEmailVerification.findMany({
       where: { confirmedAt: { gte: since } },
       select: { email: true, predictor: { select: { displayName: true, agentName: true } } },
       orderBy: { confirmedAt: "asc" },
     }),
+    // The site's "I Advocated" log — advocacyType/stance/hearingDate are set
+    // on every current row; null only on a handful of legacy free-text
+    // comments written before this existed.
     prisma.projectComment.findMany({
       where: { createdAt: { gte: since } },
       select: {
@@ -75,8 +59,24 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         parentId: true,
         predictionId: true,
+        advocacyType: true,
+        hearingDate: true,
+        stance: true,
         predictor: { select: { displayName: true, agentName: true, email: true, identityDecidedAt: true } },
         project: { select: { name: true, slug: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    // Site-wide "I Reached Out!" entries — not tied to a project.
+    prisma.advocacyContact.findMany({
+      where: { createdAt: { gte: since } },
+      select: {
+        createdAt: true,
+        targetType: true,
+        state: true,
+        targetName: true,
+        note: true,
+        predictor: { select: { displayName: true, agentName: true, email: true, identityDecidedAt: true } },
       },
       orderBy: { createdAt: "asc" },
     }),
@@ -100,45 +100,51 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Unified list of what people posted. An AI agent can predict hundreds of
-  // projects in one run, so agent predictions are only counted, not listed.
+  // Unified list of what real people and guests actually did: project
+  // advocacy entries ("I Advocated") and site-wide official-contact entries
+  // ("I Reached Out!"). Agent-authored rows are still included (flagged via
+  // isAgent) rather than dropped, since an agent logging a real advocacy
+  // action is a meaningfully different signal than an agent bulk-predicting
+  // dates ever was.
   const projectUrl = (slug: string) => `https://waitingforpower.com/project/${slug}#comments`;
   const labelOf = (p: { displayName: string | null; agentName: string | null }) => p.displayName ?? p.agentName ?? "anonymous";
   const posts: { at: Date; post: Parameters<typeof sendDailyDigestEmail>[0]["newPosts"][number] }[] = [];
-  let agentPredictionCount = 0;
-  for (const p of newPredictions) {
-    if (p.predictor.agentName != null) {
-      agentPredictionCount++;
-      continue;
-    }
-    posts.push({
-      at: p.submittedAt,
-      post: {
-        kind: "prediction",
-        label: labelOf(p.predictor),
-        isAgent: false,
-        guest: p.predictor.email == null,
-        held: p.predictor.identityDecidedAt == null,
-        projectName: p.project.name,
-        url: projectUrl(p.project.slug),
-        predictedDate: p.predictedDate.toISOString(),
-        body: p.why,
-      },
-    });
-  }
   for (const c of newComments) {
     const isAgent = c.predictor.agentName != null;
+    const actionText = c.advocacyType
+      ? `${describeAdvocacyEntry(c.advocacyType as AdvocacyType, c.hearingDate?.toISOString())}${c.stance ? ` ${STANCE_INFO[c.stance as Stance].phrase}` : ""}`
+      : c.parentId || c.predictionId
+        ? "replied"
+        : "commented";
     posts.push({
       at: c.createdAt,
       post: {
-        kind: c.parentId || c.predictionId ? "reply" : "comment",
+        kind: "project",
         label: labelOf(c.predictor),
         isAgent,
         guest: !isAgent && c.predictor.email == null,
         held: !isAgent && c.predictor.identityDecidedAt == null,
         projectName: c.project.name,
         url: projectUrl(c.project.slug),
-        body: c.body,
+        actionText,
+        body: c.body || null,
+      },
+    });
+  }
+  for (const contact of newContacts) {
+    const isAgent = contact.predictor.agentName != null;
+    posts.push({
+      at: contact.createdAt,
+      post: {
+        kind: "contact",
+        label: labelOf(contact.predictor),
+        isAgent,
+        guest: !isAgent && contact.predictor.email == null,
+        held: !isAgent && contact.predictor.identityDecidedAt == null,
+        projectName: null,
+        url: "https://waitingforpower.com/policies",
+        actionText: describeContactTarget({ ...contact, targetType: contact.targetType as ContactTargetType }),
+        body: contact.note,
       },
     });
   }
@@ -158,14 +164,7 @@ export async function GET(req: NextRequest) {
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
     newPosts: posts.slice(0, 50).map((x) => x.post),
-    agentPredictionCount,
     newLikeCount,
-    newlyScored: newlyScored.map((p) => ({
-      label: p.predictor.displayName ?? p.predictor.agentName ?? "anonymous",
-      isAgent: p.predictor.agentName != null,
-      projectName: p.project.name,
-      daysOff: p.daysOff ?? 0,
-    })),
     newPredictorEmails: newPredictorEmails.map((v) => ({
       email: v.email,
       label: v.predictor.displayName ?? v.predictor.agentName ?? "anonymous",
@@ -184,9 +183,7 @@ export async function GET(req: NextRequest) {
     feedbackCount: feedbackRows.length,
     newSubscriptionCount: newSubscriptions.length,
     newPostCount: posts.length,
-    agentPredictionCount,
     newLikeCount,
-    newlyScoredCount: newlyScored.length,
     newPredictorEmailCount: newPredictorEmails.length,
   };
   console.log("daily-digest cron:", summary);

@@ -20,6 +20,7 @@ import { SaveProfilePrompt } from "@/components/SaveProfilePrompt";
 import { ChooseName } from "@/components/ChooseName";
 import { AdvocacyActionFields, type HearingOption } from "./AdvocacyActionFields";
 import type { IdentityStatus } from "@/lib/community";
+import { trackAttributedAction } from "@/lib/attribution";
 
 const STATE_OPTIONS = Object.entries(STATE_NAMES).sort((a, b) => a[1].localeCompare(b[1]));
 const MAX_NOTE = 500;
@@ -165,6 +166,7 @@ export function AdvocacyContactForm() {
         setError(result.error ?? "Something went wrong.");
         return;
       }
+      trackAttributedAction("Advocacy logged");
       setPointsEarned(result.pointsEarned ?? (advocacyType ? pointsFor(advocacyType) : null));
       resetProjectForm();
       window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
@@ -200,6 +202,7 @@ export function AdvocacyContactForm() {
         setError(result.error ?? "Something went wrong.");
         return;
       }
+      trackAttributedAction("Official contact logged");
       setPointsEarned(result.pointsEarned ?? CONTACT_POINTS);
       resetOfficialForm();
       loadIdentity(key);

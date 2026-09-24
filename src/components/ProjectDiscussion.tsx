@@ -11,6 +11,7 @@ import { relativeTime } from "@/lib/feedTime";
 import type { Discussion, DiscussionItem } from "@/lib/community";
 import { HEARING_LOOKBACK_DAYS, describeAdvocacyEntry, STANCE_INFO, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
 import { AdvocacyActionFields, type HearingOption } from "@/components/advocacy/AdvocacyActionFields";
+import { trackAttributedAction } from "@/lib/attribution";
 
 const POSTS_PER_PAGE = 10;
 
@@ -123,6 +124,7 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
         setError(result.error ?? "Something went wrong.");
         return;
       }
+      trackAttributedAction("Advocacy logged");
       setPointsEarned(result.pointsEarned ?? null);
       resetForm();
       setFormOpen(false);

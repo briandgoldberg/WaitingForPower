@@ -7,6 +7,7 @@ import { IdentityDecision } from "@/components/IdentityDecision";
 import { SaveProfilePrompt } from "@/components/SaveProfilePrompt";
 import { ChooseName } from "@/components/ChooseName";
 import type { IdentityStatus } from "@/lib/community";
+import { trackAttributedAction } from "@/lib/attribution";
 
 const MAX_REPLY = 1000;
 
@@ -48,6 +49,7 @@ export function ReplyForm({ topicId }: { topicId: string }) {
         setError(result.error ?? "Something went wrong.");
         return;
       }
+      trackAttributedAction("Board post");
       setBody("");
       // Refresh in case this reply is already public (not a first-ever
       // post), and re-check identity — a first-ever post needs to flip this

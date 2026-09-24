@@ -93,8 +93,9 @@ export default async function HomePage({
         )}
         <div className="flex flex-col gap-3">
           <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
-            Track America&rsquo;s energy permitting. Help fix it. Every year of delay means higher bills, more
-            climate pollution, and a country that can&rsquo;t build the power it needs.
+            America&rsquo;s energy projects are stuck waiting on permits, some for years. Every year of delay means
+            higher bills, more climate pollution, and a country that can&rsquo;t build fast enough. We track every
+            project and help you push the stuck ones forward.
           </h1>
           <Link
             href="/policies"
@@ -124,16 +125,13 @@ export default async function HomePage({
         </div>
 
         {feed === "changes" && (
-          <>
-            <h2 className="text-sm font-semibold">Recent changes</h2>
-            {/* key={state}: ChangesFeed seeds its own state from initialChanges
-                via useState's lazy initializer, which only runs once on mount —
-                a client-side navigation to a new ?state= otherwise leaves the
-                old filtered list on screen even though this server component
-                re-rendered with fresh data. Keying by state forces a real
-                remount when the filter changes. */}
-            <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
-          </>
+          // key={state}: ChangesFeed seeds its own state from initialChanges
+          // via useState's lazy initializer, which only runs once on mount —
+          // a client-side navigation to a new ?state= otherwise leaves the
+          // old filtered list on screen even though this server component
+          // re-rendered with fresh data. Keying by state forces a real
+          // remount when the filter changes.
+          <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
         )}
         {feed === "advocating" && (
           <AdvocacyFeed initialItems={advocacyResult.items} initialHasMore={advocacyResult.hasMore} now={now} />

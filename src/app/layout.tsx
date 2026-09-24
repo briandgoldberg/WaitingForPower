@@ -61,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </span>
               </span>
             </Link>
-            {/* Four tabs: one row beside the logo on wider screens, a full-width row under it on phones. */}
+            {/* Five tabs: one row beside the logo on wider screens, a full-width row under it on phones. */}
             <SiteNav />
           </div>
         </header>

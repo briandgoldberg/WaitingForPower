@@ -53,9 +53,32 @@ sources that can be re-run and stay current on their own).
 | `vtPucDockets.ts` | Vermont Public Utility Commission (PUC) Certificate of Public Good (CPG, 30 V.S.A. §248) dockets | Yes — server-rendered HTML (Drupal 7), no auth | None (no auth) | Cron daily (11:30 UTC), `/api/cron/ingest-vt-puc`. |
 | `sdPucDockets.ts` | South Dakota Public Utilities Commission (PUC) Energy Conversion and Transmission Facility permit dockets (SDCL 49-41B) | Yes — server-rendered HTML, no auth | None (no auth) | Cron daily (12:00 UTC), `/api/cron/ingest-sd-puc`. |
 | `ndPscDockets.ts` | North Dakota Public Service Commission (PSC) Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) | Yes — server-rendered HTML + real order PDFs (parsed via `pdf-parse`), no auth | None (no auth) | Cron daily (12:30 UTC), `/api/cron/ingest-nd-psc`. |
-| `ncNcucDockets.ts` | North Carolina Utilities Commission (NCUC) Electric Generation Certificate (EGC) + Electric Transmission Line Certificate (ETL) dockets | Yes — server-rendered HTML (ASP.NET WebForms behind Cloudflare, non-standard `__VIEWSTATE1` postback counter), no auth | None (no auth) | Cron weekly, Wednesdays (13:30 UTC), `/api/cron/ingest-nc-ncuc` — reduced from daily since every run currently errors (Cloudflare-blocked, see "2 states remain genuinely blocked" below). |
+| `ncNcucDockets.ts` | North Carolina Utilities Commission (NCUC) Electric Generation Certificate (EGC) + Electric Transmission Line Certificate (ETL) dockets | Yes — server-rendered HTML (ASP.NET WebForms behind Cloudflare, non-standard `__VIEWSTATE1` postback counter), no auth | None (no auth) | Cron weekly, Wednesdays (13:30 UTC), `/api/cron/ingest-nc-ncuc`. The live search is Cloudflare-blocked; each run falls back to the weekly hand-researched list (see "Hand-researched states" below). |
 | `wyIscDockets.ts` | Wyoming DEQ Industrial Siting Council (ISC) permit dockets | Yes — a public Google Drive folder, listed via Drive's legacy unauthenticated `embeddedfolderview` HTML endpoint (the state's own embedded file-browser widget is broken site-wide; the folder's own "click here" fallback link is what this module actually uses), no auth | None (no auth) | Cron daily (14:30 UTC), `/api/cron/ingest-wy-isc`. |
 | `gaPscDockets.ts` | Georgia Public Service Commission (PSC) electric dockets | Yes — real JSON XHR endpoint (`docket-filter-service`), no auth | None (no auth) | Cron daily (15:00 UTC), `/api/cron/ingest-ga-psc`. |
+
+## Hand-researched states (North Carolina, Iowa)
+
+Neither state's docket system can be read automatically: every
+`starw1.ncuc.gov` page (including order PDFs) serves Cloudflare's JS
+challenge, and Iowa's EFS requires a signed-in session. Both publish enough
+on their ordinary public websites to hand-check status, so
+`handResearched.ts` holds that hand-checked data and a weekly Claude Code
+routine re-checks and updates it:
+
+- **North Carolina**: the pending generating-facility and transmission
+  certificate dockets listed on www.ncuc.gov/Hearings/hearings.html (the
+  "hearings scheduled" and "awaiting decision" tables), minus any that the
+  same page's final-orders archive shows already granted. When the live
+  docket search fails, `ingestNcNcucDockets` upserts this list instead
+  (vanished-detection skipped, since it's a partial list).
+- **Iowa**: the Summit Carbon HLP-2021-0001 status note on the ND PSC
+  project (see below), now taken from the Commission's public status page,
+  iuc.iowa.gov/hazardous-liquid-pipeline-requests.
+
+The rules for the weekly pass are at the top of `handResearched.ts`. The
+main one: an entry changes only when the state's own public page shows the
+change, and entries whose sources contradict each other stay out.
 
 ## Iowa: deliberately not a 42nd state module
 
@@ -249,10 +272,10 @@ still undetermined. One untested lead: the legacy
 and lists a docket's full filing history with dates (e.g. "Order Entered -
 Interim, Mar 18, 2020"), but it's keyed by an internal numeric id, not the
 case number, and no way to map one to the other has been found yet. North
-Carolina ingestion is still broken: every `starw1.ncuc.gov` page (Dockets,
-Orders, DocketDetails) serves Cloudflare's JS challenge, and the ungated
-www.ncuc.gov site has no docket data of its own, only links into `starw1`
-(checked 2026-09-24).
+Carolina's live search is still blocked: every `starw1.ncuc.gov` page
+(Dockets, Orders, DocketDetails, order PDFs) serves Cloudflare's JS
+challenge (checked 2026-09-24). Pending NC certificates now come from the
+weekly hand-researched list instead (see "Hand-researched states" above).
 
 ## Open questions (flagged, not guessed at)
 

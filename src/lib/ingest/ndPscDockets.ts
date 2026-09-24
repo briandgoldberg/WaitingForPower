@@ -167,6 +167,7 @@ import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
+import { IA_SUMMIT_NOTE } from "@/lib/ingest/handResearched";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 import { classifyReviewStep, type DocketEvent, type StepSignals } from "@/lib/ingest/reviewStep";
 
@@ -606,10 +607,10 @@ async function normalizeCandidate(
   // Iowa entry for why: EFS now requires an authenticated session with no
   // durable, storable API credential, unlike every other source in this
   // series). See also this project's ProjectSource row for the direct link.
+  // Since 2026-09-24 the status text lives in handResearched.ts
+  // (IA_SUMMIT_NOTE), re-checked weekly against the IUC's public status page.
   if (listing.caseNumber === "PU-22-391") {
-    dataQualityNoteParts.push(
-      "This same physical CO2 pipeline also has an Iowa Hazardous Liquid Pipeline permit — Iowa Utilities Commission Docket HLP-2021-0001, filed 8/4/2021, status \"Compliance Filing Window\" (see the source link above) — added as a one-time manual citation, not auto-updating; Iowa's own docket system requires an authenticated session with no durable API credential (see README.md).",
-    );
+    dataQualityNoteParts.push(IA_SUMMIT_NOTE);
   }
   if (capacityUnit === "kV") {
     dataQualityNoteParts.push("Capacity shown is the transmission line's voltage rating (kV), not a MW capacity figure — this source does not publish line MW ratings.");

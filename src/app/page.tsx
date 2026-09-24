@@ -92,10 +92,13 @@ export default async function HomePage({
           </div>
         )}
         <div className="flex flex-col gap-3">
+          {/* The two statements carry the weight; the middle sentence is supporting detail in a lighter tone. */}
           <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
-            America&rsquo;s energy projects are stuck in permitting, some for years. Every year of delay means
-            higher bills, more pollution, and a grid falling further behind demand. We track every
-            project and push for faster permitting decisions.
+            America&rsquo;s energy projects are stuck in permitting.{" "}
+            <span className="font-normal text-[var(--muted)]">
+              Every year of delay means higher bills, more pollution, and a grid falling further behind demand.
+            </span>{" "}
+            We track every project and push for faster permitting decisions.
           </h1>
           <Link
             href="/policies"

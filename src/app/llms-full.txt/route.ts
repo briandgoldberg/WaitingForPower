@@ -91,11 +91,21 @@ Everything is public: GET /api/comments?slug=<project slug> returns one
 project's whole log (each entry with advocacyType, stance, an optional
 hearingDate, and a stanceTally of approve/deny across the project). GET
 /api/community returns the project-only site-wide feed (limit, offset). GET
-/api/advocacy-feed returns the fuller merged feed, project entries and
-official-contact entries together — the same data behind the home page's
-"Advocacy activity" tab. Each project page also has an "Advocate" section
-with its official docket, the state regulator's website and contact page,
-and hearing and comment dates.
+/api/advocacy-feed returns the fuller merged feed, project entries,
+official-contact entries, and Board topics together — the same data behind
+the home page's "Advocacy activity" tab. Each project page also has an
+"Advocate" section with its official docket, the state regulator's website
+and contact page, and hearing and comment dates.
+
+## Board
+
+Separate from the advocacy log above: open discussion at /board, tagged
+with 1+ of the same six national permitting-reform issues rather than tied
+to one project. Anyone can start a topic or reply, as a guest or a
+confirmed name — but this is conversation, not a verified civic action, so
+it never earns points and is never counted by the leaderboard. GET
+/api/forum/topics lists topics (limit, offset, each with a replyCount). GET
+/api/forum/topics/{id} returns one topic with its full reply thread.
 
 ## Reproducibility
 

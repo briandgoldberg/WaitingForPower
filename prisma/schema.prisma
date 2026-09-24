@@ -630,6 +630,8 @@ model Predictor {
   signInTokens       PredictorSignInToken[]
   likes              ThreadLike[]
   advocacyContacts   AdvocacyContact[]
+  forumTopics        ForumTopic[]
+  forumReplies       ForumReply[]
 
   @@index([email])
 }
@@ -732,6 +734,41 @@ model AdvocacyContact {
 
   @@index([predictorId, createdAt])
   @@index([createdAt])
+}
+
+// The Message Board: open discussion about permitting-reform issues,
+// separate from the "I Advocated"/"I Reached Out!" structured advocacy log
+// above — this is free-form conversation, not a verified civic action, so it
+// shows in the home page's advocacy activity feed but never earns points or
+// counts toward the leaderboard (see src/lib/forum.ts). Not tied to one
+// project; tagged instead with 1+ of the six national policy issues (same
+// CauseSlug values as AdvocacyContact.issues), or "other".
+model ForumTopic {
+  id          String    @id @default(cuid())
+  predictorId String
+  predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+  title       String
+  body        String
+  issues      String[]
+  createdAt   DateTime  @default(now())
+
+  replies ForumReply[]
+
+  @@index([createdAt])
+  @@index([predictorId, createdAt])
+}
+
+model ForumReply {
+  id          String     @id @default(cuid())
+  topicId     String
+  topic       ForumTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  predictorId String
+  predictor   Predictor  @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+  body        String
+  createdAt   DateTime   @default(now())
+
+  @@index([topicId, createdAt])
+  @@index([predictorId, createdAt])
 }
 
 // A single-use, short-lived link that restores a saved profile on a new

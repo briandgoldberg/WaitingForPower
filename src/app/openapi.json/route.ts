@@ -190,26 +190,53 @@ const spec = {
       get: {
         summary: "Site-wide feed of every advocacy action, newest first",
         description:
-          "Merges a project's \"I Advocated\" log entries with site-wide \"I Reached Out!\" official-contact entries (state regulator or a member of Congress) into one feed — the data behind the home page's \"Advocacy activity\" tab. Each item's `kind` is \"project\" or \"contact\".",
+          "Merges a project's \"I Advocated\" log entries, site-wide \"I Reached Out!\" official-contact entries (state regulator or a member of Congress), and new Message Board topics into one feed — the data behind the home page's \"Advocacy activity\" tab. Each item's `kind` is \"project\", \"contact\", or \"board\". Board entries always carry points: 0 — they're conversation, not a verified civic action, and never count toward the leaderboard.",
         parameters: [
           { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
           { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
         ],
         responses: {
           "200": {
-            description: "Each item has a kind ('project' or 'contact'), the poster's label, points earned, and kind-specific fields (advocacyType/hearingDate/projectSlug for project entries; targetType/state/targetName/issues for contact entries).",
+            description: "Each item has a kind ('project', 'contact', or 'board'), the poster's label, points earned, and kind-specific fields (advocacyType/hearingDate/projectSlug for project entries; targetType/state/targetName/issues for contact entries; title/topicId/replyCount/issues for board entries).",
             content: {
               "application/json": {
                 schema: {
                   type: "object",
                   properties: {
-                    items: { type: "array", items: { type: "object", properties: { kind: { type: "string", enum: ["project", "contact"] } } } },
+                    items: { type: "array", items: { type: "object", properties: { kind: { type: "string", enum: ["project", "contact", "board"] } } } },
                     hasMore: { type: "boolean" },
                   },
                 },
               },
             },
           },
+        },
+      },
+    },
+    "/api/forum/topics": {
+      get: {
+        summary: "Message Board topic list, newest first",
+        description:
+          "Open discussion tagged with 1+ of the six national permitting-reform issues (see /api/community for the separate project-scoped advocacy log). A topic here is conversation, not a verified advocacy action — it never earns points.",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
+          { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: {
+          "200": {
+            description: "items: each with title, body, issues, the poster's label, and replyCount (replies themselves are only returned by the single-topic endpoint below).",
+            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } }, hasMore: { type: "boolean" } } } } },
+          },
+        },
+      },
+    },
+    "/api/forum/topics/{id}": {
+      get: {
+        summary: "One Message Board topic, with its full reply thread",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "The topic plus a replies array, oldest first.", content: { "application/json": { schema: { type: "object" } } } },
+          "404": { description: "No such topic (or it's still held, pending the author's first identity decision)." },
         },
       },
     },

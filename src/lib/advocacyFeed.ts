@@ -1,10 +1,12 @@
 // The home page's "What people are advocating for" tab: every structured
-// advocacy action across the site, merged from two sources — a project's
-// own "I Advocated" log (src/lib/community.ts, ProjectComment.advocacyType)
-// and a logged contact with a regulator or member of Congress
-// (src/lib/advocacyContacts.ts, AdvocacyContact) — since both count toward
-// the same points and the same leaderboard, a visitor shouldn't have to
-// care which table a given entry actually lives in.
+// advocacy action across the site, merged from three sources — a project's
+// own "I Advocated" log (src/lib/community.ts, ProjectComment.advocacyType),
+// a logged contact with a regulator or member of Congress
+// (src/lib/advocacyContacts.ts, AdvocacyContact), and new Message Board
+// topics (src/lib/forum.ts, ForumTopic) — since a visitor shouldn't have to
+// care which table a given entry actually lives in. Board topics carry
+// points: 0 and are never counted by the leaderboard (see leaderboard.ts):
+// they're conversation, not a verified civic action.
 
 import { prisma } from "@/lib/db";
 import { labelOf, flagsOf, isHeld } from "@/lib/community";
@@ -13,7 +15,7 @@ import type { ContactTargetType } from "@/lib/data/advocacyPoints";
 
 export interface AdvocacyFeedItem {
   id: string;
-  kind: "project" | "contact";
+  kind: "project" | "contact" | "board";
   label: string;
   isAgent: boolean;
   confirmed: boolean;
@@ -32,7 +34,12 @@ export interface AdvocacyFeedItem {
   targetType?: ContactTargetType;
   state?: string;
   targetName?: string | null;
+  // "contact" and "board" entries
   issues?: string[];
+  // "board" entries only
+  topicId?: string;
+  title?: string;
+  replyCount?: number;
 }
 
 export async function getAdvocacyFeed(offset = 0, limit = 20): Promise<{ items: AdvocacyFeedItem[]; hasMore: boolean }> {
@@ -42,7 +49,7 @@ export async function getAdvocacyFeed(offset = 0, limit = 20): Promise<{ items: 
     select: { id: true, displayName: true, agentName: true, email: true, identityDecidedAt: true },
   } as const;
 
-  const [comments, contacts] = await Promise.all([
+  const [comments, contacts, topics] = await Promise.all([
     prisma.projectComment.findMany({
       where: { predictor: publicPoster, advocacyType: { not: null } },
       include: { predictor: predictorSelect, project: { select: { slug: true, name: true } } },
@@ -52,6 +59,12 @@ export async function getAdvocacyFeed(offset = 0, limit = 20): Promise<{ items: 
     prisma.advocacyContact.findMany({
       where: { predictor: publicPoster },
       include: { predictor: predictorSelect },
+      orderBy: { createdAt: "desc" },
+      take: need,
+    }),
+    prisma.forumTopic.findMany({
+      where: { predictor: publicPoster },
+      include: { predictor: predictorSelect, _count: { select: { replies: true } } },
       orderBy: { createdAt: "desc" },
       take: need,
     }),
@@ -93,6 +106,22 @@ export async function getAdvocacyFeed(offset = 0, limit = 20): Promise<{ items: 
     issues: r.issues,
   }));
 
-  const merged = [...fromComments, ...fromContacts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const fromTopics: AdvocacyFeedItem[] = topics.map((t) => ({
+    id: t.id,
+    kind: "board",
+    label: labelOf(t.predictor),
+    isAgent: t.predictor.agentName != null,
+    ...flagsOf(t.predictor),
+    pending: isHeld(t.predictor),
+    createdAt: t.createdAt.toISOString(),
+    points: 0,
+    note: null,
+    issues: t.issues,
+    topicId: t.id,
+    title: t.title,
+    replyCount: t._count.replies,
+  }));
+
+  const merged = [...fromComments, ...fromContacts, ...fromTopics].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return { items: merged.slice(offset, offset + limit), hasMore: merged.length > offset + limit };
 }

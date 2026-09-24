@@ -4,16 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { PosterBadge } from "./PosterBadge";
 import { relativeTime, groupByDate } from "@/lib/feedTime";
-import { POLICIES } from "@/lib/data/policies";
-import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
+import { issueLabel } from "@/lib/data/policies";
 import { describeAdvocacyEntry, describeContactTarget, STANCE_INFO, type AdvocacyType, type ContactTargetType } from "@/lib/data/advocacyPoints";
 import type { AdvocacyFeedItem } from "@/lib/advocacyFeed";
-
-function issueLabel(slug: string): string {
-  if (slug === "other") return "Something else";
-  const policy = POLICIES.find((p) => p.slug === slug);
-  return policy?.badgeLabel ?? CAUSE_CATEGORY_BY_SLUG[slug as keyof typeof CAUSE_CATEGORY_BY_SLUG]?.shortLabel ?? slug;
-}
 
 // describeAdvocacyEntry/describeContactTarget return a lowercase-first fragment meant to follow a
 // name ("Brian submitted a comment...") on project pages — here it opens its
@@ -29,7 +22,7 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
       <div className="flex items-center gap-1.5 text-xs">
         <span className="font-semibold truncate">{item.label}</span>
         <PosterBadge isAgent={item.isAgent} confirmed={item.confirmed} guest={item.guest} />
-        <span className="text-[var(--accent)] font-medium shrink-0">+{item.points} pts</span>
+        {item.points > 0 && <span className="text-[var(--accent)] font-medium shrink-0">+{item.points} pts</span>}
         <span className="text-[var(--muted)] ml-auto shrink-0">{relativeTime(item.createdAt, nowMs)}</span>
       </div>
       <p className="text-sm mt-1">
@@ -38,11 +31,15 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
             {capitalize(describeAdvocacyEntry(item.advocacyType as AdvocacyType, item.hearingDate))}
             {stanceInfo ? ` ${stanceInfo.phrase}` : ""} on <span className="font-medium">{item.projectName}</span>
           </>
-        ) : (
+        ) : item.kind === "contact" ? (
           capitalize(describeContactTarget(item as { targetType: ContactTargetType; state: string; targetName: string | null }))
+        ) : (
+          <>
+            Started a topic: <span className="font-medium">{item.title}</span>
+          </>
         )}
       </p>
-      {item.kind === "contact" && item.issues && item.issues.length > 0 && (
+      {(item.kind === "contact" || item.kind === "board") && item.issues && item.issues.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
           {item.issues.map((slug) => (
             <span key={slug} className="text-[10px] rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[var(--muted)]">
@@ -52,6 +49,11 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
         </div>
       )}
       {item.note && <p className="text-sm text-[var(--text-secondary)] mt-1.5 whitespace-pre-wrap break-words line-clamp-4">{item.note}</p>}
+      {item.kind === "board" && (
+        <p className="text-xs text-[var(--muted)] mt-1.5">
+          {item.replyCount} {item.replyCount === 1 ? "reply" : "replies"}
+        </p>
+      )}
     </>
   );
 
@@ -59,6 +61,13 @@ function AdvocacyCard({ item, nowMs }: { item: AdvocacyFeedItem; nowMs: number }
   if (item.kind === "project" && item.projectSlug) {
     return (
       <Link href={`/project/${item.projectSlug}#comments`} className={`block ${className}`}>
+        {inner}
+      </Link>
+    );
+  }
+  if (item.kind === "board" && item.topicId) {
+    return (
+      <Link href={`/board/${item.topicId}`} className={`block ${className}`}>
         {inner}
       </Link>
     );

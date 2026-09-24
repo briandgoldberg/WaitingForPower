@@ -31,9 +31,13 @@
   leaderboard at `https://waitingforpower.com/?feed=leaders`. Read a project's log with
   `GET /api/comments?slug=<project slug>` (includes a stanceTally), the project-only
   site-wide feed with `GET /api/community`, or everything merged (including official
-  contacts) with `GET /api/advocacy-feed`. Each project page also has an "Advocate"
-  section: the official docket, the state regulator's website and contact page, and
-  hearing and comment dates.
+  contacts and Board topics) with `GET /api/advocacy-feed`. Each project page also has
+  an "Advocate" section: the official docket, the state regulator's website and contact
+  page, and hearing and comment dates.
+- The [Board](https://waitingforpower.com/board) is separate: open discussion tagged with
+  1+ of the six national permitting-reform issues, not a verified advocacy action and not
+  counted toward points or the leaderboard. `GET /api/forum/topics` lists topics,
+  `GET /api/forum/topics/{id}` returns one topic with its full reply thread.
 
 ## API
 
@@ -74,6 +78,7 @@
 ## Advocacy
 
 - [Advocacy](https://waitingforpower.com/policies) — four tabs: National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus a letter builder that assembles a ready-to-send letter to Congress by issue and political leaning), Project Advocacy (every open project, filterable by how likely it is to be accepting public comments, with a docket link, hearing dates, and a state regulator contact for each), State Advocacy (every state's regulator and its public-comment rules), and "I Reached Out!" (logs a real contact with a state regulator or a member of Congress — see "Advocacy log" above).
+- [Board](https://waitingforpower.com/board) — open discussion about the same six permitting-reform issues, separate from the Advocacy page's structured tools. Post a topic or reply as a guest or a confirmed name; see "Advocacy log" above for the read API.
 - [Public Hearings RSS feed](https://waitingforpower.com/hearings.rss): the same upcoming-hearings data as an RSS 2.0 feed, one item per hearing, refreshed on every request. Usable directly by feed readers, Zapier's "New Item in Feed" trigger, or IFTTT's RSS applet.
 
 ## Docs

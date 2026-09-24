@@ -17,7 +17,7 @@
 // SPEED Act, H.R. 4776, 119th Congress, passed the House 221-196 on
 // 2025-12-18; the Energy Permitting Reform Act, S. 4753, 118th Congress).
 
-import type { CauseSlug } from "./causeCategories";
+import { CAUSE_CATEGORY_BY_SLUG, type CauseSlug } from "./causeCategories";
 
 export interface Bill {
   label: string;
@@ -199,4 +199,14 @@ export const POLICY_BY_SLUG: Record<CauseSlug, Policy | undefined> =
 
 export function getPolicy(slug: string): Policy | undefined {
   return POLICY_BY_SLUG[slug as CauseSlug];
+}
+
+// Human label for an issue tag on an AdvocacyContact or Message Board topic —
+// shared so the home feed, the board, and anywhere else that shows these
+// tags never drift apart. "other" is the one issue slug that isn't a real
+// CauseSlug at all (see AdvocacyContactForm.tsx / NewTopicForm.tsx).
+export function issueLabel(slug: string): string {
+  if (slug === "other") return "Something else";
+  const policy = getPolicy(slug);
+  return policy?.badgeLabel ?? CAUSE_CATEGORY_BY_SLUG[slug as CauseSlug]?.shortLabel ?? slug;
 }

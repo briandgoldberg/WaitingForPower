@@ -17,11 +17,6 @@ export default async function BoardPage() {
 
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Board</h1>
-        <p className="text-sm text-[var(--text-secondary)] max-w-2xl">Discuss permitting reform with people tracking stuck projects.</p>
-      </div>
-
       <NewTopicForm />
 
       <TopicList initialItems={items} initialHasMore={hasMore} now={now} />

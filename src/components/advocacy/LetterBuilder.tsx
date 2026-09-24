@@ -32,16 +32,14 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () =
 // Picks one or more issues plus a political leaning and assembles a
 // pre-written letter to a member of Congress — see advocacyLetters.ts for
 // why nothing here is generated live. Every combination is a deterministic
-// composition of reviewed text, not a model call. The issue and leaning
-// pickers always stay visible; only the written-out letter itself folds up,
-// via `expanded` below — the actions (Copy letter, Find your representative)
-// stay visible either way, right after the leaning picker when folded.
+// composition of reviewed text, not a model call. The letter textarea
+// starts short (resizable, not collapsible) so the action buttons below it
+// stay in view without needing to expand anything first.
 export function LetterBuilder() {
   const [selected, setSelected] = useState<Set<CauseSlug>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>("moderate");
   const [letterText, setLetterText] = useState("");
   const [copied, setCopied] = useState(false);
-  const [expanded, setExpanded] = useState(true);
 
   const causeSlugs = useMemo(() => [...selected], [selected]);
 
@@ -153,38 +151,15 @@ export function LetterBuilder() {
 
       {ready && (
         <div className="flex flex-col gap-2.5">
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            className="flex items-center justify-between gap-2 text-sm font-semibold"
-          >
-            <span>Your letter</span>
-            <svg
-              viewBox="0 0 20 20"
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
-              aria-hidden="true"
-            >
-              <path d="M5 7l5 5 5-5" />
-            </svg>
-          </button>
+          <span className="text-sm font-semibold">Your letter</span>
 
-          {expanded && (
-            <textarea
-              value={letterText}
-              onChange={(e) => setLetterText(e.target.value)}
-              rows={14}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm leading-relaxed font-sans resize-y"
-              aria-label="Your letter"
-            />
-          )}
+          <textarea
+            value={letterText}
+            onChange={(e) => setLetterText(e.target.value)}
+            rows={6}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm leading-relaxed font-sans resize-y"
+            aria-label="Your letter"
+          />
 
           <div className="flex flex-col sm:flex-row gap-2">
             <button

@@ -35,14 +35,14 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () =
 // composition of reviewed text, not a model call.
 export function LetterBuilder() {
   const [selected, setSelected] = useState<Set<CauseSlug>>(new Set());
-  const [orientation, setOrientation] = useState<Orientation | null>(null);
+  const [orientation, setOrientation] = useState<Orientation>("moderate");
   const [letterText, setLetterText] = useState("");
   const [copied, setCopied] = useState(false);
 
   const causeSlugs = useMemo(() => [...selected], [selected]);
 
   const computedLetter = useMemo(() => {
-    if (!orientation || causeSlugs.length === 0) return "";
+    if (causeSlugs.length === 0) return "";
     return buildLetter({ causeSlugs, orientation });
   }, [causeSlugs, orientation]);
 
@@ -72,7 +72,7 @@ export function LetterBuilder() {
     }
   }
 
-  const ready = orientation !== null && causeSlugs.length > 0;
+  const ready = causeSlugs.length > 0;
   const mailtoHref = ready
     ? `mailto:?subject=${encodeURIComponent(letterSubject(causeSlugs))}&body=${encodeURIComponent(letterText)}`
     : undefined;
@@ -159,7 +159,7 @@ export function LetterBuilder() {
         </div>
       </div>
 
-      {ready ? (
+      {ready && (
         <div className="flex flex-col gap-2.5">
           <textarea
             value={letterText}
@@ -197,8 +197,6 @@ export function LetterBuilder() {
             </a>
           </p>
         </div>
-      ) : (
-        <p className="text-sm text-[var(--muted)]">Choose an issue and a leaning to see your letter.</p>
       )}
     </div>
   );

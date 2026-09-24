@@ -4,7 +4,7 @@
 // same points system, not tied to one project.
 
 import { prisma } from "@/lib/db";
-import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
+import { getOrCreateHumanPredictor, getOrCreateAgentPredictor, PredictionError } from "@/lib/predictions";
 import { labelOf, flagsOf, isHeld } from "@/lib/community";
 import { STATE_NAMES } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
@@ -14,6 +14,10 @@ import type { ContactTargetType } from "@/lib/data/advocacyPoints";
 const MAX_NOTE_LENGTH = 500;
 const MAX_ISSUES = 8;
 const MAX_CONTACTS_PER_HOUR = 10;
+// Much tighter for an agent identity — see the matching constant in
+// community.ts for why (and src/app/mcp/route.ts for the IP-based layer on
+// top of this one).
+const MAX_AGENT_CONTACTS_PER_HOUR = 3;
 // The same six reform issues shown on the National Advocacy tab (see
 // src/lib/data/policies.ts) — not every CauseSlug, which also includes the
 // "financing/supply chain" control group that isn't a real reform ask.
@@ -44,7 +48,10 @@ export interface AdvocacyContactItem {
 }
 
 export async function submitAdvocacyContact(params: {
-  anonymousKey: string;
+  // Exactly one of these identifies who's logging the contact — see
+  // submitComment in community.ts for the same convention.
+  anonymousKey?: string;
+  agentName?: string;
   targetType: string;
   state: string;
   targetName?: string;
@@ -76,9 +83,12 @@ export async function submitAdvocacyContact(params: {
     throw new AdvocacyContactError("too_long", `Keep the note under ${MAX_NOTE_LENGTH} characters.`);
   }
 
+  if (!params.anonymousKey && !params.agentName) {
+    throw new AdvocacyContactError("missing_identity", "No identity provided.");
+  }
   let predictor;
   try {
-    predictor = await getOrCreateHumanPredictor(params.anonymousKey);
+    predictor = params.agentName ? await getOrCreateAgentPredictor(params.agentName) : await getOrCreateHumanPredictor(params.anonymousKey!);
   } catch (err) {
     if (err instanceof PredictionError) throw new AdvocacyContactError(err.code, err.message);
     throw err;
@@ -87,7 +97,8 @@ export async function submitAdvocacyContact(params: {
   const recentCount = await prisma.advocacyContact.count({
     where: { predictorId: predictor.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
   });
-  if (recentCount >= MAX_CONTACTS_PER_HOUR) {
+  const hourlyCap = params.agentName ? MAX_AGENT_CONTACTS_PER_HOUR : MAX_CONTACTS_PER_HOUR;
+  if (recentCount >= hourlyCap) {
     throw new AdvocacyContactError("rate_limited", "You're logging a lot of contacts. Please try again in a bit.");
   }
 

@@ -7,7 +7,7 @@
 // and AdvocacyContact). Same identity system as everywhere else on the site.
 
 import { prisma } from "@/lib/db";
-import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
+import { getOrCreateHumanPredictor, getOrCreateAgentPredictor, PredictionError } from "@/lib/predictions";
 import { labelOf, flagsOf, isHeld } from "@/lib/community";
 import { POLICIES } from "@/lib/data/policies";
 
@@ -18,6 +18,10 @@ const MAX_ISSUES = 8;
 const MAX_LINKS = 2;
 const MAX_TOPICS_PER_HOUR = 5;
 const MAX_REPLIES_PER_HOUR = 20;
+// Much tighter for an agent identity — see community.ts's matching
+// constant for why (and src/app/mcp/route.ts for the IP-based layer on top).
+const MAX_AGENT_TOPICS_PER_HOUR = 2;
+const MAX_AGENT_REPLIES_PER_HOUR = 5;
 // Same six reform issues shown on the National Advocacy tab, not every
 // CauseSlug — see advocacyContacts.ts for the identical restriction.
 const VALID_ISSUE_SLUGS = new Set<string>([...POLICIES.map((p) => p.slug), "other"]);
@@ -68,7 +72,7 @@ const predictorSelect = {
   select: { id: true, displayName: true, agentName: true, email: true, identityDecidedAt: true },
 } as const;
 
-export async function submitTopic(params: { anonymousKey: string; title: string; body: string; issues: string[] }) {
+export async function submitTopic(params: { anonymousKey?: string; agentName?: string; title: string; body: string; issues: string[] }) {
   const title = params.title.trim();
   const body = params.body.trim();
   if (!title) throw new ForumError("empty_title", "Give your topic a title.");
@@ -80,9 +84,10 @@ export async function submitTopic(params: { anonymousKey: string; title: string;
   const issues = [...new Set(params.issues)].filter((i) => VALID_ISSUE_SLUGS.has(i));
   if (issues.length > MAX_ISSUES) throw new ForumError("too_many_issues", "Pick fewer issues.");
 
+  if (!params.anonymousKey && !params.agentName) throw new ForumError("missing_identity", "No identity provided.");
   let predictor;
   try {
-    predictor = await getOrCreateHumanPredictor(params.anonymousKey);
+    predictor = params.agentName ? await getOrCreateAgentPredictor(params.agentName) : await getOrCreateHumanPredictor(params.anonymousKey!);
   } catch (err) {
     if (err instanceof PredictionError) throw new ForumError(err.code, err.message);
     throw err;
@@ -91,7 +96,8 @@ export async function submitTopic(params: { anonymousKey: string; title: string;
   const recentCount = await prisma.forumTopic.count({
     where: { predictorId: predictor.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
   });
-  if (recentCount >= MAX_TOPICS_PER_HOUR) {
+  const hourlyCap = params.agentName ? MAX_AGENT_TOPICS_PER_HOUR : MAX_TOPICS_PER_HOUR;
+  if (recentCount >= hourlyCap) {
     throw new ForumError("rate_limited", "You're posting a lot. Please try again in a bit.");
   }
 
@@ -99,7 +105,7 @@ export async function submitTopic(params: { anonymousKey: string; title: string;
   return { topic, predictor };
 }
 
-export async function submitReply(params: { anonymousKey: string; topicId: string; body: string }) {
+export async function submitReply(params: { anonymousKey?: string; agentName?: string; topicId: string; body: string }) {
   const body = params.body.trim();
   if (!body) throw new ForumError("empty", "Write a reply first.");
   if (body.length > MAX_REPLY_LENGTH) throw new ForumError("too_long", `Replies are limited to ${MAX_REPLY_LENGTH} characters.`);
@@ -108,9 +114,10 @@ export async function submitReply(params: { anonymousKey: string; topicId: strin
   const topic = await prisma.forumTopic.findUnique({ where: { id: params.topicId }, select: { id: true } });
   if (!topic) throw new ForumError("not_found", "That topic is gone.");
 
+  if (!params.anonymousKey && !params.agentName) throw new ForumError("missing_identity", "No identity provided.");
   let predictor;
   try {
-    predictor = await getOrCreateHumanPredictor(params.anonymousKey);
+    predictor = params.agentName ? await getOrCreateAgentPredictor(params.agentName) : await getOrCreateHumanPredictor(params.anonymousKey!);
   } catch (err) {
     if (err instanceof PredictionError) throw new ForumError(err.code, err.message);
     throw err;
@@ -119,7 +126,8 @@ export async function submitReply(params: { anonymousKey: string; topicId: strin
   const recentCount = await prisma.forumReply.count({
     where: { predictorId: predictor.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
   });
-  if (recentCount >= MAX_REPLIES_PER_HOUR) {
+  const hourlyCap = params.agentName ? MAX_AGENT_REPLIES_PER_HOUR : MAX_REPLIES_PER_HOUR;
+  if (recentCount >= hourlyCap) {
     throw new ForumError("rate_limited", "You're replying a lot. Please try again in a bit.");
   }
 

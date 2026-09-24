@@ -64,6 +64,24 @@ export async function getOrCreateHumanPredictor(anonymousKey: string) {
   return prisma.predictor.create({ data: { anonymousKey, displayName } });
 }
 
+const MAX_AGENT_NAME = 60;
+
+// The MCP-server counterpart to getOrCreateHumanPredictor — an agent's
+// self-reported name (already collected by submit_feedback) becomes its own
+// stable identity, one row per distinct name, reused across calls the same
+// way a browser's anonymous key is. Unlike a human predictor, this is never
+// held: isHeld()/flagsOf() (community.ts) already treat any row with
+// agentName set as a public, always-labeled-as-agent post — there's no
+// "decide how to appear" step for a machine caller, and no guest/confirmed
+// distinction either.
+export async function getOrCreateAgentPredictor(rawAgentName: string) {
+  const agentName = rawAgentName.trim().slice(0, MAX_AGENT_NAME);
+  if (!agentName) throw new PredictionError("missing_agent_name", "Provide your agent/model name.");
+  const existing = await prisma.predictor.findUnique({ where: { agentName } });
+  if (existing) return existing;
+  return prisma.predictor.create({ data: { agentName, identityDecidedAt: new Date() } });
+}
+
 const RESERVED_NAME = /^(anon|anonymous|guest|admin|administrator|moderator|mod|staff|official|support|system|waitingforpower)\b/i;
 // Looks like an auto-assigned handle (CopperFalcon48); those can't be chosen.
 const HANDLE_SHAPE = /^[A-Z][a-z]+[A-Z][a-z]+\d{2,3}$/;

@@ -5,7 +5,7 @@
 // prediction game on the same identity; that feature is gone, the name
 // stuck.)
 import { prisma } from "@/lib/db";
-import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
+import { getOrCreateHumanPredictor, getOrCreateAgentPredictor, PredictionError } from "@/lib/predictions";
 import { ADVOCACY_TYPES, HEARING_LOOKBACK_DAYS, STANCES, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
 
 export interface IdentityStatus {
@@ -38,6 +38,11 @@ export async function getIdentityStatus(anonymousKey: string): Promise<IdentityS
 
 export const MAX_COMMENT_LENGTH = 1000;
 const MAX_COMMENTS_PER_HOUR = 10;
+// Agents get a much tighter per-identity cap than humans — this is on top
+// of, not instead of, the IP-based limit at the MCP route layer (see
+// src/app/mcp/route.ts) that stops a script from dodging this exact cap by
+// minting a fresh agentName on every call.
+const MAX_AGENT_COMMENTS_PER_HOUR = 3;
 const MAX_LIKES_PER_HOUR = 60;
 const MAX_LINKS_PER_COMMENT = 2;
 const MAX_THREAD_ROWS = 500;
@@ -130,7 +135,12 @@ export function flagsOf(p: { agentName: string | null; email: string | null }): 
 
 export async function submitComment(params: {
   projectId: string;
-  anonymousKey: string;
+  // Exactly one of these two identifies the poster — anonymousKey for a
+  // human (browser), agentName for an MCP-connected agent (see
+  // getOrCreateAgentPredictor; always public, always isAgent-labeled, no
+  // held/guest/confirmed distinction).
+  anonymousKey?: string;
+  agentName?: string;
   body: string;
   parentCommentId?: string;
   advocacyType?: AdvocacyType;
@@ -192,9 +202,12 @@ export async function submitComment(params: {
     parentId = parent.parentId ?? parent.id;
   }
 
+  if (!params.anonymousKey && !params.agentName) {
+    throw new CommentError("missing_identity", "No identity provided.");
+  }
   let predictor;
   try {
-    predictor = await getOrCreateHumanPredictor(params.anonymousKey);
+    predictor = params.agentName ? await getOrCreateAgentPredictor(params.agentName) : await getOrCreateHumanPredictor(params.anonymousKey!);
   } catch (err) {
     if (err instanceof PredictionError) throw new CommentError(err.code, err.message);
     throw err;
@@ -204,7 +217,8 @@ export async function submitComment(params: {
     where: { predictorId: predictor.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
     select: { body: true, projectId: true, advocacyType: true },
   });
-  if (recent.length >= MAX_COMMENTS_PER_HOUR) {
+  const hourlyCap = params.agentName ? MAX_AGENT_COMMENTS_PER_HOUR : MAX_COMMENTS_PER_HOUR;
+  if (recent.length >= hourlyCap) {
     throw new CommentError("rate_limited", "You're commenting a lot. Please try again in a bit.");
   }
   // Same project, same kind of entry (or same free text for a legacy plain

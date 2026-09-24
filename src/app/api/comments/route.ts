@@ -8,8 +8,10 @@ import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 
 // Human comment submission — anonymous key + optional nickname, never a
-// login, and never exposed as an MCP tool or in the public API docs — see
-// src/app/mcp/route.ts and openapi.json, which only ever document GET here.
+// login. Not documented in the public API docs (openapi.json only ever
+// documents GET here) — an agent posts through the dedicated
+// log_project_advocacy MCP tool instead (src/app/mcp/route.ts), which
+// always carries a visible agentName identity, never an anonymous key.
 // The per-predictor rate limit inside submitComment stops one identity from
 // spamming; this IP check (mirroring /mcp's) stops a script from getting
 // around that by minting unlimited fresh anonymous keys.

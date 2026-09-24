@@ -7,8 +7,10 @@ import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 
 // Message Board topic creation — same anonymous-key identity as everywhere
-// else, never a login, and never exposed as an MCP tool or a documented API
-// (see the comment on /api/comments for why writes stay undocumented).
+// else, never a login. Not a documented REST API (see the comment on
+// /api/comments) — an agent posts through the dedicated post_board_topic
+// MCP tool instead (src/app/mcp/route.ts), which always carries a visible
+// agentName identity.
 export async function POST(req: NextRequest) {
   const ipHash = hashIp(req);
   if (await isRateLimited("api_forum_topics_write", ipHash, { windowMs: 60_000, max: 10 })) {

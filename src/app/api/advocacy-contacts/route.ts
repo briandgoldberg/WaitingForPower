@@ -9,9 +9,11 @@ export const dynamic = "force-dynamic";
 
 // Logging a contact with a state regulator or a member of Congress — see
 // src/lib/advocacyContacts.ts. Same anonymous-key identity as comments,
-// never a login, and never exposed as an MCP tool or a documented API — see
-// the comment on /api/comments for why this also has an IP-based limit on
-// top of the per-predictor one inside submitAdvocacyContact.
+// never a login, and not a documented REST API — an agent posts through the
+// dedicated report_advocacy_contact MCP tool instead (src/app/mcp/route.ts),
+// which always carries a visible agentName identity. See the comment on
+// /api/comments for why this also has an IP-based limit on top of the
+// per-predictor one inside submitAdvocacyContact.
 export async function POST(req: NextRequest) {
   const ipHash = hashIp(req);
   if (await isRateLimited("api_advocacy_contacts", ipHash, { windowMs: 60_000, max: 10 })) {

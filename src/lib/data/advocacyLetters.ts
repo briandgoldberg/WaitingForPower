@@ -110,9 +110,8 @@ const CAUSE_PARAGRAPHS: Partial<Record<CauseSlug, Partial<Record<Orientation, st
 // ask, since the paragraphs just above already named each of them.
 function closingAsk(causeSlugs: CauseSlug[]): string {
   const titles = POLICIES.filter((p) => causeSlugs.includes(p.slug)).map((p) => p.title);
-  if (titles.length === 1) return `I would ask you to support ${titles[0]}.`;
-  if (titles.length === 0) return "I would ask you to support bipartisan permitting reform.";
-  return "I would ask you to support bipartisan permitting reform on each of these.";
+  if (titles.length === 1) return `I ask you to please support ${titles[0]}!`;
+  return "I ask you to please support bipartisan permit reform!";
 }
 
 export interface LetterInput {

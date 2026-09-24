@@ -49,7 +49,12 @@ export function ReplyForm({ topicId }: { topicId: string }) {
         return;
       }
       setBody("");
+      // Refresh in case this reply is already public (not a first-ever
+      // post), and re-check identity — a first-ever post needs to flip this
+      // form into the IdentityDecision gate below so it doesn't just stay
+      // silently held.
       router.refresh();
+      loadIdentity(key);
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {
@@ -58,7 +63,16 @@ export function ReplyForm({ topicId }: { topicId: string }) {
   }
 
   if (me && !me.decided && key) {
-    return <IdentityDecision anonymousKey={key} label={me.label} onDecided={() => loadIdentity(key)} />;
+    return (
+      <IdentityDecision
+        anonymousKey={key}
+        label={me.label}
+        onDecided={() => {
+          loadIdentity(key);
+          router.refresh();
+        }}
+      />
+    );
   }
 
   return (

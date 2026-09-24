@@ -158,14 +158,16 @@ export async function getForumTopic(id: string): Promise<ForumTopicDetail | null
     where: { id },
     include: {
       predictor: predictorSelect,
-      replies: { include: { predictor: predictorSelect }, orderBy: { createdAt: "asc" } },
+      // Same rule as a project's "I Advocated" log (community.ts,
+      // getProjectDiscussion): a held post is invisible to everyone,
+      // including its own author, until the poster decides how to appear —
+      // filtered out here entirely rather than included with a flag.
+      replies: { where: { predictor: publicPoster }, include: { predictor: predictorSelect }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!t) return null;
-  // A held topic (author hasn't decided how to appear) is invisible to
-  // everyone but its own author — same rule as a project's "I Advocated"
-  // log. The API layer doesn't currently distinguish "held from me" vs
-  // "held from someone else", so it's simply not shown at all here.
+  // A held topic is invisible the same way — nobody sees it, author
+  // included, until they decide.
   if (isHeld(t.predictor)) return null;
 
   return {

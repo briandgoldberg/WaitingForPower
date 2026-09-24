@@ -9,7 +9,12 @@ import { IdentityDecision } from "@/components/IdentityDecision";
 import { SaveProfilePrompt } from "@/components/SaveProfilePrompt";
 import { ChooseName } from "@/components/ChooseName";
 import type { IdentityStatus } from "@/lib/community";
-import { MAX_TITLE_LENGTH, MAX_BODY_LENGTH } from "@/lib/forum";
+
+// Mirrors src/lib/forum.ts's MAX_TITLE_LENGTH/MAX_BODY_LENGTH — kept as
+// plain constants here rather than imported, since forum.ts pulls in the
+// Prisma client (server-only) and this is a client component.
+const MAX_TITLE_LENGTH = 140;
+const MAX_BODY_LENGTH = 2000;
 
 // Starts a new Message Board topic — same guest-or-confirm-email identity
 // gate as every other posting surface on the site (IdentityDecision), tagged
@@ -27,6 +32,10 @@ export function NewTopicForm() {
   const [issues, setIssues] = useState<Set<string>>(new Set());
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A first-ever post is held until identity is decided (see IdentityDecision
+  // below) — remember where to go once that happens, rather than navigating
+  // straight to a topic that would 404 while still held.
+  const [pendingTopicId, setPendingTopicId] = useState<string | null>(null);
 
   function loadIdentity(k: string) {
     fetch(`/api/identity?anonymousKey=${encodeURIComponent(k)}`)
@@ -76,9 +85,15 @@ export function NewTopicForm() {
         return;
       }
       reset();
-      setOpen(false);
-      router.push(`/board/${result.id}`);
-      router.refresh();
+      if (result.identityDecided) {
+        setOpen(false);
+        router.push(`/board/${result.id}`);
+      } else {
+        // Not visible yet — stay put and let the identity gate take over;
+        // its onDecided handler below navigates once it's actually public.
+        setPendingTopicId(result.id);
+        loadIdentity(key);
+      }
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {
@@ -88,7 +103,19 @@ export function NewTopicForm() {
 
   // A first-time poster's topic is held until they decide how to appear.
   if (me && !me.decided && key) {
-    return <IdentityDecision anonymousKey={key} label={me.label} onDecided={() => loadIdentity(key)} />;
+    return (
+      <IdentityDecision
+        anonymousKey={key}
+        label={me.label}
+        onDecided={() => {
+          if (pendingTopicId) {
+            router.push(`/board/${pendingTopicId}`);
+          } else {
+            loadIdentity(key);
+          }
+        }}
+      />
+    );
   }
 
   if (!open) {

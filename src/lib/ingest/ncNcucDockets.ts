@@ -8,11 +8,12 @@
 // (see the STATUS/SCOPING gotchas) needed real correction, not just
 // confirmation.
 //
-// STATUS: the Orders portal's Cloudflare wall (see ingest/README.md "2
-// states remain genuinely blocked") means every run currently errors, 0
-// upserted. Moved from daily to weekly (see vercel.json) rather than paused
-// outright, so this keeps checking whether the block ever lifts without
-// burning daily Fluid Active CPU on a guaranteed failure in the meantime.
+// STATUS: every starw1.ncuc.gov page (Dockets, Orders, docket details and
+// order PDFs) now serves Cloudflare's JS challenge, so the live search below
+// fails every run. When it does, ingestNcNcucDockets upserts the weekly
+// hand-researched list in handResearched.ts instead (see ingest/README.md
+// "Hand-researched states"). Kept on a weekly cron so it still notices if
+// the block ever lifts.
 //
 // FETCHING: starw1.ncuc.gov is a classic ASP.NET WebForms site behind
 // Cloudflare, with no public JSON API (unlike AZ). Two portal pages matter:
@@ -254,6 +255,7 @@
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
+import { ncHandResearchedProjects } from "@/lib/ingest/handResearched";
 import { upsertNormalizedProjects, selectWithRotation, type NormalizedProject } from "@/lib/ingest/common";
 
 const BASE_URL = "https://starw1.ncuc.gov";
@@ -809,11 +811,31 @@ export interface IngestSummary {
   upserted: number;
   removedResolved: number;
   errors: { matchKey: string; message: string }[];
+  // Set when the live portal couldn't be searched and the hand-researched
+  // list (see handResearched.ts) was upserted instead.
+  handResearchedFallback?: string;
 }
 
 export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promise<IngestSummary> {
   const session = new NcucSession();
-  const allCandidates = await searchCandidates(session);
+  let allCandidates: DocketCandidate[];
+  try {
+    allCandidates = await searchCandidates(session);
+  } catch (err) {
+    // See the module header STATUS: the portal is behind a Cloudflare
+    // challenge. Fall back to the weekly hand-researched list. It's a
+    // partial list by construction, so vanished-detection is skipped
+    // (wasCapped) rather than flagging every other NC project as gone.
+    const { upserted, removedResolved, errors } = await upsertNormalizedProjects(ncHandResearchedProjects(), { wasCapped: true });
+    return {
+      candidatesFound: 0,
+      processedCandidates: 0,
+      upserted,
+      removedResolved,
+      errors,
+      handResearchedFallback: `live docket search failed (${String(err).slice(0, 200)}); used the hand-researched list instead`,
+    };
+  }
   const candidates = selectWithRotation(allCandidates, maxCandidates, ROTATING_RECENT_SLOTS);
 
   const rotatingTier = new Set(candidates.slice(ROTATING_RECENT_SLOTS));

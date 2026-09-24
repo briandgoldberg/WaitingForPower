@@ -49,10 +49,10 @@ const ALERT_MESSAGES: Record<string, string> = {
 };
 
 type HomeFeed = "changes" | "advocating" | "leaders";
-const TABS: { value: HomeFeed; label: string; shortLabel: string }[] = [
-  { value: "changes", label: "Project changes", shortLabel: "Changes" },
-  { value: "advocating", label: "Advocacy activity", shortLabel: "Advocating" },
-  { value: "leaders", label: "Top advocates", shortLabel: "Leaders" },
+const TABS: { value: HomeFeed; label: string }[] = [
+  { value: "changes", label: "Project changes" },
+  { value: "advocating", label: "Advocacy activity" },
+  { value: "leaders", label: "Top advocates" },
 ];
 
 export default async function HomePage({
@@ -109,20 +109,19 @@ export default async function HomePage({
           </Link>
         </div>
 
-        <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)]" role="tablist">
+        <div className="flex justify-between sm:justify-start gap-2 sm:gap-6 border-b border-[var(--border)]" role="tablist">
           {TABS.map((tab) => (
             <Link
               key={tab.value}
               href={tab.value === "changes" ? "/" : `/?feed=${tab.value}`}
               role="tab"
               aria-selected={feed === tab.value}
-              className={`shrink-0 -mb-px px-0.5 pb-2.5 pt-1 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              className={`shrink-0 -mb-px px-0.5 pb-2.5 pt-1 max-[359px]:text-xs text-[13px] min-[400px]:text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 feed === tab.value ? "border-[var(--accent)]" : "border-transparent text-[var(--muted)] hover:text-[var(--text-secondary)]"
               }`}
               style={feed === tab.value ? { color: "var(--accent)" } : undefined}
             >
-              <span className="sm:hidden">{tab.shortLabel}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
+              {tab.label}
             </Link>
           ))}
         </div>

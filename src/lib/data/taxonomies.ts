@@ -64,12 +64,6 @@ export const ZERO_CARBON_FUELS: FuelType[] = [
   "geothermal",
 ];
 
-// Fossil-fuel technologies that burn or move fossil fuels directly. Used for
-// the "Biggest polluters (potentially)" filter on the advocacy page — a fuel-
-// type grouping, not an emissions estimate. ("pipeline" also covers CO2
-// capture pipelines, hence "potentially".)
-export const POTENTIAL_POLLUTER_FUELS: FuelType[] = ["gas", "lng", "pipeline"];
-
 export type ProjectStage =
   | "interconnection_study"
   | "environmental_review"

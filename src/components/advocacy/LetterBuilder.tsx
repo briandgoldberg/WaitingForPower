@@ -38,6 +38,7 @@ export function LetterBuilder() {
   const [orientation, setOrientation] = useState<Orientation>("moderate");
   const [letterText, setLetterText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const causeSlugs = useMemo(() => [...selected], [selected]);
 
@@ -76,16 +77,7 @@ export function LetterBuilder() {
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
-      <div>
-        <h3 className="text-lg font-bold tracking-tight">Write to your representative or senator</h3>
-        <p className="text-sm text-[var(--muted)] mt-0.5">
-          Pick your issues and how you lean to get a real letter, framed the way{" "}
-          <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
-            Citizens&rsquo; Climate Lobby
-          </a>{" "}
-          trains volunteers to write to Congress.
-        </p>
-      </div>
+      <h3 className="text-lg font-bold tracking-tight">Write to your representative or senator</h3>
 
       <div className="flex flex-col gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
@@ -158,35 +150,58 @@ export function LetterBuilder() {
 
       {ready && (
         <div className="flex flex-col gap-2.5">
-          <textarea
-            value={letterText}
-            onChange={(e) => setLetterText(e.target.value)}
-            rows={14}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm leading-relaxed font-sans resize-y"
-            aria-label="Your letter"
-          />
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              type="button"
-              onClick={copyLetter}
-              className="text-sm font-semibold px-4 py-2 rounded-full bg-accent hover:bg-accent/90 shadow-sm transition-colors whitespace-nowrap"
-              style={{ color: "white" }}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            className="flex items-center justify-between gap-2 text-sm font-semibold"
+          >
+            <span>Your letter</span>
+            <svg
+              viewBox="0 0 20 20"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+              aria-hidden="true"
             >
-              Copy letter
-            </button>
-            {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
-          </div>
-          <p className="text-xs text-[var(--muted)]">
-            Fill in the brackets, then paste this into their contact form or email.{" "}
-            <a
-              href="https://www.usa.gov/elected-officials"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[var(--accent)] underline font-medium"
-            >
-              Find your representative or senator →
-            </a>
-          </p>
+              <path d="M5 7l5 5 5-5" />
+            </svg>
+          </button>
+          {expanded && (
+            <>
+              <textarea
+                value={letterText}
+                onChange={(e) => setLetterText(e.target.value)}
+                rows={14}
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm leading-relaxed font-sans resize-y"
+                aria-label="Your letter"
+              />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={copyLetter}
+                  className="text-sm font-semibold px-4 py-2 rounded-full bg-accent hover:bg-accent/90 shadow-sm transition-colors whitespace-nowrap"
+                  style={{ color: "white" }}
+                >
+                  Copy letter
+                </button>
+                <a
+                  href="https://www.congress.gov/members/find-your-member"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-semibold px-4 py-2 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-center whitespace-nowrap"
+                >
+                  Find your representative →
+                </a>
+                {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

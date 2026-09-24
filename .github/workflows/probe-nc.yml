@@ -1,5 +1,4 @@
-# TEMPORARY: checks whether NCUC order documents and the NC Public Staff
-# renewable-builders page are reachable. Remove after the investigation.
+# TEMPORARY: dumps the ungated NCUC hearings page tables. Remove after the investigation.
 name: probe-nc
 on:
   push:
@@ -10,12 +9,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e
           UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
-          for u in "https://starw1.ncuc.gov/NCUC/ViewFile.aspx?Id=89f9d821-3734-49fb-847f-e161a0fb87bb" "https://starw1.ncuc.gov/ncuc/ViewFile.aspx?Id=7daa9759-6d80-4312-b65e-9cea980e2251" "https://publicstaff.nc.gov/public-staff-divisions/energy-division/electric-section/builders-and-owners-renewable-energy-facilities"; do
-            curl -sL -o f -D h -A "$UA" -H 'Accept-Language: en-US,en;q=0.9' --max-time 60 "$u"; echo "=== $u -> $(head -1 h) $(grep -i '^content-type' h) size=$(wc -c <f) $(grep -c 'Just a moment' f)"
-            file f
-            grep -o -i 'href="[^"]*\(xls\|csv\|pdf\|media\)[^"]*"' f | sort -u | head -40
-            sed -e 's/<[^>]*>/ /g' f | tr -s ' \n' | grep -i -m20 'certificate\|CPCN\|docket\|list\|spreadsheet'
-            sleep 3
-          done
+          curl -sL -o f -A "$UA" -H 'Accept-Language: en-US,en;q=0.9' --max-time 60 https://www.ncuc.gov/Hearings/hearings.html
+          wc -c f
+          python3 - <<'PY'
+          import re,html
+          s=open('f',encoding='utf-8',errors='replace').read()
+          s=re.sub(r'<!--.*?-->','',s,flags=re.S)
+          i=s.find('Select Proceedings with Hearings Scheduled')
+          s=s[i:]
+          s=re.sub(r'<(tr|br|p|li)[^>]*>','\n',s,flags=re.I)
+          s=re.sub(r'</td>',' | ',s,flags=re.I)
+          s=html.unescape(re.sub(r'<[^>]+>',' ',s))
+          s=re.sub(r'[ \t\r]+',' ',s)
+          s=re.sub(r'\n\s*\n+','\n',s)
+          print(s[:30000])
+          PY

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { AdvocacyProject } from "@/lib/advocacyProjects";
-import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, POTENTIAL_POLLUTER_FUELS, formatCapacity, type FuelType } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 import type { StateCommentRule } from "@/lib/data/stateCommentRules";
@@ -66,6 +66,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [bucket, setBucket] = useState(initialBucket);
+  const [pollutersOnly, setPollutersOnly] = useState(false);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -89,9 +90,10 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
     return rows.filter(({ p }) => {
       if (state && !splitStateCodes(p.state).includes(state)) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
+      if (pollutersOnly && !POTENTIAL_POLLUTER_FUELS.includes(p.fuelType as FuelType)) return false;
       return true;
     });
-  }, [rows, query, state]);
+  }, [rows, query, state, pollutersOnly]);
 
   const filtered = useMemo(() => {
     const list = inScope.filter((r) => matchesBucket(bucket, r.score));
@@ -131,6 +133,18 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-1.5 text-xs font-medium self-center cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={pollutersOnly}
+            onChange={(e) => {
+              setPollutersOnly(e.target.checked);
+              reset();
+            }}
+            className="accent-[var(--accent)]"
+          />
+          Biggest polluters (potentially)
+        </label>
         <span className="text-xs text-[var(--muted)] self-center">{filtered.length} projects</span>
       </div>
 

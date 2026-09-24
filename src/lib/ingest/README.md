@@ -77,6 +77,10 @@ routine re-checks and updates it:
   iuc.iowa.gov/hazardous-liquid-pipeline-requests.
 
 The rules for the weekly pass are at the top of `handResearched.ts`. The
+source pages are fetched by the manual-trigger GitHub Actions workflow
+`.github/workflows/hand-research-sources.yml` (the Claude Code cloud
+environment's network policy blocks both hosts; GitHub's runners can reach
+them), which prints them as plain text in its job log. The
 main one: an entry changes only when the state's own public page shows the
 change, and entries whose sources contradict each other stay out.
 

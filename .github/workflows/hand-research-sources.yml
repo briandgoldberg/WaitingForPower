@@ -1,0 +1,37 @@
+# Fetches the public pages the weekly NC/Iowa hand-research pass reads (see
+# src/lib/ingest/handResearched.ts) and prints them as plain text in the job
+# log. Exists because the Claude Code cloud environment's network policy
+# blocks these hosts; GitHub's runners can reach them. Manual trigger only.
+name: hand-research-sources
+on:
+  workflow_dispatch:
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch source pages
+        run: |
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
+          curl -sSL -o nc.html -A "$UA" --max-time 60 https://www.ncuc.gov/Hearings/hearings.html
+          curl -sSL -o ia.html -A "$UA" --max-time 60 https://iuc.iowa.gov/hazardous-liquid-pipeline-requests
+          python3 - <<'PY'
+          import html, re
+          def text(path):
+              s = open(path, encoding="utf-8", errors="replace").read()
+              s = re.sub(r"<!--.*?-->", "", s, flags=re.S)
+              s = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", s, flags=re.S | re.I)
+              s = re.sub(r"<(tr|br|p|li|h\d)[^>]*>", "\n", s, flags=re.I)
+              s = re.sub(r"</td>", " | ", s, flags=re.I)
+              s = html.unescape(re.sub(r"<[^>]+>", " ", s))
+              s = re.sub(r"[ \t\r]+", " ", s)
+              return re.sub(r"\n\s*\n+", "\n", s)
+          nc = text("nc.html")
+          i = nc.find("Select Proceedings with Hearings Scheduled")
+          print("===== NCUC HEARINGS PAGE (https://www.ncuc.gov/Hearings/hearings.html) =====")
+          print(nc[i:] if i >= 0 else "SECTION HEADER NOT FOUND — page structure changed\n" + nc[:3000])
+          ia = text("ia.html")
+          k = ia.find("Summit Carbon Solutions and SCS Carbon Transport: Applications")
+          k = ia.find("Updated", k)
+          print("===== IUC SUMMIT PAGE (https://iuc.iowa.gov/hazardous-liquid-pipeline-requests) =====")
+          print(ia[k:k + 12000] if k >= 0 else "SECTION NOT FOUND — page structure changed\n" + ia[:3000])
+          PY

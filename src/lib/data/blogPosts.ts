@@ -13,7 +13,7 @@ export const BLOG_POSTS: BlogPostMeta[] = [
     slug: "advocacy-platform-redesign",
     title: "We rebuilt WaitingForPower around advocacy, not just tracking",
     excerpt:
-      "Free-form comments are gone. In their place: a structured way to log that you actually submitted a comment, attended a hearing, or contacted an official, plus a public leaderboard.",
+      "Free-form comments are gone, replaced by a structured way to log real advocacy, a public leaderboard, and a new Board for open discussion.",
     publishedAt: "2026-09-23",
   },
   {

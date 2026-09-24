@@ -40,36 +40,36 @@ export function AdvocacyPlatformRedesign() {
     <div className="text-sm leading-relaxed flex flex-col gap-3">
       <RedesignBanner />
       <p>
-        The comment box on every project page is gone. It let anyone type anything, which meant it
-        mostly filled up with noise instead of a record of real advocacy. It&rsquo;s been replaced
-        with &ldquo;I Advocated&rdquo;: pick what you actually did &mdash; submitted a public comment,
-        found the comment period already closed, or attended a specific hearing &mdash; and say
-        whether you support approving or denying the project. Attending a hearing has to match one of
-        that project&rsquo;s own real hearing dates; you can&rsquo;t claim one that didn&rsquo;t happen.
+        The comment box on every project page is gone. It let anyone type anything, so it mostly
+        filled up with noise. It&rsquo;s been replaced with &ldquo;I Advocated&rdquo;: pick what you
+        actually did (submitted a public comment, found the comment period already closed, or
+        attended a specific hearing) and say whether you support approving or denying the project.
+        A hearing has to match one of that project&rsquo;s own real dates.
       </p>
       <p>
         Every logged action earns points, and{" "}
         <Link href="/?feed=leaders" className="underline text-[var(--accent)]">
           a public leaderboard
         </Link>{" "}
-        now tracks who&rsquo;s advocated the most. The home page has a new{" "}
+        tracks who&rsquo;s advocated the most. The home page has a new{" "}
         <Link href="/?feed=advocating" className="underline text-[var(--accent)]">
           Advocacy activity
         </Link>{" "}
-        feed showing every action site-wide, right next to the existing project-changes feed.
+        feed showing every action site-wide.
       </p>
       <p>
-        There&rsquo;s also a new way to log advocacy that isn&rsquo;t tied to a project at all: hit{" "}
+        There&rsquo;s also{" "}
         <Link href="/policies" className="underline text-[var(--accent)]">
           &ldquo;I Reached Out!&rdquo;
         </Link>{" "}
-        on the Advocacy page after contacting your state energy regulator or a member of Congress,
-        and say which permitting reform issue you raised. It feeds the same leaderboard.
+        for logging a contact with your state energy regulator or a member of Congress, and a new{" "}
+        <Link href="/board" className="underline text-[var(--accent)]">
+          Board
+        </Link>{" "}
+        for open discussion, tagged by which reform issue it touches. The Board is conversation, not
+        a verified action, so it doesn&rsquo;t earn points.
       </p>
-      <p>
-        None of this is postable through the API or MCP server &mdash; it stays a real record of
-        people actually doing something, not something a script can pad out.
-      </p>
+      <p>None of this is postable through the API or MCP server. It stays a real record of people actually doing something.</p>
     </div>
   );
 }

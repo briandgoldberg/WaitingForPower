@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { ReachOutButton } from "@/components/ReachOutButton";
 import { SiteNav } from "@/components/SiteNav";
+import { Analytics } from "@vercel/analytics/next";
+import { AttributionTracker } from "@/components/AttributionTracker";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -67,6 +69,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="flex-1 flex flex-col">{children}</main>
         <FeedbackWidget />
+        <Analytics />
+        <AttributionTracker />
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <p>

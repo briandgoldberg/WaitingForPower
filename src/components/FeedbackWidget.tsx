@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { trackAttributedAction } from "@/lib/attribution";
 
 const STORAGE_KEY = "wfp_feedback_auto_shown";
 const SHOW_AFTER_MS = 8000;
@@ -74,6 +75,7 @@ export function FeedbackWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ feedbackText: text, contactEmail: email, path: window.location.pathname }),
       });
+      trackAttributedAction("Feedback sent");
     } catch {
       // Best-effort — a visitor shouldn't see an error for an optional,
       // already-dismissible widget.

@@ -9,6 +9,7 @@ import { IdentityDecision } from "@/components/IdentityDecision";
 import { SaveProfilePrompt } from "@/components/SaveProfilePrompt";
 import { ChooseName } from "@/components/ChooseName";
 import type { IdentityStatus } from "@/lib/community";
+import { trackAttributedAction } from "@/lib/attribution";
 
 // Mirrors src/lib/forum.ts's MAX_TITLE_LENGTH/MAX_BODY_LENGTH — kept as
 // plain constants here rather than imported, since forum.ts pulls in the
@@ -84,6 +85,7 @@ export function NewTopicForm() {
         setError(result.error ?? "Something went wrong.");
         return;
       }
+      trackAttributedAction("Board post");
       reset();
       if (result.identityDecided) {
         setOpen(false);

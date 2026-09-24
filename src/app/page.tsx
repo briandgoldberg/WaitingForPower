@@ -95,7 +95,7 @@ export default async function HomePage({
           <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
             America&rsquo;s energy projects are stuck waiting on permits, some for years. Every year of delay means
             higher bills, more climate pollution, and a country that can&rsquo;t build fast enough. We track every
-            project and help you push the stuck ones forward.
+            project and advocate for faster permitting decisions.
           </h1>
           <Link
             href="/policies"

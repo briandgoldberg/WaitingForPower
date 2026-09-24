@@ -15,7 +15,16 @@
 // and the bills down.
 
 import type { CauseSlug } from "./causeCategories";
+import { CAUSE_CATEGORY_BY_SLUG } from "./causeCategories";
 import { POLICIES } from "./policies";
+
+// Most House and Senate contact forms cap a message well under 2,000
+// characters, and that cap doesn't grow just because someone picked more
+// issues. Up to three issues each get their own full paragraph (see below);
+// past that, only the first gets full treatment and the rest are named
+// together in one short paragraph instead of stacking on more full ones —
+// keeps the letter roughly the same length no matter how many are picked.
+const FULL_PARAGRAPH_LIMIT = 3;
 
 export type Orientation = "liberal" | "moderate" | "conservative";
 
@@ -104,6 +113,29 @@ const CAUSE_PARAGRAPHS: Partial<Record<CauseSlug, Partial<Record<Orientation, st
   },
 };
 
+// One combined sentence for "everything past the first issue" when more
+// than FULL_PARAGRAPH_LIMIT are picked — takes the joined list of short
+// issue names, e.g. "NEPA, Multi-agency, and Litigation".
+const CONSOLIDATED_PARAGRAPH: Record<Orientation, (list: string) => string> = {
+  liberal: (list) =>
+    `${list} hold up clean energy the same way: no real deadline forcing a decision. Fixing each would mean more good projects actually getting built, without weakening environmental review.`,
+  moderate: (list) =>
+    `${list} share the same underlying problem: no real deadline forcing a decision, which drives up cost and delay for everyone.`,
+  conservative: (list) =>
+    `${list} all suffer from the same problem: government taking too long with nobody accountable for the delay.`,
+};
+
+function shortLabel(slug: CauseSlug): string {
+  const policy = POLICIES.find((p) => p.slug === slug);
+  return policy?.badgeLabel ?? CAUSE_CATEGORY_BY_SLUG[slug]?.shortLabel ?? slug;
+}
+
+function joinWithAnd(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
 // A direct, self-contained ask to end on, instead of the closing paragraph
 // trailing off with "support the following" and nothing actually following
 // it. One issue gets named directly; more than one gets a single combined
@@ -126,20 +158,21 @@ export function buildLetter({ causeSlugs, orientation }: LetterInput): string {
   const framing = FRAMING[orientation];
   const orderedSlugs = POLICIES.map((p) => p.slug).filter((slug) => causeSlugs.includes(slug));
 
-  const issueParagraphs = orderedSlugs
-    .map((slug) => CAUSE_PARAGRAPHS[slug]?.[orientation])
-    .filter((p): p is string => Boolean(p));
+  let issueParagraphs: string[];
+  if (orderedSlugs.length <= FULL_PARAGRAPH_LIMIT) {
+    issueParagraphs = orderedSlugs
+      .map((slug) => CAUSE_PARAGRAPHS[slug]?.[orientation])
+      .filter((p): p is string => Boolean(p));
+  } else {
+    const [first, ...rest] = orderedSlugs;
+    const firstParagraph = CAUSE_PARAGRAPHS[first]?.[orientation];
+    const restList = joinWithAnd(rest.map(shortLabel));
+    const consolidated = CONSOLIDATED_PARAGRAPH[orientation](restList);
+    issueParagraphs = [firstParagraph, consolidated].filter((p): p is string => Boolean(p));
+  }
 
   const closing = `${framing.closing} ${closingAsk(causeSlugs)}`;
   const body = [framing.intro, ...issueParagraphs, closing].join("\n\n");
 
-  return [
-    "Dear [Representative or Senator's name],",
-    "",
-    body,
-    "",
-    "Sincerely,",
-    "[Your name]",
-    "[Your city, state]",
-  ].join("\n");
+  return ["Dear [Representative or Senator's name],", "", body].join("\n");
 }

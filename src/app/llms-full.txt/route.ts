@@ -73,13 +73,29 @@ sources only), ownerSector, netSummerCapacityMw/netWinterCapacityMw,
 primeMoverCode (EIA-860M only), dataQualityNote (a stated caveat when one
 applies, rather than presented as unqualified fact).
 
-## Comments
+## Advocacy log
 
-People can comment on a pending project. Everything is public: GET
-/api/community is the site-wide feed of comments (limit, offset), and GET
-/api/comments?slug=<project slug> is one project's thread. Each project page
-also has an "Advocate" section with its official docket, the state
-regulator's website and contact page, and hearing and comment dates.
+No free-text comments — people log real advocacy actions instead, through a
+no-signup form identified by an anonymous browser key or a confirmed email
+(never a login). On a project page, "I Advocated" records one of: submitted
+a public comment, found the comment period closed, or attended a specific
+hearing (validated against that project's own real ProjectHearing rows,
+only within 45 days after it happened, never in advance) — each paired with
+a stated stance, support approval or support denial. Separately, "I Reached
+Out!" (on /policies) records a contact with a state energy regulator or a
+member of Congress, with which of the six national reform issues were
+raised. Both count toward a points-based leaderboard shown at
+https://waitingforpower.com/?feed=leaders.
+
+Everything is public: GET /api/comments?slug=<project slug> returns one
+project's whole log (each entry with advocacyType, stance, an optional
+hearingDate, and a stanceTally of approve/deny across the project). GET
+/api/community returns the project-only site-wide feed (limit, offset). GET
+/api/advocacy-feed returns the fuller merged feed, project entries and
+official-contact entries together — the same data behind the home page's
+"Advocacy activity" tab. Each project page also has an "Advocate" section
+with its official docket, the state regulator's website and contact page,
+and hearing and comment dates.
 
 ## Reproducibility
 

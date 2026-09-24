@@ -20,13 +20,20 @@
   `submit_feedback` (report bugs, confusing data, or a missing capability — read directly
   by a human, not published anywhere).
 
-## Comments
+## Advocacy log
 
-- People can comment on a pending project through a no-signup form on each project page.
-  Read them with `GET /api/community` (the site-wide feed) and
-  `GET /api/comments?slug=<project slug>` (one project's thread). Each project page also
-  has an "Advocate" section: the official docket, the state regulator's website and
-  contact page, and hearing and comment dates.
+- No free-text comments — people log real advocacy actions instead, through a no-signup
+  form. On a project page, "I Advocated" records submitting a public comment, finding the
+  comment period closed, or attending a specific recent hearing (validated against that
+  project's own real hearing dates), each paired with a stated position (support approval
+  or support denial). A separate "I Reached Out!" log (on /policies) records contacting a
+  state energy regulator or a member of Congress. Both earn points toward a public
+  leaderboard at `https://waitingforpower.com/?feed=leaders`. Read a project's log with
+  `GET /api/comments?slug=<project slug>` (includes a stanceTally), the project-only
+  site-wide feed with `GET /api/community`, or everything merged (including official
+  contacts) with `GET /api/advocacy-feed`. Each project page also has an "Advocate"
+  section: the official docket, the state regulator's website and contact page, and
+  hearing and comment dates.
 
 ## API
 
@@ -59,12 +66,14 @@
   captures of the entire dataset (every status, not just still-waiting); fetch one in full at
   `/api/snapshots/{id}` (e.g. `/api/snapshots/2026-09-01`). Use this to cite an exact past state
   rather than today's live (changing) numbers.
+- [GET /api/advocacy-feed](https://waitingforpower.com/api/advocacy-feed): every logged
+  advocacy action site-wide, newest first — see "Advocacy log" above. Optional `limit`, `offset`.
 - [OpenAPI spec](https://waitingforpower.com/openapi.json): machine-readable schema for the
   endpoints above.
 
 ## Advocacy
 
-- [Advocacy](https://waitingforpower.com/policies) — three tabs: Project Advocacy (every open project, filterable by how likely it is to be accepting public comments, with a docket link, hearing dates, and a state regulator contact for each), State Advocacy (every state's regulator and its public-comment rules), and National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus links to contact your House member and senators).
+- [Advocacy](https://waitingforpower.com/policies) — four tabs: National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus a letter builder that assembles a ready-to-send letter to Congress by issue and political leaning), Project Advocacy (every open project, filterable by how likely it is to be accepting public comments, with a docket link, hearing dates, and a state regulator contact for each), State Advocacy (every state's regulator and its public-comment rules), and "I Reached Out!" (logs a real contact with a state regulator or a member of Congress — see "Advocacy log" above).
 - [Public Hearings RSS feed](https://waitingforpower.com/hearings.rss): the same upcoming-hearings data as an RSS 2.0 feed, one item per hearing, refreshed on every request. Usable directly by feed readers, Zapier's "New Item in Feed" trigger, or IFTTT's RSS applet.
 
 ## Docs

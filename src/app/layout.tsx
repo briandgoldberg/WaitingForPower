@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 // the link.
 const TITLE = "WaitingForPower — Energy Project Tracker";
 const DESCRIPTION =
-  "Tracking proposed U.S. energy projects — generation, transmission, storage, LNG, and pipelines, every fuel type — and how long each has been waiting for approval, and why.";
+  "Tracking proposed U.S. energy projects — generation, transmission, storage, LNG, and pipelines, every fuel type — how long each has been waiting for approval, why, and how to advocate for a faster decision.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://waitingforpower.com"),

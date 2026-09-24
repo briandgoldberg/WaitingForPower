@@ -122,14 +122,16 @@ const spec = {
     },
     "/api/community": {
       get: {
-        summary: "Feed of public comments from people, newest first",
+        summary: "Feed of public project advocacy entries, newest first",
+        description:
+          "Each item is a structured advocacy action logged on a project page (submitted a public comment, found the comment period closed, or attended a hearing), not free text — see advocacyType and stance. Does not include the site-wide official-contact entries (state regulator / Congress); use /api/advocacy-feed for the merged feed.",
         parameters: [
           { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
           { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
         ],
         responses: {
           "200": {
-            description: "Each item is a comment, with the project's slug and name.",
+            description: "Each item is one logged advocacy action, with the project's slug and name.",
             content: {
               "application/json": {
                 schema: {
@@ -143,7 +145,13 @@ const spec = {
                           id: { type: "string" },
                           label: { type: "string" },
                           isAgent: { type: "boolean" },
-                          body: { type: ["string", "null"] },
+                          advocacyType: {
+                            type: ["string", "null"],
+                            enum: ["submitted_comment", "period_closed", "attended_hearing", null],
+                          },
+                          stance: { type: ["string", "null"], enum: ["approve", "deny", null] },
+                          hearingDate: { type: ["string", "null"] },
+                          body: { type: ["string", "null"], description: "Optional note the person added." },
                           createdAt: { type: "string" },
                           projectSlug: { type: "string" },
                           projectName: { type: "string" },
@@ -161,17 +169,47 @@ const spec = {
     },
     "/api/comments": {
       get: {
-        summary: "Comments on one project, newest first",
+        summary: "One project's advocacy log, newest first",
+        description:
+          "A project page's \"I Advocated\" log — not a comment thread. Each entry is one of the three structured actions above, with likeCount. People appear under auto-assigned anonymous handles unless they confirmed an email and chose a name.",
         parameters: [
           { name: "slug", in: "query", description: "Project slug (or use projectId).", schema: { type: "string" } },
           { name: "projectId", in: "query", description: "Project id (or use slug).", schema: { type: "string" } },
         ],
         responses: {
           "200": {
-            description: "The project's whole comment thread, newest first, each with likeCount and replies. People appear under auto-assigned anonymous handles unless they confirmed an email and chose a name.",
-            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } } } } } },
+            description:
+              "items: the log entries, each with advocacyType, stance, an optional hearingDate, and likeCount. stanceTally: { approve, deny } counts across every entry on this project.",
+            content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { type: "object" } }, stanceTally: { type: "object" } } } } },
           },
           "404": { description: "No such project." },
+        },
+      },
+    },
+    "/api/advocacy-feed": {
+      get: {
+        summary: "Site-wide feed of every advocacy action, newest first",
+        description:
+          "Merges a project's \"I Advocated\" log entries with site-wide \"I Reached Out!\" official-contact entries (state regulator or a member of Congress) into one feed — the data behind the home page's \"Advocacy activity\" tab. Each item's `kind` is \"project\" or \"contact\".",
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
+          { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: {
+          "200": {
+            description: "Each item has a kind ('project' or 'contact'), the poster's label, points earned, and kind-specific fields (advocacyType/hearingDate/projectSlug for project entries; targetType/state/targetName/issues for contact entries).",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    items: { type: "array", items: { type: "object", properties: { kind: { type: "string", enum: ["project", "contact"] } } } },
+                    hasMore: { type: "boolean" },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },

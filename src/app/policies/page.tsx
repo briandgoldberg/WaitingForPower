@@ -31,7 +31,7 @@ export default async function PoliciesPage({
 }) {
   const { tab, comments } = await searchParams;
   // The old Public Hearings tab was folded into Projects.
-  const defaultTab = TABS.find((t) => t === tab) ?? "project";
+  const defaultTab = TABS.find((t) => t === tab) ?? "national";
   const initialBucket = comments ? (COMMENT_BUCKETS[comments] ?? 0) : 0;
   const advocacyProjects = await getAdvocacyProjects();
 

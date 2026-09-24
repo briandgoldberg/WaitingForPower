@@ -23,6 +23,10 @@ export function AdvocacyTabs({
           the Projects tab has its own pill filter below, and stacking two
           pill controls read as one confusing double slider. */}
       <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)]" role="tablist">
+        <TabButton active={tab === "national"} onClick={() => setTab("national")}>
+          <span className="sm:hidden">National</span>
+          <span className="hidden sm:inline">National Advocacy</span>
+        </TabButton>
         <TabButton active={tab === "project"} onClick={() => setTab("project")}>
           <span className="sm:hidden">Projects</span>
           <span className="hidden sm:inline">Project Advocacy</span>
@@ -31,15 +35,11 @@ export function AdvocacyTabs({
           <span className="sm:hidden">States</span>
           <span className="hidden sm:inline">State Advocacy</span>
         </TabButton>
-        <TabButton active={tab === "national"} onClick={() => setTab("national")}>
-          <span className="sm:hidden">National</span>
-          <span className="hidden sm:inline">National Advocacy</span>
-        </TabButton>
       </div>
 
+      <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
       <div hidden={tab !== "project"}>{projectAdvocacy}</div>
       <div hidden={tab !== "state"}>{stateAdvocacy}</div>
-      <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
     </div>
   );
 }

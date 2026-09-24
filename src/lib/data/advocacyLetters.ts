@@ -35,19 +35,19 @@ const FRAMING: Record<Orientation, Framing> = {
     intro:
       "I am writing as a constituent who wants America to move past fossil fuels quickly and responsibly. Clean energy is ready to build today. Too often the holdup is not the technology or the money. It is a permitting system that leaves good projects waiting years for a real answer.",
     closing:
-      "None of this requires weakening environmental protection. It means real deadlines, coordinated reviews, and an early seat at the table for communities instead of only a lawsuit at the end. I would ask you to support the following.",
+      "None of this requires weakening environmental protection. It means real deadlines, coordinated reviews, and an early seat at the table for communities instead of only a lawsuit at the end.",
   },
   moderate: {
     intro:
       "I am writing as a constituent about a problem that should not be partisan. Energy projects of every kind sit stuck in permitting for years longer than the construction itself takes. That delay eventually shows up as a higher electric bill and a less reliable grid back home.",
     closing:
-      "This is one of the few issues left where people who disagree about almost everything else can still agree on the fix. Keep the same standards, just put the process on a real clock. I would ask you to support the following.",
+      "This is one of the few issues left where people who disagree about almost everything else can still agree on the fix. Keep the same standards, just put the process on a real clock.",
   },
   conservative: {
     intro:
       "I am writing as a constituent concerned about how much red tape stands between good projects and the energy this country needs. The holdup is rarely the engineering or the private money ready to build. It is a permitting process with no deadline and no accountability.",
     closing:
-      "This is not about cutting corners. It is about making government finally do its job on a reasonable timeline, the way any business is expected to. I would ask you to support the following.",
+      "This is not about cutting corners. It is about making government finally do its job on a reasonable timeline, the way any business is expected to.",
   },
 };
 
@@ -104,6 +104,17 @@ const CAUSE_PARAGRAPHS: Partial<Record<CauseSlug, Partial<Record<Orientation, st
   },
 };
 
+// A direct, self-contained ask to end on, instead of the closing paragraph
+// trailing off with "support the following" and nothing actually following
+// it. One issue gets named directly; more than one gets a single combined
+// ask, since the paragraphs just above already named each of them.
+function closingAsk(causeSlugs: CauseSlug[]): string {
+  const titles = POLICIES.filter((p) => causeSlugs.includes(p.slug)).map((p) => p.title);
+  if (titles.length === 1) return `I would ask you to support ${titles[0]}.`;
+  if (titles.length === 0) return "I would ask you to support bipartisan permitting reform.";
+  return "I would ask you to support bipartisan permitting reform on each of these.";
+}
+
 export interface LetterInput {
   causeSlugs: CauseSlug[];
   orientation: Orientation;
@@ -120,7 +131,8 @@ export function buildLetter({ causeSlugs, orientation }: LetterInput): string {
     .map((slug) => CAUSE_PARAGRAPHS[slug]?.[orientation])
     .filter((p): p is string => Boolean(p));
 
-  const body = [framing.intro, ...issueParagraphs, framing.closing].join("\n\n");
+  const closing = `${framing.closing} ${closingAsk(causeSlugs)}`;
+  const body = [framing.intro, ...issueParagraphs, closing].join("\n\n");
 
   return [
     "Dear [Representative or Senator's name],",
@@ -131,11 +143,4 @@ export function buildLetter({ causeSlugs, orientation }: LetterInput): string {
     "[Your name]",
     "[Your city, state]",
   ].join("\n");
-}
-
-export function letterSubject(causeSlugs: CauseSlug[]): string {
-  const titles = POLICIES.filter((p) => causeSlugs.includes(p.slug)).map((p) => p.title);
-  if (titles.length === 0) return "Support faster energy permitting";
-  if (titles.length <= 2) return `Please support: ${titles.join(" and ")}`;
-  return "Please support faster energy permitting";
 }

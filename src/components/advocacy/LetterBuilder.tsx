@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
-import { ORIENTATION_OPTIONS, buildLetter, letterSubject, type Orientation } from "@/lib/data/advocacyLetters";
+import { ORIENTATION_OPTIONS, buildLetter, type Orientation } from "@/lib/data/advocacyLetters";
 
 // A small on/off switch for "include this issue in my letter" — kept local
 // to this file since nothing else on the site needs a toggle yet.
@@ -73,9 +73,6 @@ export function LetterBuilder() {
   }
 
   const ready = causeSlugs.length > 0;
-  const mailtoHref = ready
-    ? `mailto:?subject=${encodeURIComponent(letterSubject(causeSlugs))}&body=${encodeURIComponent(letterText)}`
-    : undefined;
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
@@ -177,12 +174,6 @@ export function LetterBuilder() {
             >
               Copy letter
             </button>
-            <a
-              href={mailtoHref}
-              className="text-sm font-semibold px-4 py-2 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-center whitespace-nowrap"
-            >
-              Open in email
-            </a>
             {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
           </div>
           <p className="text-xs text-[var(--muted)]">

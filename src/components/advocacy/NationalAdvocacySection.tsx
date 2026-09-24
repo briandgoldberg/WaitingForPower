@@ -1,6 +1,7 @@
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
 import { LetterBuilder } from "./LetterBuilder";
+import { AdvocacyContactForm } from "./AdvocacyContactForm";
 
 export function NationalAdvocacySection() {
   return (
@@ -16,6 +17,11 @@ export function NationalAdvocacySection() {
       </div>
 
       <LetterBuilder />
+
+      <div>
+        <h3 className="text-sm font-semibold mb-2">Already reached out?</h3>
+        <AdvocacyContactForm />
+      </div>
 
       <div className="flex flex-col gap-5">
         {POLICIES.map((policy) => {

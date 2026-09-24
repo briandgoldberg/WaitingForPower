@@ -45,7 +45,7 @@ export function RestoreProfile({ token }: { token: string }) {
         <p className="text-sm">
           You&rsquo;re signed in{name ? <> as <strong>{name}</strong></> : ""}. Your name and comments are back on this device.
         </p>
-        <Link href="/?feed=people" className="text-sm text-[var(--accent)] underline">
+        <Link href="/?feed=advocating" className="text-sm text-[var(--accent)] underline">
           Go to the feed
         </Link>
       </div>

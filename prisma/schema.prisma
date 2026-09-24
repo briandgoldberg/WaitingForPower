@@ -629,6 +629,7 @@ model Predictor {
   emailVerifications PredictorEmailVerification[]
   signInTokens       PredictorSignInToken[]
   likes              ThreadLike[]
+  advocacyContacts   AdvocacyContact[]
 
   @@index([email])
 }
@@ -651,6 +652,17 @@ model ProjectComment {
   body        String
   createdAt   DateTime  @default(now())
 
+  // The old free-form discussion box was replaced by a structured "I
+  // Advocated" log: one of "submitted_comment" | "period_closed" |
+  // "attended_hearing" (see src/lib/data/advocacyPoints.ts), null on the
+  // handful of legacy rows written before this existed. `body` becomes an
+  // optional note in that case rather than the whole post. `hearingDate` is
+  // set only for "attended_hearing", copied from one of the project's own
+  // ProjectHearing rows at submit time (validated server-side to be a real,
+  // recent, past hearing — not free text).
+  advocacyType String?
+  hearingDate  DateTime?
+
   // A reply is a comment with a parent: either another comment (one level
   // deep, replies to replies attach to the top comment) or a prediction.
   parentId     String?
@@ -665,6 +677,7 @@ model ProjectComment {
   @@index([projectId, createdAt])
   @@index([createdAt])
   @@index([predictorId, createdAt])
+  @@index([advocacyType, createdAt])
 }
 
 // A like on a comment or a prediction. Exactly one of commentId/predictionId
@@ -683,6 +696,38 @@ model ThreadLike {
   @@unique([predictorId, predictionId])
   @@index([commentId])
   @@index([predictionId])
+}
+
+// A contact with a state energy regulator or a member of Congress, logged
+// from the Advocate > National/State tabs (src/components/advocacy/
+// AdvocacyContactForm.tsx) rather than tied to one project — see
+// ProjectComment.advocacyType for the project-page version of the same
+// idea. Counts toward the same points and leaderboard (src/lib/leaderboard.ts).
+model AdvocacyContact {
+  id          String    @id @default(cuid())
+  predictorId String
+  predictor   Predictor @relation(fields: [predictorId], references: [id], onDelete: Cascade)
+
+  // "state_regulator" | "house" | "senate"
+  targetType String
+  // USPS state code — always set: which state's regulator, or which state's
+  // congressional delegation, they reached.
+  state      String
+  // The regulator's name, picked from STATE_REGULATORS, for state_regulator.
+  // Self-reported free text (optional) for house/senate, since there's no
+  // built-in directory of every member of Congress to pick from.
+  targetName String?
+
+  // Which reform issues they raised — CauseSlug values (see
+  // src/lib/data/causeCategories.ts), picked from the same six shown on the
+  // National Advocacy tab, plus an optional free-text note for anything else.
+  issues String[]
+  note   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([predictorId, createdAt])
+  @@index([createdAt])
 }
 
 // A single-use, short-lived link that restores a saved profile on a new

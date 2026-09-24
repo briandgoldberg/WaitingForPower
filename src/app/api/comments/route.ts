@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { submitComment, getProjectDiscussion, CommentError } from "@/lib/community";
+import { ADVOCACY_TYPES, pointsFor, type AdvocacyType } from "@/lib/data/advocacyPoints";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,13 @@ export async function POST(req: NextRequest) {
   const anonymousKey = String(body.anonymousKey ?? "").trim();
   const text = String(body.body ?? "");
   const parentCommentId = String(body.parentCommentId ?? "").trim() || undefined;
+  const advocacyTypeRaw = String(body.advocacyType ?? "").trim();
+  const advocacyType = ADVOCACY_TYPES.includes(advocacyTypeRaw as AdvocacyType) ? (advocacyTypeRaw as AdvocacyType) : undefined;
+  const hearingDate = String(body.hearingDate ?? "").trim() || undefined;
 
-  if (!projectId || !anonymousKey || !text.trim()) {
+  // Text is required for a plain post; a structured "I Advocated" entry
+  // (advocacyType set) can be submitted with no note at all.
+  if (!projectId || !anonymousKey || (!text.trim() && !advocacyType)) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
   if (anonymousKey.length < 8 || anonymousKey.length > 200) {
@@ -31,6 +37,8 @@ export async function POST(req: NextRequest) {
       anonymousKey,
       body: text,
       parentCommentId,
+      advocacyType,
+      hearingDate,
     });
     return NextResponse.json({
       ok: true,
@@ -40,6 +48,7 @@ export async function POST(req: NextRequest) {
       hasSavedProfile: predictor.email != null,
       nameChosen: predictor.nameChosenAt != null,
       identityDecided: predictor.identityDecidedAt != null,
+      pointsEarned: advocacyType ? pointsFor(advocacyType) : 0,
     });
   } catch (err) {
     if (err instanceof CommentError) {

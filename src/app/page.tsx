@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { getRecentChanges } from "@/lib/changes";
 import { ChangesFeed } from "@/components/ChangesFeed";
-import { CommunityFeed } from "@/components/CommunityFeed";
-import { getCommunityFeed } from "@/lib/community";
+import { AdvocacyFeed } from "@/components/AdvocacyFeed";
+import { Leaderboard } from "@/components/Leaderboard";
+import { getAdvocacyFeed } from "@/lib/advocacyFeed";
+import { getTopAdvocates } from "@/lib/leaderboard";
 import { STATE_NAMES } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
@@ -45,21 +48,34 @@ const ALERT_MESSAGES: Record<string, string> = {
   "email-taken": "That email already has a saved profile. Sign in with it instead.",
 };
 
+type HomeFeed = "changes" | "advocating" | "leaders";
+const TABS: { value: HomeFeed; label: string; shortLabel: string }[] = [
+  { value: "changes", label: "Project changes", shortLabel: "Changes" },
+  { value: "advocating", label: "What people are advocating for", shortLabel: "Advocating" },
+  { value: "leaders", label: "Top advocates", shortLabel: "Leaders" },
+];
+
 export default async function HomePage({
   searchParams,
 }: {
   searchParams: Promise<{ state?: string; alert?: string; feed?: string }>;
 }) {
   const { state: stateParam, alert, feed: feedParam } = await searchParams;
-  const feed = feedParam === "people" ? "people" : "changes";
+  // Project changes stays the default — the other two tabs start out
+  // thinner and will fill in as people actually use the new advocacy tools.
+  const feed: HomeFeed = feedParam === "advocating" || feedParam === "leaders" ? feedParam : "changes";
   const state = stateParam && stateParam.toUpperCase() in STATE_NAMES ? stateParam.toUpperCase() : null;
   const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
 
-  const { changes, hasMore } = feed === "changes" ? await getRecentChanges(50, 0, state) : { changes: [], hasMore: false };
-  const community = feed === "people" ? await getCommunityFeed(0, 20) : { items: [], hasMore: false };
-  // Passed down instead of letting ChangesFeed call `new Date()` itself —
-  // see ChangesFeed's `now` prop comment for the hydration mismatch this
-  // fixes.
+  const [changesResult, advocacyResult, leaders] = await Promise.all([
+    feed === "changes" ? getRecentChanges(50, 0, state) : Promise.resolve({ changes: [], hasMore: false }),
+    feed === "advocating" ? getAdvocacyFeed(0, 20) : Promise.resolve({ items: [], hasMore: false }),
+    feed === "leaders" ? getTopAdvocates(25) : Promise.resolve([]),
+  ]);
+  const { changes, hasMore } = changesResult;
+  // Passed down instead of letting the feed components call `new Date()`
+  // themselves — see ChangesFeed's `now` prop comment for the hydration
+  // mismatch this fixes.
   const now = new Date().toISOString();
 
   return (
@@ -69,7 +85,7 @@ export default async function HomePage({
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
       />
-      <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-3">
+      <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
         {alertMessage && (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm">
             {alertMessage}
@@ -79,21 +95,48 @@ export default async function HomePage({
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Track America&rsquo;s energy permitting in real time.
           </h1>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Projects wait years for a yes or no. That&rsquo;s not a technology problem, it&rsquo;s a paperwork problem.{" "}
+            <Link href="/policies" className="font-semibold text-[var(--accent)] underline whitespace-nowrap">
+              Advocate now →
+            </Link>
+          </p>
         </div>
 
-        {feed === "changes" && <h2 className="text-sm font-semibold">Recent changes</h2>}
+        <div className="flex gap-4 sm:gap-6 border-b border-[var(--border)]" role="tablist">
+          {TABS.map((tab) => (
+            <Link
+              key={tab.value}
+              href={tab.value === "changes" ? "/" : `/?feed=${tab.value}`}
+              role="tab"
+              aria-selected={feed === tab.value}
+              className={`shrink-0 -mb-px px-0.5 pb-2.5 pt-1 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                feed === tab.value ? "border-[var(--accent)]" : "border-transparent text-[var(--muted)] hover:text-[var(--text-secondary)]"
+              }`}
+              style={feed === tab.value ? { color: "var(--accent)" } : undefined}
+            >
+              <span className="sm:hidden">{tab.shortLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+            </Link>
+          ))}
+        </div>
 
-        {feed === "changes" ? (
-          /* key={state}: ChangesFeed seeds its own state from initialChanges
-             via useState's lazy initializer, which only runs once on mount —
-             a client-side navigation to a new ?state= otherwise leaves the
-             old filtered list on screen even though this server component
-             re-rendered with fresh data. Keying by state forces a real
-             remount when the filter changes. */
-          <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
-        ) : (
-          <CommunityFeed initialItems={community.items} initialHasMore={community.hasMore} now={now} />
+        {feed === "changes" && (
+          <>
+            <h2 className="text-sm font-semibold">Recent changes</h2>
+            {/* key={state}: ChangesFeed seeds its own state from initialChanges
+                via useState's lazy initializer, which only runs once on mount —
+                a client-side navigation to a new ?state= otherwise leaves the
+                old filtered list on screen even though this server component
+                re-rendered with fresh data. Keying by state forces a real
+                remount when the filter changes. */}
+            <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
+          </>
         )}
+        {feed === "advocating" && (
+          <AdvocacyFeed initialItems={advocacyResult.items} initialHasMore={advocacyResult.hasMore} now={now} />
+        )}
+        {feed === "leaders" && <Leaderboard entries={leaders} />}
       </div>
     </>
   );

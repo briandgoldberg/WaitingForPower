@@ -331,7 +331,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <SectionPills sections={sections} />
 
       <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
-        <ProjectDiscussion projectId={p.id} />
+        <ProjectDiscussion projectId={p.id} hearings={p.hearings.map((h) => ({ date: h.date, label: h.label }))} />
       </section>
     </div>
   );

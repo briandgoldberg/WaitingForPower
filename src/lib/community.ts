@@ -6,6 +6,7 @@
 // stuck.)
 import { prisma } from "@/lib/db";
 import { getOrCreateHumanPredictor, PredictionError } from "@/lib/predictions";
+import { ADVOCACY_TYPES, HEARING_LOOKBACK_DAYS, type AdvocacyType } from "@/lib/data/advocacyPoints";
 
 export const MAX_COMMENT_LENGTH = 1000;
 const MAX_COMMENTS_PER_HOUR = 10;
@@ -31,12 +32,16 @@ export interface ReplyItem {
   // Held: the author hasn't yet chosen how to appear, so only they can see it.
   pending: boolean;
   body: string;
+  advocacyType: AdvocacyType | null;
+  hearingDate: string | null;
   createdAt: string;
   likeCount: number;
   likedByMe: boolean;
 }
 
-// One post in a project's thread.
+// One post in a project's thread — now always a structured "I Advocated"
+// entry (advocacyType set) going forward; null only on legacy rows from
+// before that existed.
 export interface DiscussionItem {
   // The database id, used for liking and replying.
   rawId: string;
@@ -46,6 +51,8 @@ export interface DiscussionItem {
   guest: boolean;
   pending: boolean;
   body: string | null;
+  advocacyType: AdvocacyType | null;
+  hearingDate: string | null;
   createdAt: string;
   likeCount: number;
   likedByMe: boolean;
@@ -65,20 +72,24 @@ export interface CommunityFeedItem {
   confirmed: boolean;
   guest: boolean;
   body: string | null;
+  advocacyType: AdvocacyType | null;
+  hearingDate: string | null;
   createdAt: string;
   projectSlug: string;
   projectName: string;
 }
 
-function labelOf(p: { displayName: string | null; agentName: string | null }): string {
+// Exported for src/lib/advocacyFeed.ts and src/lib/advocacyContacts.ts, so
+// every UGC surface renders identity the exact same way.
+export function labelOf(p: { displayName: string | null; agentName: string | null }): string {
   return p.displayName ?? p.agentName ?? "anonymous";
 }
 
-function isHeld(p: { agentName: string | null; identityDecidedAt: Date | null }): boolean {
+export function isHeld(p: { agentName: string | null; identityDecidedAt: Date | null }): boolean {
   return p.agentName == null && p.identityDecidedAt == null;
 }
 
-function flagsOf(p: { agentName: string | null; email: string | null }): { confirmed: boolean; guest: boolean } {
+export function flagsOf(p: { agentName: string | null; email: string | null }): { confirmed: boolean; guest: boolean } {
   const human = p.agentName == null;
   return { confirmed: human && p.email != null, guest: human && p.email == null };
 }
@@ -88,9 +99,17 @@ export async function submitComment(params: {
   anonymousKey: string;
   body: string;
   parentCommentId?: string;
+  advocacyType?: AdvocacyType;
+  hearingDate?: string;
 }) {
   const body = params.body.trim();
-  if (!body) throw new CommentError("empty", "Write a comment first.");
+  const advocacyType = params.advocacyType;
+  // A structured "I Advocated" entry only needs its type; the note is
+  // optional. A plain (legacy-shaped) post still needs real text.
+  if (!body && !advocacyType) throw new CommentError("empty", "Write a comment first.");
+  if (advocacyType && !ADVOCACY_TYPES.includes(advocacyType)) {
+    throw new CommentError("invalid", "That's not a valid advocacy type.");
+  }
   if (body.length > MAX_COMMENT_LENGTH) {
     throw new CommentError("too_long", `Comments are limited to ${MAX_COMMENT_LENGTH} characters.`);
   }
@@ -98,8 +117,29 @@ export async function submitComment(params: {
     throw new CommentError("too_many_links", "Please keep it to two links or fewer.");
   }
 
-  const project = await prisma.project.findUnique({ where: { id: params.projectId }, select: { id: true } });
+  const project = await prisma.project.findUnique({
+    where: { id: params.projectId },
+    select: { id: true, hearings: { select: { date: true } } },
+  });
   if (!project) throw new CommentError("not_found", "Project not found.");
+
+  // "Attended a hearing" must point at one of this project's own real
+  // hearing dates — never free text — and that hearing must actually have
+  // happened already, recently, not be claimed in advance or from long ago.
+  let hearingDate: Date | null = null;
+  if (advocacyType === "attended_hearing") {
+    if (!params.hearingDate) throw new CommentError("missing_hearing", "Pick which hearing you attended.");
+    const candidate = new Date(params.hearingDate);
+    const matches = project.hearings.some((h) => h.date.getTime() === candidate.getTime());
+    if (!matches) throw new CommentError("invalid_hearing", "That's not one of this project's hearings.");
+    const now = Date.now();
+    const lookbackMs = HEARING_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+    if (candidate.getTime() > now) throw new CommentError("hearing_not_past", "That hearing hasn't happened yet.");
+    if (candidate.getTime() < now - lookbackMs) {
+      throw new CommentError("hearing_too_old", `Only hearings from the last ${HEARING_LOOKBACK_DAYS} days can be logged.`);
+    }
+    hearingDate = candidate;
+  }
 
   // Replies are one level deep: a reply to a reply attaches to the same top
   // comment, so threads stay flat and readable.
@@ -123,17 +163,19 @@ export async function submitComment(params: {
 
   const recent = await prisma.projectComment.findMany({
     where: { predictorId: predictor.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
-    select: { body: true, projectId: true },
+    select: { body: true, projectId: true, advocacyType: true },
   });
   if (recent.length >= MAX_COMMENTS_PER_HOUR) {
     throw new CommentError("rate_limited", "You're commenting a lot. Please try again in a bit.");
   }
-  if (recent.some((r) => r.projectId === project.id && r.body === body)) {
-    throw new CommentError("duplicate", "You already posted that.");
+  // Same project, same kind of entry (or same free text for a legacy plain
+  // comment), within the hour — a duplicate submit, not a second real action.
+  if (recent.some((r) => r.projectId === project.id && r.advocacyType === (advocacyType ?? null) && r.body === body)) {
+    throw new CommentError("duplicate", advocacyType ? "You already logged that for this project." : "You already posted that.");
   }
 
   const comment = await prisma.projectComment.create({
-    data: { projectId: project.id, predictorId: predictor.id, body, parentId },
+    data: { projectId: project.id, predictorId: predictor.id, body, parentId, advocacyType, hearingDate },
   });
   return { comment, predictor };
 }
@@ -208,6 +250,8 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
     ...flagsOf(c.predictor),
     pending: isHeld(c.predictor),
     body: c.body,
+    advocacyType: c.advocacyType as AdvocacyType | null,
+    hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     likeCount: commentLikes.get(c.id) ?? 0,
     likedByMe: likedComments.has(c.id),
@@ -227,6 +271,8 @@ export async function getProjectDiscussion(projectId: string, anonymousKey?: str
       ...flagsOf(c.predictor),
       pending: isHeld(c.predictor),
       body: c.body,
+      advocacyType: c.advocacyType as AdvocacyType | null,
+      hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
       createdAt: c.createdAt.toISOString(),
       likeCount: commentLikes.get(c.id) ?? 0,
       likedByMe: likedComments.has(c.id),
@@ -257,7 +303,9 @@ export async function getCommunityFeed(offset = 0, limit = 20): Promise<{ items:
   const publicPoster = { OR: [{ agentName: { not: null } }, { identityDecidedAt: { not: null } }] };
 
   const comments = await prisma.projectComment.findMany({
-    where: { predictor: publicPoster },
+    // Legacy free-form rows (predate advocacyType) don't belong in a feed
+    // now framed entirely around structured advocacy actions.
+    where: { predictor: publicPoster, advocacyType: { not: null } },
     include: { predictor: predictorSelect, project: projectSelect },
     orderBy: { createdAt: "desc" },
     take: need,
@@ -269,6 +317,8 @@ export async function getCommunityFeed(offset = 0, limit = 20): Promise<{ items:
     isAgent: c.predictor.agentName != null,
     ...flagsOf(c.predictor),
     body: c.body,
+    advocacyType: c.advocacyType as AdvocacyType | null,
+    hearingDate: c.hearingDate ? c.hearingDate.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     projectSlug: c.project.slug,
     projectName: c.project.name,

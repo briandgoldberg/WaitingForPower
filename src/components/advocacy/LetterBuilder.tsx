@@ -82,11 +82,11 @@ export function LetterBuilder() {
       <div>
         <h3 className="text-lg font-bold tracking-tight">Write to your representative or senator</h3>
         <p className="text-sm text-[var(--muted)] mt-0.5">
-          Pick what you care about and how you lean, and this fills in a real letter you can send. Modeled on how{" "}
+          Pick your issues and how you lean to get a real letter, framed the way{" "}
           <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
             Citizens&rsquo; Climate Lobby
           </a>{" "}
-          trains volunteers to write to Congress: the same ask, framed for who you are.
+          trains volunteers to write to Congress.
         </p>
       </div>
 
@@ -186,7 +186,7 @@ export function LetterBuilder() {
             {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
           </div>
           <p className="text-xs text-[var(--muted)]">
-            Paste this into their contact form or email, filling in the brackets with your own details.{" "}
+            Fill in the brackets, then paste this into their contact form or email.{" "}
             <a
               href="https://www.usa.gov/elected-officials"
               target="_blank"
@@ -198,7 +198,7 @@ export function LetterBuilder() {
           </p>
         </div>
       ) : (
-        <p className="text-sm text-[var(--muted)]">Choose at least one issue and how you lean to see your letter.</p>
+        <p className="text-sm text-[var(--muted)]">Choose an issue and a leaning to see your letter.</p>
       )}
     </div>
   );

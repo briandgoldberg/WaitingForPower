@@ -17,25 +17,6 @@ export function NationalAdvocacySection() {
 
       <LetterBuilder />
 
-      <nav className="flex flex-wrap gap-1.5">
-        {POLICIES.map((policy) => {
-          const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
-          return (
-            <a
-              key={policy.slug}
-              href={`#${policy.slug}`}
-              className="px-2.5 py-1 rounded-full text-xs border border-[var(--border)] hover:opacity-80"
-            >
-              <span
-                className="inline-block h-2 w-2 rounded-full mr-1.5 align-middle"
-                style={{ backgroundColor: cause.color }}
-              />
-              {policy.badgeLabel ?? cause.shortLabel}
-            </a>
-          );
-        })}
-      </nav>
-
       <div className="flex flex-col gap-5">
         {POLICIES.map((policy) => {
           const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];

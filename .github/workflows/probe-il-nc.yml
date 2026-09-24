@@ -18,36 +18,29 @@ jobs:
             i=$((i+1)); f="out/$i.txt"
             code=$(curl -sL -o "$f" -w '%{http_code} %{size_download} %{url_effective}' -A "$UA" \
               -H 'Accept: text/html,application/xhtml+xml,application/xml,application/rss+xml;q=0.9,*/*;q=0.8' \
-              -H 'Accept-Language: en-US,en;q=0.9' --max-time 30 "$1")
+              -H 'Accept-Language: en-US,en;q=0.9' --max-time 20 "$1")
             flags=$(grep -o -i -m3 'recaptcha\|g-recaptcha\|no robots\|Just a moment\|cf-mitigated\|<rss\|<item>' "$f" | sort | uniq -c | tr '\n' ' ')
             echo "=== [$i] $1 -> $code | $flags"
             echo "--- head:"; head -c 1500 "$f" | tr -s ' \t\r' ' '; echo
             sleep 2
           }
-          # --- Illinois ---
-          probe "https://icc.illinois.gov/rss/"
-          probe "https://icc.illinois.gov/rss/casedetails.rss?no=26-0156"
-          probe "https://icc.illinois.gov/rss/casedetails.rss?no=P2026-0156"
-          probe "https://icc.illinois.gov/rss/casedetails.rss?no=23-0658"
-          probe "https://icc.illinois.gov/rss/dailyfilings.rss"
-          probe "https://icc.illinois.gov/docket/P2026-0156"
-          probe "https://icc.illinois.gov/docket/casedetails.aspx?no=23-0658"
-          probe "https://icc.illinois.gov/e-Docket/reports/browse/default.asp?id=23058"
-          probe "https://icc.illinois.gov/e-Docket/reports/browse/rssreader.aspx?id=23058"
-          probe "https://icc.illinois.gov/docket/search/cases/results?ct=5|4,5|5&st=7,18&o=False"
-          probe "https://icc.illinois.gov/docket/search/cases/results?ct=5|4,5|5&st=7,18&o=True"
-          echo "### IL o=False rows: $(grep -o 'href="/docket/P[0-9]*-[0-9]*"' out/10.txt | sort -u | wc -l)  o=True rows: $(grep -o 'href="/docket/P[0-9]*-[0-9]*"' out/11.txt | sort -u | wc -l)"
-          echo "### o=True ids:"; grep -o 'href="/docket/P[0-9]*-[0-9]*"' out/11.txt | sort -u | tr '\n' ' '; echo
-          echo "### P2026-0156 in o=True: $(grep -c 'P2026-0156' out/11.txt)  P2023-0658 in o=True: $(grep -c 'P2023-0658' out/11.txt)"
-          # --- North Carolina ---
+          set +e
+          # round 2
           probe "https://www.ncuc.gov/"
+          echo "### ncuc.gov all links:"; grep -o -i 'href="[^"]*"' out/$i.txt | sort -u | head -150
           probe "https://www.ncuc.gov/search/searchdocket.html"
-          probe "https://starw1.ncuc.gov/NCUC/page/Dockets/portal.aspx"
-          probe "https://starw1.ncuc.gov/NCUC/page/Orders/portal.aspx"
-          probe "https://starw1.ncuc.gov/NCUC/page/docket-docs/PSC/DocketDetails.aspx?DocketId=49b08b22-8538-49a5-88fb-de4c26488720"
-          probe "https://publicstaff.nc.gov/public-staff-divisions/energy-division/electric-section/builders-and-owners-renewable-energy-facilities"
-          echo "### ncuc.gov links:"; grep -o -i 'href="[^"]*"' out/12.txt out/13.txt | grep -i 'order\|docket\|rss\|calendar\|csv\|xls' | sort -u | head -60
-          echo "### publicstaff links:"; grep -o -i 'href="[^"]*"' out/17.txt | grep -i 'xls\|csv\|pdf\|media\|list' | sort -u | head -40
-          echo "### rss index links:"; grep -o -i 'href="[^"]*rss[^"]*"' out/1.txt | sort -u
+          echo "### searchdocket links/forms:"; grep -o -i 'href="[^"]*"\|action="[^"]*"\|recaptcha[^"]*' out/$i.txt | sort -u | head -60
+          probe "https://www.ncuc.gov/newsroom.html"
+          echo "### newsroom links:"; grep -o -i 'href="[^"]*"' out/$i.txt | sort -u | head -80
+          probe "https://publicstaff.nc.gov/"
+          probe "https://icc.illinois.gov/e-Docket/reports/browse/rssreader.aspx?id=23058"
+          echo "### rssreader text:"; sed -e 's/<[^>]*>/ /g' out/$i.txt | tr -s ' \n' | head -c 4000
+          echo
+          probe "https://icc.illinois.gov/e-Docket/reports/browse/rssreader.aspx?no=23-0658"
+          echo "### rssreader no= text:"; sed -e 's/<[^>]*>/ /g' out/$i.txt | tr -s ' \n' | head -c 1500
+          echo
+          probe "https://icc.illinois.gov/docket/search/cases/results?ct=5|4,5|5&st=7,18&o=True"
+          echo "### o=True rows text:"; sed -e 's/<[^>]*>/ /g' out/$i.txt | tr -s ' \n' | grep -o 'Case Search.*' | head -c 3000
+          echo
       - uses: actions/upload-artifact@v4
         with: { name: probe-out, path: out }

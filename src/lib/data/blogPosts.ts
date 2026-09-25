@@ -11,7 +11,7 @@ export interface BlogPostMeta {
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
     slug: "dirtiest-projects",
-    title: "The 13 dirtiest projects pending approval, and how to advocate on them",
+    title: "The 13 dirtiest projects pending approval and how to advocate against them",
     excerpt:
       "No permitting docket publishes an emissions number, so we ranked the largest fossil-fuel projects by capacity instead — then individually verified every one and dropped three that turned out not to be real anymore.",
     publishedAt: "2026-09-24",

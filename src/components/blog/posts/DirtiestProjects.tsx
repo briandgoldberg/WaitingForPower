@@ -64,7 +64,7 @@ export async function DirtiestProjects() {
                         href={`/project/${p.slug}#comments`}
                         className="inline-flex items-center gap-1 mt-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
                       >
-                        Advocate on this project →
+                        Advocate against this project →
                       </Link>
                     </div>
                   </div>

@@ -14,6 +14,7 @@ import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { SectionPills, type PillSection } from "@/components/project/SectionPills";
+import { AdvocateNowButton } from "@/components/project/AdvocateNowButton";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
 import { OutcomeBanner } from "@/components/project/OutcomeBanner";
 import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
@@ -248,6 +249,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
       content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
+      headerAction: !resolved ? <AdvocateNowButton /> : undefined,
     },
   ];
 

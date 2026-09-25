@@ -6,7 +6,7 @@ import { IdentityDecision } from "./IdentityDecision";
 import { SignInLink } from "./SignInLink";
 import { ChooseName } from "./ChooseName";
 import { PosterBadge } from "./PosterBadge";
-import { DISCUSSION_CHANGED_EVENT, getOrCreatePredictorKey } from "@/lib/clientIdentity";
+import { DISCUSSION_CHANGED_EVENT, OPEN_ADVOCACY_FORM_EVENT, getOrCreatePredictorKey } from "@/lib/clientIdentity";
 import { relativeTime } from "@/lib/feedTime";
 import type { Discussion, DiscussionItem } from "@/lib/community";
 import { HEARING_LOOKBACK_DAYS, describeAdvocacyEntry, STANCE_INFO, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
@@ -72,10 +72,17 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
       load(k);
     }, 0);
     const onChanged = () => load();
+    // Fired by AdvocateNowButton, the "I Advocated!" shortcut next to the
+    // Advocate pill — this section lives lower on the page, so there's no
+    // shared React state to lift; a custom event is this codebase's
+    // established way around that (see DISCUSSION_CHANGED_EVENT above).
+    const onOpenForm = () => setFormOpen(true);
     window.addEventListener(DISCUSSION_CHANGED_EVENT, onChanged);
+    window.addEventListener(OPEN_ADVOCACY_FORM_EVENT, onOpenForm);
     return () => {
       clearTimeout(t);
       window.removeEventListener(DISCUSSION_CHANGED_EVENT, onChanged);
+      window.removeEventListener(OPEN_ADVOCACY_FORM_EVENT, onOpenForm);
     };
   }, [load]);
 

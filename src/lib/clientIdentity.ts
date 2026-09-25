@@ -35,3 +35,9 @@ export function storeNickname(nickname: string): void {
 // Fired after anything new is posted on a project so other components on
 // the page (the Comments list) can refresh without sharing state.
 export const DISCUSSION_CHANGED_EVENT = "wfp:discussion-changed";
+
+// Fired by the "I Advocated!" shortcut next to the Advocate pill (see
+// AdvocateNowButton) so ProjectDiscussion — a separate section further down
+// the page — opens its log-advocacy form without the two components sharing
+// React state.
+export const OPEN_ADVOCACY_FORM_EVENT = "wfp:open-advocacy-form";

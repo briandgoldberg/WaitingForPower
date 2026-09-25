@@ -104,7 +104,7 @@ export function AdvocacyFeed({ initialItems, initialHasMore, now }: { initialIte
   if (items.length === 0) {
     return (
       <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-center text-sm text-[var(--muted)]">
-        Nothing here yet. Open a project and log the first "I Advocated."
+        Nothing here yet. Open a project and log the first "I Advocated!"
       </div>
     );
   }

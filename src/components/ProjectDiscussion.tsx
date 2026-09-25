@@ -176,9 +176,9 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
             <button
               type="button"
               onClick={() => setFormOpen(true)}
-              className="rounded-full bg-[var(--accent)] text-white px-4 py-2 text-sm font-semibold hover:opacity-90"
+              className="rounded-full px-3 py-1.5 text-sm font-semibold transition-colors bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
             >
-              I Advocated
+              I Advocated!
             </button>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 rounded-lg border border-[var(--border)] p-3">

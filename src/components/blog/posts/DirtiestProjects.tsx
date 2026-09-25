@@ -22,17 +22,13 @@ export async function DirtiestProjects() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="text-sm leading-relaxed flex flex-col gap-3">
+      <div className="text-sm leading-relaxed">
         <p>
-          This tracker doesn&rsquo;t have an emissions or CO&#8322; figure for any project &mdash; no public source
-          publishes one at the docket level. So &ldquo;dirtiest&rdquo; here means the largest fossil-fuel
-          infrastructure still waiting on a permitting decision: gas-fired power plants by megawatts, and interstate
-          gas pipelines by MMcf/d of throughput. Each one below was individually checked against real, current
-          reporting before making this list &mdash; three algorithmically-large pipelines got dropped entirely
-          during that check because they turned out to be withdrawn, suspended, or stalled rather than real active
-          projects.
+          No permitting docket publishes an emissions number, so &ldquo;dirtiest&rdquo; here means the largest
+          fossil-fuel infrastructure still awaiting approval &mdash; gas plants by megawatts, pipelines by MMcf/d,
+          each individually verified, not just size-sorted. Click through for the docket, hearing dates, and how to
+          advocate.
         </p>
-        <p>Click a project to see its official docket, hearing dates, and how to advocate on it directly.</p>
       </div>
 
       {Array.from(byCategory.entries()).map(([category, items]) => (

@@ -100,13 +100,21 @@ export default async function HomePage({
               track every project and push for faster permitting decisions.
             </span>
           </h1>
-          <Link
-            href="/policies"
-            className="flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[48px] rounded-full bg-accent px-6 text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"
-            style={{ color: "white" }}
-          >
-            Advocate Now →
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Link
+              href="/policies"
+              className="flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[48px] rounded-full bg-accent px-6 text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"
+              style={{ color: "white" }}
+            >
+              Advocate Now →
+            </Link>
+            <Link
+              href="/dirtiest"
+              className="flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[48px] rounded-full border border-amber-600/40 bg-amber-500/10 px-6 text-sm font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              See the Dirtiest Projects →
+            </Link>
+          </div>
         </div>
 
         <div className="flex justify-between sm:justify-start gap-2 sm:gap-6 border-b border-[var(--border)]" role="tablist">

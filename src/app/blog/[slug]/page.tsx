@@ -8,12 +8,14 @@ import { FortEdwardSolarApproved } from "@/components/blog/posts/FortEdwardSolar
 import { GasTakingOverNewFilings } from "@/components/blog/posts/GasTakingOverNewFilings";
 import { InterconnectionQueueCrisis } from "@/components/blog/posts/InterconnectionQueueCrisis";
 import { AdvocacyPlatformRedesign } from "@/components/blog/posts/AdvocacyPlatformRedesign";
+import { DirtiestProjectsMethodology } from "@/components/blog/posts/DirtiestProjectsMethodology";
 
 export const dynamic = "force-dynamic";
 
 // Maps a post's slug to its body component — see src/lib/data/blogPosts.ts
 // for the listing metadata (title/excerpt/date) these pair with.
 const POST_COMPONENTS: Record<string, React.ComponentType> = {
+  "dirtiest-projects-methodology": DirtiestProjectsMethodology,
   "advocacy-platform-redesign": AdvocacyPlatformRedesign,
   "interconnection-queue-crisis": InterconnectionQueueCrisis,
   "gas-taking-over-new-filings": GasTakingOverNewFilings,

@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import Script from "next/script";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { ReachOutButton } from "@/components/ReachOutButton";
 import { SiteNav } from "@/components/SiteNav";
 import { Analytics } from "@vercel/analytics/next";
 import { AttributionTracker } from "@/components/AttributionTracker";
 import "./globals.css";
+
+// Google Ads conversion tag (Data manager > Google tag > AW-1048331722,
+// account "Waitingforpower"), for the "WaitingForPower - Advocates Launch"
+// campaign's Page view goal — separate from the site's own UTM-based
+// attribution.ts/Vercel Analytics pipeline, which stays the source of truth
+// for per-action tracking; this only feeds Google Ads its own reporting.
+const GOOGLE_ADS_TAG_ID = "AW-1048331722";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -71,6 +79,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <FeedbackWidget />
         <Analytics />
         <AttributionTracker />
+        <Script async src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_TAG_ID}`} strategy="afterInteractive" />
+        <Script id="google-ads-tag" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GOOGLE_ADS_TAG_ID}');
+          `}
+        </Script>
         <footer className="border-t border-[var(--border)] bg-[var(--panel)] text-xs text-[var(--muted)]">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <p>

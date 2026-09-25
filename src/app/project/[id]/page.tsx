@@ -14,7 +14,6 @@ import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { SectionPills, type PillSection } from "@/components/project/SectionPills";
-import { AdvocateNowButton } from "@/components/project/AdvocateNowButton";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
 import { OutcomeBanner } from "@/components/project/OutcomeBanner";
 import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
@@ -249,7 +248,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
       content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
-      headerAction: !resolved ? <AdvocateNowButton /> : undefined,
+    },
+    {
+      id: "comments",
+      label: "I Advocated!",
+      content: <ProjectDiscussion projectId={p.id} hearings={p.hearings.map((h) => ({ date: h.date, label: h.label }))} />,
     },
   ];
 
@@ -331,10 +334,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <SectionPills sections={sections} />
-
-      <section id="comments" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 scroll-mt-4">
-        <ProjectDiscussion projectId={p.id} hearings={p.hearings.map((h) => ({ date: h.date, label: h.label }))} />
-      </section>
     </div>
   );
 }

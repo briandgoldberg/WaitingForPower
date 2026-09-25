@@ -10,13 +10,6 @@ export interface BlogPostMeta {
 // this array is only the listing metadata for /blog and generateMetadata.
 export const BLOG_POSTS: BlogPostMeta[] = [
   {
-    slug: "dirtiest-projects-methodology",
-    title: "How we picked the 13 dirtiest projects pending approval",
-    excerpt:
-      "No permitting docket publishes an emissions number, so we ranked by capacity instead — then individually verified every candidate and dropped three that turned out not to be real anymore.",
-    publishedAt: "2026-09-24",
-  },
-  {
     slug: "advocacy-platform-redesign",
     title: "We rebuilt WaitingForPower around advocacy, not just tracking",
     excerpt:

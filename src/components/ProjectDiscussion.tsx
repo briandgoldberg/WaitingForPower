@@ -6,7 +6,7 @@ import { IdentityDecision } from "./IdentityDecision";
 import { SignInLink } from "./SignInLink";
 import { ChooseName } from "./ChooseName";
 import { PosterBadge } from "./PosterBadge";
-import { DISCUSSION_CHANGED_EVENT, OPEN_ADVOCACY_FORM_EVENT, getOrCreatePredictorKey } from "@/lib/clientIdentity";
+import { DISCUSSION_CHANGED_EVENT, getOrCreatePredictorKey } from "@/lib/clientIdentity";
 import { relativeTime } from "@/lib/feedTime";
 import type { Discussion, DiscussionItem } from "@/lib/community";
 import { HEARING_LOOKBACK_DAYS, describeAdvocacyEntry, STANCE_INFO, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
@@ -27,7 +27,6 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
   const [identityOpen, setIdentityOpen] = useState(false);
   const [visible, setVisible] = useState(POSTS_PER_PAGE);
 
-  const [formOpen, setFormOpen] = useState(false);
   const [advocacyType, setAdvocacyType] = useState<AdvocacyType | null>(null);
   const [stance, setStance] = useState<Stance | null>(null);
   const [hearingDate, setHearingDate] = useState("");
@@ -72,17 +71,10 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
       load(k);
     }, 0);
     const onChanged = () => load();
-    // Fired by AdvocateNowButton, the "I Advocated!" shortcut next to the
-    // Advocate pill — this section lives lower on the page, so there's no
-    // shared React state to lift; a custom event is this codebase's
-    // established way around that (see DISCUSSION_CHANGED_EVENT above).
-    const onOpenForm = () => setFormOpen(true);
     window.addEventListener(DISCUSSION_CHANGED_EVENT, onChanged);
-    window.addEventListener(OPEN_ADVOCACY_FORM_EVENT, onOpenForm);
     return () => {
       clearTimeout(t);
       window.removeEventListener(DISCUSSION_CHANGED_EVENT, onChanged);
-      window.removeEventListener(OPEN_ADVOCACY_FORM_EVENT, onOpenForm);
     };
   }, [load]);
 
@@ -134,7 +126,6 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
       trackAttributedAction("Advocacy logged");
       setPointsEarned(result.pointsEarned ?? null);
       resetForm();
-      setFormOpen(false);
       window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT));
       setTimeout(() => setPointsEarned(null), 3000);
     } catch {
@@ -179,52 +170,35 @@ export function ProjectDiscussion({ projectId, hearings = [] }: { projectId: str
         <IdentityDecision anonymousKey={key} label={me.label} onDecided={() => window.dispatchEvent(new Event(DISCUSSION_CHANGED_EVENT))} />
       ) : (
         <div>
-          {!formOpen ? (
-            <button
-              type="button"
-              onClick={() => setFormOpen(true)}
-              className="rounded-full px-3 py-1.5 text-sm font-semibold transition-colors bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
-            >
-              I Advocated!
-            </button>
-          ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 rounded-lg border border-[var(--border)] p-3">
-              <AdvocacyActionFields
-                advocacyType={advocacyType}
-                onAdvocacyType={setAdvocacyType}
-                hearingDate={hearingDate}
-                onHearingDate={setHearingDate}
-                eligibleHearings={eligibleHearings}
-                stance={stance}
-                onStance={setStance}
-                note={note}
-                onNote={setNote}
-              />
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 rounded-lg border border-[var(--border)] p-3">
+            <AdvocacyActionFields
+              advocacyType={advocacyType}
+              onAdvocacyType={setAdvocacyType}
+              hearingDate={hearingDate}
+              onHearingDate={setHearingDate}
+              eligibleHearings={eligibleHearings}
+              stance={stance}
+              onStance={setStance}
+              note={note}
+              onNote={setNote}
+            />
 
-              <div className="flex items-center gap-2 flex-wrap">
-                {!me && <SignInLink />}
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormOpen(false);
-                    resetForm();
-                  }}
-                  className="text-sm text-[var(--muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={posting || !advocacyType || !stance}
-                  className="rounded-md bg-[var(--accent)] text-white px-4 py-1.5 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                >
-                  {posting ? "…" : "Log it"}
-                </button>
-              </div>
-              {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-            </form>
-          )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {!me && <SignInLink />}
+              <span className="flex-1" />
+              <button type="button" onClick={resetForm} className="text-sm text-[var(--muted)]">
+                Clear
+              </button>
+              <button
+                type="submit"
+                disabled={posting || !advocacyType || !stance}
+                className="rounded-md bg-[var(--accent)] text-white px-4 py-1.5 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+              >
+                {posting ? "…" : "Log it"}
+              </button>
+            </div>
+            {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          </form>
 
           {pointsEarned != null && (
             <p className="mt-2 text-sm font-semibold text-[var(--accent)]">+{pointsEarned} points. Thanks for advocating!</p>

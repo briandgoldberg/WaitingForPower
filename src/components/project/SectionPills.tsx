@@ -6,10 +6,6 @@ export interface PillSection {
   id: string;
   label: string;
   content: ReactNode;
-  // Rendered inline right after this section's own pill, in the same row —
-  // for a shortcut action related to but distinct from the pill's own panel
-  // (see AdvocateNowButton, next to the Advocate pill).
-  headerAction?: ReactNode;
 }
 
 // A row of pills under the headline numbers. Each one opens its section in a
@@ -44,25 +40,23 @@ export function SectionPills({ sections }: { sections: PillSection[] }) {
         {sections.map((s) => {
           const open = openId === s.id;
           return (
-            <span key={s.id} className="inline-flex items-center gap-2">
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls={s.id}
-                onClick={() => setOpenId(open ? null : s.id)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors ${
-                  open
-                    ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                    : "border-[var(--border)] bg-[var(--panel)] text-[var(--accent)] hover:border-[var(--accent)]"
-                }`}
-              >
-                {s.label}
-                <span aria-hidden className={`transition-transform ${open ? "rotate-90" : ""}`}>
-                  ›
-                </span>
-              </button>
-              {s.headerAction}
-            </span>
+            <button
+              key={s.id}
+              type="button"
+              aria-expanded={open}
+              aria-controls={s.id}
+              onClick={() => setOpenId(open ? null : s.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors ${
+                open
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                  : "border-[var(--border)] bg-[var(--panel)] text-[var(--accent)] hover:border-[var(--accent)]"
+              }`}
+            >
+              {s.label}
+              <span aria-hidden className={`transition-transform ${open ? "rotate-90" : ""}`}>
+                ›
+              </span>
+            </button>
           );
         })}
       </div>

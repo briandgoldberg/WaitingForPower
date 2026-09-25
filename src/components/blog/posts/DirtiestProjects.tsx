@@ -61,7 +61,7 @@ export async function DirtiestProjects() {
                       </p>
                       {e.blurb && <p className="text-sm mt-1.5 text-[var(--text-secondary)] leading-snug">{e.blurb}</p>}
                       <Link
-                        href={`/project/${p.slug}#comments`}
+                        href={`/project/${p.slug}#take-action`}
                         className="inline-flex items-center gap-1 mt-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
                       >
                         Advocate against this project →

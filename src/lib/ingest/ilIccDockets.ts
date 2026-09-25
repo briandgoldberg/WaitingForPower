@@ -142,6 +142,51 @@
 // linked order document) could not be inspected this session — resolution
 // left genuinely undetermined, not implemented, and not worked around.
 //
+// ALTERNATE CHANNEL TRIED AND REJECTED (2026-09-24): ICC's public Open
+// Meeting Minutes (icc.illinois.gov/home/open-minutes, a real, ungated,
+// static index of verbatim court-reporter transcripts of every Commission
+// meeting since 2008) looked like a real fix for both grant/deny/dismiss
+// disposition and resolution date — the Commission votes on every CPCN at
+// one of these meetings. Built and live-tested a full prototype
+// (fetch the index, download+parse the relevant PDFs via `pdf-parse`,
+// match a docket to its own vote) before concluding it isn't safe to ship,
+// for three independently confirmed reasons, not just one:
+//   1. The transcript NEVER cites a docket number anywhere — matching has
+//      to go by the applicant's own name instead, but the same handful of
+//      utilities (ComEd, Ameren Illinois, Ameren Transmission) file most of
+//      this docket type's real history, so applicant-name matching alone
+//      produced SIXTEEN real dockets spanning 2012-2026 all matching the
+//      same one or two recent grants — obvious nonsense confirmed by a live
+//      test run against all 59 real candidates.
+//   2. Adding a required distinctive-term match (the docket's own county
+//      name(s) or a named project's acronym, both real per-docket details —
+//      see candidate descriptions) cut that from 16 false matches to 3, but
+//      didn't fix it: Illinois county names recur across entirely unrelated
+//      dockets of different utility types voted at the SAME meeting (a real
+//      confirmed collision: an Ameren electric CPCN and an unrelated
+//      Illinois American Water wastewater CPCN, both naming Madison County,
+//      at the same Nov 7, 2024 meeting).
+//   3. Even after also requiring the item text to say "electric" and reject
+//      "water"/"gas" (which happens to reject that specific collision), a
+//      deeper, structural problem surfaced: real items are NOT reliably
+//      newline-delimited in the extracted transcript text — e.g. a real
+//      "Item G-1" was found starting mid-line right after the PRECEDING,
+//      unrelated item's own closing sentence ("...the orders are approved.
+//      Now we will turn to gas items. Item G-1 concerns..."), with no
+//      newline before "Item G-1" at all. A plain-text item splitter (the
+//      only kind available without positional/layout-aware PDF parsing, a
+//      much larger undertaking) silently merges that case into the
+//      PRECEDING item's chunk, so a real Ameren gas-certificate WITHDRAWAL
+//      got misclassified as "granted" purely because the merged-in prior
+//      item's own unrelated sentence happened to contain "the orders grant
+//      the certificates."
+// Each fix uncovered a new, independent failure mode rather than narrowing
+// toward zero — the opposite of what this project's "confirmed one real
+// example, iterate if wrong" convention expects. Concluded this channel
+// cannot meet this project's bar against guessing, and was not wired in.
+// Resolution stays genuinely undetermined for reCAPTCHA-blocked dockets,
+// same as before this investigation — not implemented, not worked around.
+//
 // OPEN-ONLY SEARCH (2026-09-24): the same reCAPTCHA gate also broke the
 // original CaseStatus lookup, which fetched `/docket/{id}` (every real
 // candidate errored, 0 upserted). Replacement: the ungated case-search

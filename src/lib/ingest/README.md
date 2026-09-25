@@ -72,6 +72,22 @@ routine re-checks and updates it:
   same page's final-orders archive shows already granted. When the live
   docket search fails, `ingestNcNcucDockets` upserts this list instead
   (vanished-detection skipped, since it's a partial list).
+  ALTERNATE-CHANNEL SEARCH (2026-09-24): looked for a non-Cloudflare-gated
+  substitute for the starw1.ncuc.gov docket/orders portal itself (not just
+  the hearings page above, which already works). Confirmed dead ends, so a
+  future session doesn't re-spend time on the same leads: (1) NCUC's annual
+  "Orders and Decisions" bulletin (`ncuc.gov/documents/ordersYYYY.pdf`) is
+  real and CAPTCHA-free, but confirmed live that it stops at `orders2020.pdf`
+  — `orders2021.pdf` through `orders2025.pdf` all 404, so the series was
+  discontinued and can't help with anything current; (2) the Cloudflare
+  challenge on starw1.ncuc.gov itself was re-checked live the same day and
+  is still up (HTTP 403 with a realistic browser header set, same as this
+  module's own header documents); (3) NCUC's per-docket email subscriptions
+  exist but their signup UI lives inside the same Cloudflare-gated portal
+  and require an NCID login, so they're not a separate channel; (4) a
+  Chapter 132 public-records request to the Clerk's Office for a recurring
+  bulk export is the one remaining real option, but untried — it's a manual
+  ask to a person, not something to automate, and nobody has sent it yet.
 - **Iowa**: the Summit Carbon HLP-2021-0001 status note on the ND PSC
   project (see below), now taken from the Commission's public status page,
   iuc.iowa.gov/hazardous-liquid-pipeline-requests.

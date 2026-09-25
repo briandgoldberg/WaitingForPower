@@ -251,8 +251,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     },
     {
       id: "comments",
-      label: "I Advocated!",
+      label: "I Reached Out!",
       content: <ProjectDiscussion projectId={p.id} hearings={p.hearings.map((h) => ({ date: h.date, label: h.label }))} />,
+      variant: "amber",
     },
   ];
 

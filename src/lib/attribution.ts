@@ -80,7 +80,7 @@ function adLabel(a: Attribution): string {
 
 // Reports a meaningful action. Only visitors who arrived via a tagged link
 // are reported, since the point is to see what ad traffic does.
-export function trackAttributedAction(action: "Advocacy logged" | "Official contact logged" | "Board post" | "Feedback sent"): void {
+export function trackAttributedAction(action: "Advocacy logged" | "Official contact logged" | "Board post" | "Feedback sent" | "Hearing added to calendar"): void {
   const a = read();
   if (!a) return;
   ensureQueue();

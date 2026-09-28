@@ -8,6 +8,8 @@ import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 import type { StateCommentRule } from "@/lib/data/stateCommentRules";
 import { isPublicHearing, ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
+import { buildHearingsIcs, downloadIcs, type CalendarHearing } from "@/lib/calendarInvite";
+import { trackAttributedAction } from "@/lib/attribution";
 
 const PAGE_SIZE = 20;
 
@@ -40,6 +42,21 @@ interface ActionRow {
   ok: boolean | null;
   label: string;
   lines: string[];
+  hearings: CalendarHearing[];
+}
+
+// Downloads an .ics with the project's public hearings (see calendarInvite.ts).
+function addToCalendar(p: AdvocacyProject, hearings: CalendarHearing[]) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://waitingforpower.com";
+  const ics = buildHearingsIcs({
+    projectName: p.name,
+    projectUrl: `${origin}/project/${p.slug}`,
+    detailsUrl: p.hearingLink && /^https?:\/\//.test(p.hearingLink) ? p.hearingLink : null,
+    hearings,
+    uidPrefix: p.slug,
+  });
+  downloadIcs(ics, `hearing-${p.slug}.ics`.slice(0, 120));
+  trackAttributedAction("Hearing added to calendar");
 }
 
 // What a resident can do on this project: whether they can attend and speak
@@ -55,7 +72,12 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
   // page entirely; they're still on the project's own page.
   const attend: ActionRow | null =
     pub.length > 0
-      ? { ok: true, label: "Attend and speak", lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`) }
+      ? {
+          ok: true,
+          label: "Attend and speak",
+          lines: pub.map((h) => `${fmtShort(h.date)} · ${h.label ?? "Public hearing"}${h.location ? " · " + h.location : ""}`),
+          hearings: pub,
+        }
       : null;
 
   const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
@@ -220,19 +242,27 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
               </div>
 
               {attend && (
-                <div className="rounded-lg border-l-4 border-amber-400 dark:border-amber-600 bg-amber-100/70 dark:bg-amber-900/20 px-3 py-2.5 flex gap-2.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => addToCalendar(p, attend.hearings)}
+                  title="Add to your calendar"
+                  className="w-full text-left rounded-lg border-l-4 border-amber-400 dark:border-amber-600 bg-amber-100/70 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/35 px-3 py-2.5 flex gap-2.5 text-xs cursor-pointer transition-colors"
+                >
                   <span aria-hidden className="w-4 shrink-0 text-center">
                     📅
                   </span>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-amber-800 dark:text-amber-400">{attend.label}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-amber-800 dark:text-amber-400">
+                      {attend.label}
+                      <span className="ml-2 font-medium underline">Add to calendar</span>
+                    </div>
                     {attend.lines.map((l, i) => (
                       <div key={i} className="text-[var(--muted)]">
                         {l}
                       </div>
                     ))}
                   </div>
-                </div>
+                </button>
               )}
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">

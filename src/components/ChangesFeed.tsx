@@ -102,6 +102,7 @@ export function ChangesFeed({
   initialHasMore,
   now,
   state,
+  filterSlugs,
 }: {
   initialChanges: ProjectChangeDTO[];
   initialHasMore: boolean;
@@ -120,6 +121,13 @@ export function ChangesFeed({
   // into "Load more" so paging further back stays scoped to the same filter
   // the server-rendered first page already applied.
   state: string | null;
+  // Restricts the visible changes to this set of project slugs — used by
+  // the Projects page's Feed view (src/components/Explorer.tsx) to mirror
+  // whatever the map/list filters currently show. Purely client-side: the
+  // underlying fetch/pagination is unaffected, so "Load more" still pages
+  // through the real, unfiltered change history — a heavily filtered view
+  // may need several clicks to surface a matching change.
+  filterSlugs?: Set<string> | null;
 }) {
   const [changes, setChanges] = useState(initialChanges);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -144,15 +152,31 @@ export function ChangesFeed({
     }
   }
 
-  if (changes.length === 0) {
+  const visibleChanges = filterSlugs ? changes.filter((c) => filterSlugs.has(c.project.slug)) : changes;
+
+  if (visibleChanges.length === 0) {
     return (
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-center text-sm text-[var(--muted)]">
-        No changes detected yet — check back after the next round of source checks.
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-center text-sm text-[var(--muted)] flex flex-col gap-2 items-center">
+        <p>
+          {filterSlugs
+            ? "No recent changes match the current filters."
+            : "No changes detected yet — check back after the next round of source checks."}
+        </p>
+        {hasMore && filterSlugs && (
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loading}
+            className="text-sm font-medium px-3 py-2 rounded-md border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50"
+          >
+            {loading ? "Loading…" : "Load more"}
+          </button>
+        )}
       </div>
     );
   }
 
-  const groups = groupByDate(changes, nowDate);
+  const groups = groupByDate(visibleChanges, nowDate);
 
   return (
     <div className="flex flex-col gap-4">

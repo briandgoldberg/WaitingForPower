@@ -3,7 +3,6 @@ import { queryProjects } from "@/lib/queryProjects";
 import { DEFAULT_FILTERS } from "@/lib/filters";
 import { Explorer } from "@/components/Explorer";
 import { getRecentChanges } from "@/lib/changes";
-import { ChangesFeed } from "@/components/ChangesFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -72,11 +71,7 @@ export default async function ProjectsPage() {
           Explore the thousands of power projects waiting for permits.
         </h1>
       </div>
-      <Explorer projects={projects} />
-      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-6 flex flex-col gap-3">
-        <h2 className="text-base font-semibold">Recent project changes</h2>
-        <ChangesFeed initialChanges={changes} initialHasMore={hasMore} now={now} state={null} />
-      </div>
+      <Explorer projects={projects} initialChanges={changes} initialChangesHasMore={hasMore} now={now} />
     </>
   );
 }

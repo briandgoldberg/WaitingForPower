@@ -56,41 +56,72 @@ export default async function HomePage({
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
       />
-      <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
-        {alertMessage && (
+      {alertMessage && (
+        <div className="mx-auto max-w-5xl w-full px-4 sm:px-6 pt-4">
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm">
             {alertMessage}
           </div>
-        )}
-        <div className="flex flex-col gap-3">
-          {/* The opening statement carries the weight; the rest is supporting detail in a lighter tone. */}
-          <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
-            America&rsquo;s energy projects are stuck in permitting.{" "}
-            <span className="font-normal text-[var(--muted)]">
-              Every year of delay means higher bills, more pollution, and a grid falling further behind demand. We
-              track every project and push for faster permitting decisions.
-            </span>
-          </h1>
+        </div>
+      )}
+
+      {/* Full-bleed hero band — deliberately always dark regardless of site
+          theme, like a print ad, rather than tracking --background/--panel. */}
+      <section
+        className="relative overflow-hidden text-white"
+        style={{ background: "linear-gradient(135deg, #0b1b2e 0%, #16324f 55%, #1e3a5f 100%)" }}
+      >
+        {/* Faint diagonal grid — a hint of blueprint/schematic texture behind the copy, not a distraction. */}
+        <svg className="absolute inset-0 h-full w-full opacity-[0.07]" aria-hidden preserveAspectRatio="none">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M40 0H0V40" fill="none" stroke="white" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
+
+        <div className="relative mx-auto max-w-5xl w-full px-4 sm:px-6 py-16 sm:py-24 flex flex-col gap-6">
+          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[#f2b866]">
+            Energy Permitting Reform
+          </span>
+          <p className="text-2xl sm:text-4xl font-bold tracking-tight leading-tight max-w-3xl">
+            America&rsquo;s demand for power is rising rapidly but critical energy projects spend years stuck in
+            permitting processes and legal challenges. Billions in investment are delayed while America continues to
+            rely on aging power infrastructure and a convoluted state-by-state approval system.
+          </p>
+          <p className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug max-w-3xl text-[#f2b866]">
+            America needs comprehensive, bipartisan energy permitting reform to build faster and deliver the
+            affordable, reliable, and clean power our economy demands.
+          </p>
           <Link
             href="/policies"
-            className="flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[48px] rounded-full bg-accent px-6 text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"
-            style={{ color: "white" }}
+            className="inline-flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[52px] rounded-full px-8 text-base font-bold shadow-lg transition-transform hover:scale-[1.03]"
+            style={{ background: "#f2b866", color: "#0b1b2e" }}
           >
-            Advocate Now →
+            Advocate for Permit Reform Now →
           </Link>
         </div>
+      </section>
 
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Link href="/projects" className="rounded-full border border-[var(--border)] px-4 py-2 hover:bg-black/5 dark:hover:bg-white/10">
-            Explore projects →
-          </Link>
-          <Link href="/activity" className="rounded-full border border-[var(--border)] px-4 py-2 hover:bg-black/5 dark:hover:bg-white/10">
-            See community activity →
-          </Link>
-          <Link href="/board" className="rounded-full border border-[var(--border)] px-4 py-2 hover:bg-black/5 dark:hover:bg-white/10">
-            Join the discussion →
-          </Link>
-        </div>
+      <div className="mx-auto max-w-5xl w-full px-4 sm:px-6 py-8 flex flex-wrap gap-3 text-sm">
+        <Link
+          href="/projects"
+          className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
+        >
+          Explore projects →
+        </Link>
+        <Link
+          href="/activity"
+          className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
+        >
+          See community activity →
+        </Link>
+        <Link
+          href="/board"
+          className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
+        >
+          Join the discussion →
+        </Link>
       </div>
     </>
   );

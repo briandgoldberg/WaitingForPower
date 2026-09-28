@@ -76,12 +76,19 @@ export function LetterBuilder() {
   // without this the same scroll offset lands past its content instead of
   // on it. Scrolls the whole widget back to the top on every step change,
   // skipping the initial mount so loading the page doesn't itself scroll.
+  // Desktop (matches Tailwind's sm: breakpoint, used elsewhere in this file
+  // for the same mobile/desktop split) already fits a step in one view, so
+  // this would only add an unwanted jump there — mobile-only.
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (window.matchMedia("(min-width: 640px)").matches) return;
+    // "auto" (instant), not "smooth" — confirmed some browser/automation
+    // contexts silently no-op a smooth scrollIntoView instead of animating
+    // it, which would leave the scroll position wrong with no visible fix.
+    containerRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
   }, [step]);
 
   const causeSlugs = useMemo(() => [...selected], [selected]);
@@ -125,7 +132,7 @@ export function LetterBuilder() {
 
       {step === 1 && (
         <div className="flex flex-col gap-2.5">
-          <h3 className="text-xl font-bold tracking-tight">Select issues you care about.</h3>
+          <h3 className="text-xl font-bold tracking-tight">Select the issues you care about.</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {POLICIES.map((policy) => {
@@ -233,7 +240,7 @@ export function LetterBuilder() {
               rel="noreferrer"
               className="text-sm font-semibold px-4 py-2 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-center whitespace-nowrap"
             >
-              Email your Congress member →
+              Email Congress →
             </a>
             {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
           </div>

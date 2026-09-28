@@ -171,7 +171,7 @@ export function LetterBuilder() {
                       >
                         Learn more →
                       </a>
-                      <span className="text-xs text-[var(--muted)]">{active ? "Added to your letter" : "Not included"}</span>
+                      <span className="text-xs text-[var(--muted)]">{active ? "Added to letter" : "Not included"}</span>
                     </div>
                   </div>
                 </div>
@@ -185,12 +185,7 @@ export function LetterBuilder() {
 
       {step === 2 && (
         <div className="flex flex-col gap-3">
-          <div>
-            <h3 className="text-xl font-bold tracking-tight">What&rsquo;s your political leaning?</h3>
-            <p className="text-sm text-[var(--muted)] mt-0.5">
-              Same ask, framed the way that fits you — this only changes the tone of your letter.
-            </p>
-          </div>
+          <h3 className="text-xl font-bold tracking-tight">What&rsquo;s your political leaning?</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {ORIENTATION_OPTIONS.map((opt) => {
@@ -225,12 +220,7 @@ export function LetterBuilder() {
 
       {step === 3 && (
         <div className="flex flex-col gap-2.5">
-          <div>
-            <h3 className="text-xl font-bold tracking-tight">Your letter is ready</h3>
-            <p className="text-sm text-[var(--muted)] mt-0.5">
-              Edit anything you&rsquo;d like, then copy it or find where to send it.
-            </p>
-          </div>
+          <h3 className="text-xl font-bold tracking-tight">Your letter is ready</h3>
 
           <textarea
             value={letterText}

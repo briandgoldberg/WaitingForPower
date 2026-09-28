@@ -132,7 +132,7 @@ export function LetterBuilder() {
 
       {step === 1 && (
         <div className="flex flex-col gap-2.5">
-          <h3 className="text-xl font-bold tracking-tight">Select the issues you care about.</h3>
+          <h3 className="text-xl font-bold tracking-tight">Select the issues you care about</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {POLICIES.map((policy) => {

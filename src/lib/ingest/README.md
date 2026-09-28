@@ -108,8 +108,8 @@ commissions, city councils, zoning boards, county boards), plus the odd
 state case a state module's search misses. No state source covers the local
 ones, and they are where most metro energy fights happen. Each entry is its
 own project (`local:<id>`); the cron at `/api/cron/ingest-local-hearings`
-loads them hourly, so a new entry is on the site within an hour of deploy
-(the upsert is a handful of rows). The same weekly Claude Code routine that maintains
+loads them daily (18:xx UTC), so a new entry is on the site within a day of
+deploy. Vercel's plan allows cron jobs at most once a day. The same weekly Claude Code routine that maintains
 `handResearched.ts` searches roughly ten metros for newly announced
 hearings, confirms each on the body's own notice or agenda, and adds it.
 The rules are at the top of `localHearings.ts`.

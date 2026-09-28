@@ -44,7 +44,7 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
           const when = dateParts(h.date, g.state);
           const { project, body } = splitName(g.name);
           const state = splitStateCodes(g.state).map((c) => STATE_NAMES[c] ?? c).join(", ");
-          const venue = h.location && h.location.length <= 60 ? h.location : null;
+          const venue = h.location;
           return (
             <article key={g.slug} className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 flex flex-col gap-4 min-w-0 shadow-sm">
               <div className="flex items-start gap-4">
@@ -61,11 +61,11 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
                   <Link href={`/project/${g.slug}`} className="font-bold leading-snug hover:underline">
                     {project}
                   </Link>
-                  {(body || venue) && (
-                    <div className="text-sm text-[var(--text-secondary)]">
-                      {body}
-                      {body && venue && " · "}
-                      {venue}
+                  {body && <div className="text-sm text-[var(--text-secondary)]">{body}</div>}
+                  {venue && (
+                    <div className="text-sm text-[var(--text-secondary)] flex gap-1">
+                      <span aria-hidden>📍</span>
+                      <span>{venue}</span>
                     </div>
                   )}
                 </div>

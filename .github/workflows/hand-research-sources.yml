@@ -5,6 +5,11 @@
 name: hand-research-sources
 on:
   workflow_dispatch:
+    inputs:
+      urls:
+        description: "Extra pages to fetch and print as text (space-separated), e.g. a city hearing notice"
+        required: false
+        default: ""
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -35,3 +40,17 @@ jobs:
           print("===== IUC SUMMIT PAGE (https://iuc.iowa.gov/hazardous-liquid-pipeline-requests) =====")
           print(ia[k:k + 12000] if k >= 0 else "SECTION NOT FOUND — page structure changed\n" + ia[:3000])
           PY
+      - name: Fetch extra pages
+        if: ${{ inputs.urls != '' }}
+        env:
+          URLS: ${{ inputs.urls }}
+        run: |
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
+          sudo apt-get install -y -qq poppler-utils >/dev/null
+          for u in $URLS; do
+            echo "===== $u"
+            curl -sSL -o page -A "$UA" --max-time 60 "$u" || { echo "FETCH FAILED"; continue; }
+            if head -c 5 page | grep -q '%PDF'; then pdftotext -layout page - | head -c 20000; else
+              python3 -c "import html,re,sys; s=open('page',errors='replace').read(); s=re.sub(r'<(script|style)[^>]*>.*?</\\1>','',s,flags=re.S|re.I); print(re.sub(r'\\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',s)))[:20000])"; fi
+            echo
+          done

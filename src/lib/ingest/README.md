@@ -100,6 +100,18 @@ them), which prints them as plain text in its job log. The
 main one: an entry changes only when the state's own public page shows the
 change, and entries whose sources contradict each other stay out.
 
+## Local hearings (big-city planning commissions and councils)
+
+`localHearings.ts` holds hand-verified public hearings on energy projects
+held by city and county bodies in big metros (planning commissions, city
+councils, county boards). No state source covers these, and they are where
+most big-city energy fights happen. Each entry is its own project
+(`local:<id>`); the cron at `/api/cron/ingest-local-hearings` loads them
+every other day. The same weekly Claude Code routine that maintains
+`handResearched.ts` searches roughly ten metros for newly announced
+hearings, confirms each on the body's own notice or agenda, and adds it.
+The rules are at the top of `localHearings.ts`.
+
 ## Iowa: deliberately not a 42nd state module
 
 Investigated 2026-09-03 (real search demand for it showed up in Search

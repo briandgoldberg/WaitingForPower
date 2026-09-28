@@ -204,6 +204,10 @@
     {
       "path": "/api/cron/ingest-ga-psc",
       "schedule": "0 15 1-31/2 * *"
+    },
+    {
+      "path": "/api/cron/ingest-local-hearings",
+      "schedule": "15 16 1-31/2 * *"
     }
   ]
 }

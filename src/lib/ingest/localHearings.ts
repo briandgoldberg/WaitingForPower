@@ -109,37 +109,44 @@ export const LOCAL_HEARINGS: LocalHearingEntry[] = [
       {
         date: "2026-10-27T19:00:00-04:00",
         label: "Zoning Board public hearing (continued)",
-        location: "Bridgewater Township Zoning Board of Adjustment meeting; see the township's agenda for room and access",
-        dateFrom: "Patch",
+        location: "Bridgewater Township Municipal Building, 100 Commons Way, Bridgewater, NJ",
       },
     ],
     sources: [
+      // Official: the Board meets at 7 p.m. on the 2nd and 4th Tuesdays at
+      // 100 Commons Way (Oct 27 is a 4th Tuesday); the continuance to Oct 27
+      // was announced on the record at the Sept meeting (Patch, Citizen Portal).
       { label: "Bridgewater Township Zoning Board of Adjustment agendas", url: "https://bridgewaternj.gov/agenda-library/board-of-adjustment-meetings" },
+      { label: "Bridgewater Township 2026 Board of Adjustment meeting dates", url: "https://bridgewaternj.gov/all-legal-notices/board-of-adjustment-notices/978-public-legal-notice-board-of-adjustment-meeting-dates-2026/file" },
       { label: "Patch: hearing carried to Oct. 27 at 7 p.m.", url: "https://patch.com/new-jersey/bridgewater/battery-storage-plan-pressed-flooding-security-fire-safety-bridgewater" },
     ],
     verifiedOn: "2026-09-28",
   },
   {
     id: "ca-menifee-seaflower-bess",
-    name: "Seaflower Battery Energy Storage System (up to 400 MWh)",
+    name: "Seaflower Battery Energy Storage System (100 MW / 400 MWh)",
     state: "CA",
     county: "Riverside",
     city: "Los Angeles area (Menifee, Inland Empire)",
     authority: "Menifee Planning Commission",
     projectType: "storage",
     fuelType: "storage",
-    capacityMw: null,
+    capacityMw: 100,
     applicant: null,
     hearings: [
       {
         date: "2026-10-28T18:00:00-07:00",
         label: "Planning Commission public hearing",
-        location: "Menifee City Hall, 29844 Haun Road, Menifee, CA",
-        dateFrom: "Menifee 24/7",
+        location: "Menifee City Hall Council Chambers, 29844 Haun Road, Menifee, CA",
       },
     ],
+    // Official: the draft IS/MND (Plot Plan PLN 25-0027, CUP PLN 25-0019;
+    // 100 MW / 4-hour) and the Commission's regular 6 p.m. meetings on the
+    // 2nd and 4th Wednesdays (Oct 28 is a 4th Wednesday); the Oct 28 date is
+    // from the city's hearing notice as reported by Menifee 24/7.
     sources: [
       { label: "City of Menifee environmental notices (Seaflower BESS draft IS/MND)", url: "https://www.menifee.ca.gov/325/Environmental-Notices-Documents" },
+      { label: "Menifee Planning Commission (meets 2nd and 4th Wednesdays, 6 p.m.)", url: "https://www.menifee.ca.gov/160/Planning-Commission" },
       { label: "Menifee 24/7: Planning Commission hearing Oct. 28", url: "https://menifee247.com/2026/09/planning-commission-to-consider-third-battery-storage-facility-in-menifee.html" },
     ],
     verifiedOn: "2026-09-28",

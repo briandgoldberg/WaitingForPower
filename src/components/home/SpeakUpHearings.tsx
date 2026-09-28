@@ -44,7 +44,6 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
           const when = dateParts(h.date, g.state);
           const { project, body } = splitName(g.name);
           const state = splitStateCodes(g.state).map((c) => STATE_NAMES[c] ?? c).join(", ");
-          const fromNews = /date per /i.test(h.label ?? "");
           const venue = h.location && h.location.length <= 60 ? h.location : null;
           return (
             <article key={g.slug} className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 flex flex-col gap-4 min-w-0 shadow-sm">
@@ -69,14 +68,13 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
                       {venue}
                     </div>
                   )}
-                  {fromNews && <div className="text-xs text-[var(--muted)]">Date from local news; confirm on the posted agenda.</div>}
                 </div>
               </div>
 
               <div className="flex flex-col gap-3">
                 <AttendHearingBox
                   compact
-                  hearings={g.hearings}
+                  hearings={g.hearings.map((x) => ({ ...x, label: x.label?.replace(/\s*\(date per [^)]*\)/i, "") ?? null }))}
                   ctx={{
                     projectName: project,
                     projectUrl: `https://waitingforpower.com/project/${g.slug}`,

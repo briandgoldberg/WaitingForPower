@@ -67,7 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="flex items-baseline gap-2">
                 <span className="text-lg font-bold tracking-tight">WaitingForPower</span>
                 <span className="text-xs text-[var(--muted)] hidden sm:inline">
-                  Tracking America&rsquo;s energy projects waiting for permits
+                  Moving America&rsquo;s Energy Grid Forward
                 </span>
               </span>
             </Link>

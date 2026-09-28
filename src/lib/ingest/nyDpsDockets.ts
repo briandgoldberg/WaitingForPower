@@ -422,13 +422,33 @@ async function fetchCalendarText(url: string): Promise<string> {
 // Event page: "<div>Sep 24, 2026</div>" under month-day-year, then
 // start_date "1:00" and meridiem "PM ET", the notice body naming "CASE
 // 26-E-0284". Confirmed live 2026-09-21 on the Tracy Solar hearing event.
+// The event date block, e.g. "<div>Oct 07, 2026</div>". The calendar uses
+// abbreviated, zero-padded month names (confirmed live 2026-09-28), which
+// LONG_DATE_RE (full names, for document titles) does not match.
+const EVENT_DATE_RE = /month-day-year">\s*<div>\s*([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),\s*(\d{4})\s*<\/div>/;
+const MONTH_ABBREVIATIONS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+function parseEventDate(html: string): { y: number; mo: number; d: number } | null {
+  const m = EVENT_DATE_RE.exec(html);
+  if (!m) return null;
+  const mo = MONTH_ABBREVIATIONS.indexOf(m[1].toLowerCase()) + 1;
+  return mo > 0 ? { y: Number(m[3]), mo, d: Number(m[2]) } : null;
+}
+
+// Case numbers in the page's visible text ("Case 25-S-0741", "Matter
+// 23-03029"). Tags are stripped first, so matter numbers that appear only
+// inside link URLs in the page chrome (e.g. 20-02359) are not picked up.
+function eventCaseNumbers(html: string): string[] {
+  return [...new Set((stripTags(html).match(CASE_NUMBER_RE) ?? []).map((c) => c.toUpperCase()))];
+}
+
 function parseCalendarEvent(html: string): CalendarHearing | null {
-  const title = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
-  const date = /month-day-year">\s*<div>\s*([A-Za-z]+ \d{1,2}, \d{4})\s*<\/div>/.exec(html);
+  // The page's first <h1> is the site logo; the event's own title is the
+  // <h1><span>...</span> one.
+  const title = /<h1[^>]*>\s*<span>([\s\S]*?)<\/span>/i.exec(html);
   const time = /class="start_date">\s*(\d{1,2}):(\d{2})\s*<\/div>\s*<div class="meridiem">\s*([AP])M/i.exec(html);
+  const date = parseEventDate(html);
   if (!title || !date) return null;
-  const dm = LONG_DATE_RE.exec(date[1]);
-  if (!dm) return null;
   let hour = 12;
   let minute = 0;
   if (time) {
@@ -436,12 +456,12 @@ function parseCalendarEvent(html: string): CalendarHearing | null {
     minute = Number(time[2]);
   }
   const venue = /venue-name">\s*<div>([\s\S]*?)<\/div>/.exec(html);
-  const caseNumbers = [...new Set((stripTags(html).match(CASE_NUMBER_RE) ?? []).map((c) => c.toUpperCase()))];
+  const caseNumbers = eventCaseNumbers(html);
   const label = /evidentiary/i.test(title[1]) ? "Evidentiary hearing" : "Public statement hearing";
   return {
     caseNumbers,
     hearing: {
-      date: easternDate(Number(dm[3]), MONTH_NUMBERS[dm[1].toLowerCase()], Number(dm[2]), hour, minute),
+      date: easternDate(date.y, date.mo, date.d, hour, minute),
       endDate: null,
       label,
       location: venue ? stripTags(venue[1]) || null : null,
@@ -449,11 +469,28 @@ function parseCalendarEvent(html: string): CalendarHearing | null {
   };
 }
 
-// Returns null (never an empty map) when the calendar cannot be read, so the
-// caller leaves hearings undefined rather than clearing stored ones. Only
-// events with "hearing" in the slug are opened (public statement and
-// evidentiary hearings); comment deadlines, sessions and conferences are not.
-async function fetchCalendarHearings(): Promise<Map<string, NormalizedHearing[]> | null> {
+// A "Comments due" / "PSC seeks comments" event page: the same month-day-year
+// date block as a hearing event, and the notice body naming the case (e.g.
+// "comments-due-proposed-1075-mw-altona-wind-repowering-project-clinton-county").
+// The deadline is taken as the end of that day, Eastern.
+function parseCommentsDueEvent(html: string): { caseNumbers: string[]; deadline: Date } | null {
+  const date = parseEventDate(html);
+  if (!date) return null;
+  return { caseNumbers: eventCaseNumbers(html), deadline: easternDate(date.y, date.mo, date.d, 23, 59) };
+}
+
+interface CalendarData {
+  hearings: Map<string, NormalizedHearing[]>;
+  // Case number -> the latest public comment deadline the calendar lists.
+  commentDeadlines: Map<string, Date>;
+}
+
+// Returns null (never empty maps) when the calendar cannot be read, so the
+// caller leaves hearings and comment deadlines undefined rather than
+// clearing stored ones. Events with "hearing" in the slug are opened as
+// hearings (public statement and evidentiary); events with "comment" in the
+// slug as comment deadlines. Sessions and conferences are not opened.
+async function fetchCalendarHearings(): Promise<CalendarData | null> {
   try {
     const slugs = new Set<string>();
     for (let page = 0; page < CALENDAR_MAX_PAGES; page++) {
@@ -466,7 +503,18 @@ async function fetchCalendarHearings(): Promise<Map<string, NormalizedHearing[]>
     }
     if (slugs.size === 0) return null;
     const byCase = new Map<string, NormalizedHearing[]>();
+    const commentDeadlines = new Map<string, Date>();
     for (const slug of slugs) {
+      if (!/hearing/i.test(slug) && /comment/i.test(slug)) {
+        const due = parseCommentsDueEvent(await fetchCalendarText(`https://dps.ny.gov/event/${slug}`));
+        await sleep(REQUEST_DELAY_MS);
+        if (!due) continue;
+        for (const caseNumber of due.caseNumbers) {
+          const prev = commentDeadlines.get(caseNumber);
+          if (!prev || due.deadline > prev) commentDeadlines.set(caseNumber, due.deadline);
+        }
+        continue;
+      }
       if (!/hearing/i.test(slug)) continue;
       const parsed = parseCalendarEvent(await fetchCalendarText(`https://dps.ny.gov/event/${slug}`));
       await sleep(REQUEST_DELAY_MS);
@@ -477,7 +525,7 @@ async function fetchCalendarHearings(): Promise<Map<string, NormalizedHearing[]>
         byCase.set(caseNumber, list);
       }
     }
-    return byCase;
+    return { hearings: byCase, commentDeadlines };
   } catch {
     return null;
   }
@@ -621,7 +669,7 @@ function normalizeMatter(
   search: MatterSearchResult,
   detail: DocketDetail,
   track: "article7" | "article8",
-  calendar: Map<string, NormalizedHearing[]> | null,
+  calendar: CalendarData | null,
 ): NormalizedProject {
   const matchKey = resolveMatchKey("ny-dps", search.caseOrMatterNumber);
   const projectType = inferProjectType(search.matterTitle);
@@ -635,7 +683,10 @@ function normalizeMatter(
   else if (detail.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
 
-  const upcoming = calendar ? (calendar.get(search.caseOrMatterNumber.toUpperCase()) ?? []).filter((h) => h.date.getTime() >= Date.now()) : null;
+  const upcoming = calendar ? (calendar.hearings.get(search.caseOrMatterNumber.toUpperCase()) ?? []).filter((h) => h.date.getTime() >= Date.now()) : null;
+  // Undefined when the calendar could not be read, so a stored deadline survives.
+  const deadline = calendar?.commentDeadlines.get(search.caseOrMatterNumber.toUpperCase());
+  const commentDeadline = calendar ? (deadline && deadline.getTime() >= Date.now() ? deadline : null) : undefined;
   const review = detail.resolution ? null : classifyNyReviewStep(detail.docs, (upcoming?.length ?? 0) > 0);
   // Undefined when the calendar could not be read, so stored hearings survive.
   const hearings = upcoming ? [...detail.pastHearings, ...upcoming] : undefined;
@@ -686,6 +737,7 @@ function normalizeMatter(
     reviewStep: review ? review.step : null,
     reviewStepAt: review ? review.at : null,
     hearings,
+    commentDeadline,
     causeSlugs,
     causeDetail: `Waiting on a determination from the New York Department of Public Service under ${trackLabel} — Case No. ${search.caseOrMatterNumber}, "${search.matterTitle}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),

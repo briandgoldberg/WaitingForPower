@@ -24,7 +24,7 @@ export function StateAdvocacySection() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Contact your state power regulator</h2>
+      <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Contact your state power regulator.</h2>
 
       <input
         type="search"

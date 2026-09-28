@@ -66,6 +66,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [bucket, setBucket] = useState(initialBucket);
+  const [upcomingOnly, setUpcomingOnly] = useState(false);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(
@@ -94,17 +95,19 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   }, [rows, query, state]);
 
   const filtered = useMemo(() => {
-    const list = inScope.filter((r) => matchesBucket(bucket, r.score));
+    const list = inScope
+      .filter((r) => matchesBucket(bucket, r.score))
+      .filter((r) => !upcomingOnly || r.attend != null);
     // Always largest project first, regardless of likelihood or date.
     return [...list].sort((a, b) => (b.p.capacityValue ?? -1) - (a.p.capacityValue ?? -1));
-  }, [inScope, bucket]);
+  }, [inScope, bucket, upcomingOnly]);
 
   const reset = () => setVisible(PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">
-        Impact approval decisions by submitting public comments at power projects
+        Impact approval decisions by submitting public comments at power projects.
       </h2>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -138,32 +141,47 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
         <span className="text-xs text-[var(--muted)] self-center">{filtered.length} projects</span>
       </div>
 
-      <div className="flex flex-col gap-1.5 max-w-sm">
-        <span className="text-xs font-medium">Accepting comments?</span>
-        <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Accepting comments?">
-          <div
-            aria-hidden
-            className="absolute top-1 bottom-1 rounded-full bg-[var(--accent)] transition-[left] duration-200 ease-out"
-            style={{ left: `calc(${bucket} * 25% + 3px)`, width: "calc(25% - 6px)" }}
-          />
-          {LIKELIHOOD_LEVELS.map((lvl, i) => (
-            <button
-              key={lvl.label}
-              type="button"
-              role="radio"
-              aria-checked={bucket === i}
-              onClick={() => {
-                setBucket(i);
-                reset();
-              }}
-              className={`relative z-10 rounded-full px-1 py-1.5 text-[11px] sm:text-xs font-medium leading-tight text-center transition-colors ${
-                bucket === i ? "text-white" : "text-[var(--text-secondary)]"
-              }`}
-            >
-              {SHORT_LIKELIHOOD_LABELS[i]}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex flex-col gap-1.5 w-full max-w-sm">
+          <span className="text-xs font-medium">Accepting comments?</span>
+          <div className="relative grid grid-cols-4 rounded-full bg-black/5 dark:bg-white/10 p-1" role="radiogroup" aria-label="Accepting comments?">
+            <div
+              aria-hidden
+              className="absolute top-1 bottom-1 rounded-full bg-[var(--accent)] transition-[left] duration-200 ease-out"
+              style={{ left: `calc(${bucket} * 25% + 3px)`, width: "calc(25% - 6px)" }}
+            />
+            {LIKELIHOOD_LEVELS.map((lvl, i) => (
+              <button
+                key={lvl.label}
+                type="button"
+                role="radio"
+                aria-checked={bucket === i}
+                onClick={() => {
+                  setBucket(i);
+                  reset();
+                }}
+                className={`relative z-10 rounded-full px-1 py-1.5 text-[11px] sm:text-xs font-medium leading-tight text-center transition-colors ${
+                  bucket === i ? "text-white" : "text-[var(--text-secondary)]"
+                }`}
+              >
+                {SHORT_LIKELIHOOD_LABELS[i]}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm font-medium py-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={upcomingOnly}
+            onChange={(e) => {
+              setUpcomingOnly(e.target.checked);
+              reset();
+            }}
+            className="h-4 w-4 shrink-0 rounded border-[var(--border)] accent-amber-500"
+          />
+          Upcoming Hearing
+        </label>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -172,7 +190,14 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
           return (
-            <div key={p.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5">
+            <div
+              key={p.slug}
+              className={`rounded-xl border p-4 flex flex-col gap-2.5 ${
+                attend
+                  ? "border-amber-400 dark:border-amber-600 bg-amber-50/60 dark:bg-amber-950/10"
+                  : "border-[var(--border)] bg-[var(--panel)]"
+              }`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <Link href={`/project/${p.slug}`} className="font-semibold text-sm text-[var(--accent)] underline">
@@ -194,12 +219,12 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
               </div>
 
               {attend && (
-                <div className="rounded-lg bg-black/[0.04] dark:bg-white/[0.06] px-3 py-2.5 flex gap-2.5 text-xs">
+                <div className="rounded-lg bg-amber-100/70 dark:bg-amber-900/20 px-3 py-2.5 flex gap-2.5 text-xs">
                   <span aria-hidden className="w-4 shrink-0 text-center">
                     📅
                   </span>
                   <div className="min-w-0">
-                    <div className="font-semibold">{attend.label}</div>
+                    <div className="font-semibold text-amber-800 dark:text-amber-400">{attend.label}</div>
                     {attend.lines.map((l, i) => (
                       <div key={i} className="text-[var(--muted)]">
                         {l}

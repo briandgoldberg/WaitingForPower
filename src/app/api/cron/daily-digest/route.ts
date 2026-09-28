@@ -2,8 +2,7 @@
 // ~24 hours: bot/MCP/API calls (ApiRequestLog), visitor feedback
 // (VisitorFeedback — this is now the site's only contact channel, since
 // /contact and ContactSubmission were retired in favor of the feedback
-// widget), and new feed subscriptions (FeedSubscription). A rolling
-// 24-hour window ending at
+// widget), and advocacy activity. A rolling 24-hour window ending at
 // run time, not a strict UTC calendar day — same convention as
 // notify-feed-subscribers, and simpler than reasoning about calendar-day
 // boundaries for a cron that just needs to run once daily.
@@ -14,7 +13,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendDailyDigestEmail } from "@/lib/dailyDigestEmail";
-import { stateName } from "@/lib/data/usStates";
 import { classifyUserAgent } from "@/lib/classifyUserAgent";
 import { describeAdvocacyEntry, describeContactTarget, STANCE_INFO, type AdvocacyType, type ContactTargetType, type Stance } from "@/lib/data/advocacyPoints";
 
@@ -30,7 +28,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, newSubscriptions, newPredictorEmails, newComments, newContacts, newLikeCount] = await Promise.all([
+  const [apiLogs, feedbackRows, newComments, newContacts, newLikeCount] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { endpoint: true, userAgent: true },
@@ -38,16 +36,6 @@ export async function GET(req: NextRequest) {
     prisma.visitorFeedback.findMany({
       where: { createdAt: { gte: since } },
       select: { feedbackText: true, contactEmail: true, path: true },
-    }),
-    prisma.feedSubscription.findMany({
-      where: { createdAt: { gte: since } },
-      select: { email: true, confirmed: true, state: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.predictorEmailVerification.findMany({
-      where: { confirmedAt: { gte: since } },
-      select: { email: true, predictor: { select: { displayName: true, agentName: true } } },
-      orderBy: { confirmedAt: "asc" },
     }),
     // The site's "I Advocated" log — advocacyType/stance/hearingDate are set
     // on every current row; null only on a handful of legacy free-text
@@ -162,13 +150,8 @@ export async function GET(req: NextRequest) {
       .map(([userAgent, count]) => ({ userAgent, count })),
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
-    newSubscriptions: newSubscriptions.map((s) => ({ scope: s.state ? stateName(s.state) : "All states", email: s.email, confirmed: s.confirmed })),
     newPosts: posts.slice(0, 50).map((x) => x.post),
     newLikeCount,
-    newPredictorEmails: newPredictorEmails.map((v) => ({
-      email: v.email,
-      label: v.predictor.displayName ?? v.predictor.agentName ?? "anonymous",
-    })),
   });
 
   if (!result.ok) {
@@ -181,10 +164,8 @@ export async function GET(req: NextRequest) {
     apiCallCount: apiLogs.length,
     apiTrafficBreakdown: trafficBreakdown,
     feedbackCount: feedbackRows.length,
-    newSubscriptionCount: newSubscriptions.length,
     newPostCount: posts.length,
     newLikeCount,
-    newPredictorEmailCount: newPredictorEmails.length,
   };
   console.log("daily-digest cron:", summary);
   return NextResponse.json(summary);

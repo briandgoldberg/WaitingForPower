@@ -170,18 +170,23 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-sm font-medium py-1.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={upcomingOnly}
-            onChange={(e) => {
-              setUpcomingOnly(e.target.checked);
-              reset();
-            }}
-            className="h-4 w-4 shrink-0 rounded border-[var(--border)] accent-amber-500"
-          />
-          Upcoming Hearing
-        </label>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium invisible hidden sm:block" aria-hidden>
+            Spacer
+          </span>
+          <label className="flex items-center gap-2 text-sm font-medium py-1.5 sm:ml-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={upcomingOnly}
+              onChange={(e) => {
+                setUpcomingOnly(e.target.checked);
+                reset();
+              }}
+              className="h-4 w-4 shrink-0 rounded border-[var(--border)]"
+            />
+            Upcoming Hearings
+          </label>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">

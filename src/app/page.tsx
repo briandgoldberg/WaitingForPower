@@ -85,7 +85,7 @@ export default async function HomePage({
             Energy Permitting Reform
           </span>
           <p className="text-xl sm:text-3xl font-bold tracking-tight leading-tight max-w-3xl">
-            While America&rsquo;s demand for power continues to rise rapidly, critical energy projects spend years stuck in
+            While America&rsquo;s demand for power rises rapidly, critical energy projects spend years stuck in
             convoluted permitting processes and legal challenges. Billions in investment are delayed and Americans
             continue to rely on aging power infrastructure.
           </p>

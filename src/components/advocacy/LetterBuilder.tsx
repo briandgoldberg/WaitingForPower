@@ -105,7 +105,7 @@ export function LetterBuilder() {
   const canProceedStep1 = causeSlugs.length > 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-5">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
       {/* Same title/subtitle pairing as a project page's own heading —
           text-3xl font-bold for the headline, text-sm text-muted for the
           line right under it. */}
@@ -121,7 +121,7 @@ export function LetterBuilder() {
       </div>
 
       {step === 1 && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
           <div>
             <h3 className="text-xl font-bold tracking-tight">Let&rsquo;s customize your message</h3>
             <p className="text-sm text-[var(--muted)] mt-0.5">
@@ -129,7 +129,7 @@ export function LetterBuilder() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {POLICIES.map((policy) => {
               const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
               const active = selected.has(policy.slug);
@@ -141,8 +141,8 @@ export function LetterBuilder() {
                   }`}
                   style={active ? { boxShadow: `0 0 0 1.5px ${cause.color}` } : undefined}
                 >
-                  <div className="h-1.5" style={{ backgroundColor: cause.color }} />
-                  <div className="p-3 flex flex-col gap-1.5 bg-[var(--background)]">
+                  <div className="h-1" style={{ backgroundColor: cause.color }} />
+                  <div className="p-2.5 flex flex-col gap-1 bg-[var(--background)]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-semibold text-sm leading-snug">{policy.title}</div>

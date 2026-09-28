@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { RESOLVED_STAGES, ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
 import { homesPowered } from "@/lib/calc/homesPowered";
 import { isPublicHearing } from "@/lib/advocacyActions";
+import { LOCAL_HEARINGS } from "@/lib/ingest/localHearings";
 
 const WAITING = { mergedIntoId: null, noLongerReported: false, isAggregateExample: false, currentStage: { notIn: RESOLVED_STAGES } };
 
@@ -53,7 +54,7 @@ export async function getStorageHearings(limit = 3): Promise<SpeakUpHearing[]> {
       label: true,
       location: true,
       project: {
-        select: { slug: true, name: true, state: true, fuelType: true, capacityValue: true, capacityUnit: true, hearingDetailsLink: true },
+        select: { slug: true, name: true, state: true, fuelType: true, capacityValue: true, capacityUnit: true, hearingDetailsLink: true, matchKey: true },
       },
     },
   });
@@ -79,5 +80,20 @@ export async function getStorageHearings(limit = 3): Promise<SpeakUpHearing[]> {
       hearings: [h],
     });
   }
-  return [...bySlug.values()].slice(0, limit);
+  // These are hand-checked entries whose source of truth is localHearings.ts,
+  // so their hearing details come from the deployed code rather than the
+  // last daily load: a corrected time or venue shows up on deploy.
+  const codeByKey = new Map(LOCAL_HEARINGS.map((e) => [`local:${e.id}`, e]));
+  const matchKeys = new Map(rows.map((r) => [r.project.slug, r.project.matchKey]));
+  const now = Date.now();
+  return [...bySlug.values()]
+    .map((g) => {
+      const entry = codeByKey.get(matchKeys.get(g.slug) ?? "");
+      if (!entry) return g;
+      const hearings = entry.hearings
+        .filter((h) => new Date(h.date).getTime() >= now)
+        .map((h) => ({ date: new Date(h.date).toISOString(), label: h.label, location: h.location }));
+      return hearings.length > 0 ? { ...g, name: `${entry.name} (${entry.authority})`, capacityValue: entry.capacityMw, capacityUnit: entry.capacityMw != null ? "MW" : null, hearings } : g;
+    })
+    .slice(0, limit);
 }

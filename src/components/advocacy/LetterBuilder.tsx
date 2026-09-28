@@ -30,7 +30,6 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () =
 }
 
 type Step = 1 | 2 | 3;
-const STEP_LABELS: Record<Step, string> = { 1: "Choose issues", 2: "Your leaning", 3: "Your letter" };
 
 function NextButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
@@ -111,38 +110,14 @@ export function LetterBuilder() {
           text-3xl font-bold for the headline, text-sm text-muted for the
           line right under it. */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Demand change from your Senators and Representative!</h2>
+        <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Demand change from your Senators and Representative.</h2>
         <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
-          Six bipartisan policies to speed up permit decisions, one per bottleneck. Inspired by{" "}
+          Six bipartisan policies to speed up permit decisions. Inspired by{" "}
           <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
             Citizens&rsquo; Climate Lobby
           </a>
           .
         </p>
-      </div>
-
-      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-[var(--muted)]">
-        {([1, 2, 3] as Step[]).map((s, i) => (
-          <div key={s} className="flex items-center gap-2">
-            <span
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
-                step === s
-                  ? "bg-accent text-white"
-                  : step > s
-                    ? "bg-accent/15 text-[var(--accent)]"
-                    : "bg-black/10 dark:bg-white/10"
-              }`}
-            >
-              {step > s ? "✓" : s}
-            </span>
-            <span className={step === s ? "text-[var(--foreground)] font-semibold" : ""}>{STEP_LABELS[s]}</span>
-            {i < 2 && (
-              <span aria-hidden className="mx-1 text-[var(--border)]">
-                —
-              </span>
-            )}
-          </div>
-        ))}
       </div>
 
       {step === 1 && (

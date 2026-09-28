@@ -1021,7 +1021,9 @@ function normalizeCandidate(
   const managed = log != null && currentStage === "local_review";
   const review = managed ? classifyVtReviewStep(log) : null;
   const logHearings = managed ? extractLogHearings(log, new Date(), CASE_DETAIL_URL(record.caseId)) : [];
-  const hearings: (UpcomingHearing & { label: string | null })[] = calendarHearings.map((h) => ({ ...h, label: null }));
+  // Calendar entries come from the PUC's "Public Hearing" event type (see
+  // HEARING_CALENDAR_URL), so each is labeled as one.
+  const hearings: (UpcomingHearing & { label: string | null })[] = calendarHearings.map((h) => ({ ...h, label: "Public hearing" }));
   for (const h of logHearings) {
     if (!hearings.some((x) => x.date.getTime() === h.date.getTime())) hearings.push(h);
   }

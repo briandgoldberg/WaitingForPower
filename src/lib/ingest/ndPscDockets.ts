@@ -233,12 +233,16 @@ const MEETINGS_URL = "https://apps.psc.nd.gov/events/meetings";
 const MEETING_BLOCK_RE = /<div class="meetings-boxes">([\s\S]*?)<\/div>/g;
 const MEETING_DATETIME_RE = /<b>\s*([A-Za-z]+ \d{1,2}, \d{4})\s*-\s*(\d{1,2}:\d{2}\s*[ap]m)/i;
 const MEETING_CASE_RE = /pscasedetail\?getId=\d+&getId2=\d+"[^>]*>\s*(PU-\d+-\d+)\s*<\/a>/gi;
-const MEETING_DOC_LINK_RE = /<a href="(https:\/\/www\.psc\.nd\.gov\/webdocs\/[^"\s]+)"/;
+const MEETING_DOC_LINK_RE = /<a href="(https:\/\/www\.psc\.nd\.gov\/webdocs\/[^"\s]+)"[^>]*>([^<]*)<\/a>/;
 
 interface UpcomingHearing {
   date: Date;
   link: string;
   location: string | null;
+  // The notice document's own link text, which names the meeting type,
+  // e.g. "Formal Hearing" or "Notice of Public Hearing" (see module header
+  // HEARING CALENDAR).
+  label: string | null;
 }
 
 // See module header HEARING CALENDAR — the calendar's own case numbers
@@ -318,12 +322,13 @@ async function fetchUpcomingHearingsByCase(): Promise<Map<string, UpcomingHearin
 
     const docMatch = MEETING_DOC_LINK_RE.exec(text);
     const link = docMatch ? docMatch[1] : MEETINGS_URL;
+    const label = docMatch && docMatch[2].trim() ? docMatch[2].replace(/\s+/g, " ").trim().slice(0, 80) : null;
     const location = extractHearingLocation(text);
 
     for (const caseMatch of text.matchAll(MEETING_CASE_RE)) {
       const caseNumber = normalizeCaseNumber(caseMatch[1]);
       const arr = map.get(caseNumber) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link, location });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link, location, label });
       map.set(caseNumber, arr);
     }
   }
@@ -648,7 +653,7 @@ async function normalizeCandidate(
       : {}),
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/pscasedetail?getId=${listing.getId}&getId2=${listing.getId2}` : null,
     // Undefined when the calendar could not be read, so stored hearings survive.
-    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
+    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })) : undefined,
     sources: [
       {
         label: `ND PSC Case No. ${listing.caseNumber}`,

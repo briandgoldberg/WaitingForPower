@@ -750,7 +750,10 @@ function normalizeCase(
     reviewStepAt: review ? review.at : null,
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/Case/Display/${candidate.caseId}` : null,
     // Undefined when the hearings page could not be read, so stored hearings survive.
-    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
+    // Every entry comes from the PSC's Upcoming Local Public Hearings page (see
+    // module header PUBLIC HEARINGS), the PSC's own term for a hearing held to
+    // take public comment, so each is labeled as one.
+    hearings: upcomingHearings ? hearings.map((h) => ({ date: h.date, endDate: null, label: "Local public hearing", location: h.location })) : undefined,
     sources: [
       {
         label: `MO PSC Case No. ${candidate.caseNo}`,

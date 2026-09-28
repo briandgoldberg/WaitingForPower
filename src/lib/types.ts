@@ -147,5 +147,6 @@ export interface AggregateStats {
   investmentWaitingCoverageCount: number; // how many of totalProjects have an applicable estimate
   totalCleanCapacityMw: number;
   cleanCapacityProjectCount: number; // how many of totalProjects are zero-carbon generation with MW capacity
+  generationCapacityMw: number; // MW of projects that generate power (excludes storage, transmission, LNG, pipelines)
   homesPowered: number; // approximate homes the waiting generation capacity could power (see calc/homesPowered.ts)
 }

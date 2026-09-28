@@ -109,7 +109,8 @@ export function StatsHeader({
     return <ResolvedStatusCard stats={stats} status={status} />;
   }
 
-  const cleanPct = stats.totalCapacityMw > 0 ? (stats.totalCleanCapacityMw / stats.totalCapacityMw) * 100 : 0;
+  // Share of generating MW (storage and transmission don't generate).
+  const cleanPct = stats.generationCapacityMw > 0 ? (stats.totalCleanCapacityMw / stats.generationCapacityMw) * 100 : 0;
 
   const items = [
     {
@@ -138,25 +139,26 @@ export function StatsHeader({
       tone: "amber" as const,
       visual: <HouseIcon />,
       value: stats.homesPowered > 0 ? homesHeadline(stats.homesPowered) : "—",
-      sub: `from ${Math.round(stats.totalCapacityMw).toLocaleString("en-US")} MW waiting`,
+      sub: `from ${Math.round(stats.generationCapacityMw).toLocaleString("en-US")} MW of generation`,
       help: (
         <>
           <p>
-            MW waiting: sums the MW capacity of every matching project. Projects whose capacity is measured in
-            a different unit (LNG&rsquo;s MTPA, a pipeline&rsquo;s length/diameter) aren&rsquo;t
-            included in this MW total.
+            MW of generation: sums the MW of every matching project that generates power (solar, wind,
+            gas, nuclear, hydro, geothermal). Battery storage only shifts power and transmission only
+            moves it, so they&rsquo;re left out here; counting everything, including storage,{" "}
+            {Math.round(stats.totalCapacityMw).toLocaleString("en-US")} MW is waiting. LNG and
+            pipelines aren&rsquo;t measured in MW.
           </p>
           <p className="mt-2">
             Homes: each generating project&rsquo;s MW &times; its fuel&rsquo;s typical U.S. capacity
             factor (EIA; e.g. solar 23%, onshore wind 33%, gas 45%, nuclear 93%) &times; 8,760 hours,
-            divided by an average home&rsquo;s 10,791 kWh a year (EIA). Storage and transmission
-            don&rsquo;t generate power, so they add MW but no homes.
+            divided by an average home&rsquo;s 10,791 kWh a year (EIA).
           </p>
-          {ex && ex.capacityUnit === "MW" && ex.capacityValue != null && (
+          {ex && ex.capacityUnit === "MW" && ex.capacityValue != null && homesPowered(ex.fuelType, ex.capacityValue, ex.capacityUnit) != null && (
             <ExampleNote>
               E.g. <strong>{ex.name}</strong> alone contributes{" "}
               {Math.round(ex.capacityValue).toLocaleString("en-US")} MW of the{" "}
-              {Math.round(stats.totalCapacityMw).toLocaleString("en-US")} MW total
+              {Math.round(stats.generationCapacityMw).toLocaleString("en-US")} MW of generation
               {(() => {
                 const h = homesPowered(ex.fuelType, ex.capacityValue, ex.capacityUnit);
                 return h != null ? <>, enough for {formatHomes(h).replace("≈ ", "about ")}</> : null;
@@ -177,7 +179,7 @@ export function StatsHeader({
       help: (
         <>
           <p>
-            The share of all MW waiting that is clean generation. Sums the MW capacity of matching projects using a zero-direct-emission technology —
+            The share of generating MW waiting that is clean (storage and transmission aren&rsquo;t generation, so they&rsquo;re left out). Sums the MW capacity of matching projects using a zero-direct-emission technology —
             solar, wind, nuclear, hydro, or geothermal. A subset of &ldquo;Capacity waiting&rdquo;
             above, broken out on its own since it&rsquo;s the clean-energy-specific slice of what&rsquo;s
             stuck.

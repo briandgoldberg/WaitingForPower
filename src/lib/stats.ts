@@ -1,7 +1,7 @@
 import type { AggregateStats } from "@/lib/types";
 import type { ProjectDTO } from "@/lib/types";
 import { RESOLVED_STAGES, ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
-import { homesPowered } from "@/lib/calc/homesPowered";
+import { CAPACITY_FACTORS, homesPowered } from "@/lib/calc/homesPowered";
 
 // Aggregate stats deliberately exclude `isAggregateExample` projects —
 // e.g. a regional/ISO-wide statistic standing in for many individual
@@ -47,6 +47,13 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
     }
   }
 
+  // Generating capacity only: storage shifts power and transmission moves it,
+  // so neither counts toward homes or the clean-energy share.
+  const generationCapacityMw = stillWaitingProjects.reduce((sum, p) => {
+    if (CAPACITY_FACTORS[p.fuelType] == null || p.capacityUnit !== "MW" || p.capacityValue == null) return sum;
+    return sum + p.capacityValue;
+  }, 0);
+
   const totalHomesPowered = stillWaitingProjects.reduce((sum, p) => sum + (homesPowered(p.fuelType, p.capacityValue, p.capacityUnit) ?? 0), 0);
 
   return {
@@ -56,6 +63,7 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
     investmentWaitingCoverageCount,
     totalCleanCapacityMw,
     cleanCapacityProjectCount,
+    generationCapacityMw,
     homesPowered: totalHomesPowered,
   };
 }

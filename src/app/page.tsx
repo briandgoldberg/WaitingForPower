@@ -91,7 +91,7 @@ export default async function HomePage({
           </p>
           <p className="text-base sm:text-xl font-semibold tracking-tight leading-snug max-w-3xl text-[#f2b866]">
             America needs comprehensive, bipartisan energy permitting reform to build faster and deliver the
-            affordable, reliable, and clean power our economy demands.
+            affordable, reliable, and clean power our citizens demand.
           </p>
           <Link
             href="/policies"

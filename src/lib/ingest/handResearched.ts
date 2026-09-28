@@ -23,6 +23,7 @@
 import type { FuelType, ProjectType } from "@/lib/data/taxonomies";
 import type { NormalizedProject } from "@/lib/ingest/common";
 import { resolveMatchKey } from "@/lib/ingest/manualOverrides";
+import type { HearingsPage } from "@/lib/ingest/ncNcucDockets";
 
 // ---------------------------------------------------------------------------
 // North Carolina
@@ -193,7 +194,10 @@ export const NC_HAND_RESEARCHED_DOCKETS: NcHandResearchedDocket[] = [
 //     MW in the archive): archive 2023, "Order Granting Certificate of Public
 //     Convenience and Necessity with Conditions".
 
-export function ncHandResearchedProjects(): NormalizedProject[] {
+// hearingsPage: the Commission's hearings page as read this run (see
+// fetchUpcomingHearingsByDocket in ncNcucDockets.ts), or null when it
+// couldn't be read, in which case stored hearings are left alone.
+export function ncHandResearchedProjects(hearingsPage: HearingsPage | null = null): NormalizedProject[] {
   return NC_HAND_RESEARCHED_DOCKETS.map((d) => {
     if (d.resolved) {
       return {
@@ -213,6 +217,7 @@ export function ncHandResearchedProjects(): NormalizedProject[] {
         externalIds: { ncNcuc: d.docketNumber },
       };
     }
+    const upcoming = hearingsPage ? (hearingsPage.upcoming.get(d.docketNumber) ?? []) : undefined;
     const noteParts = [
       `Hand-researched, not auto-updating: North Carolina's docket portal (starw1.ncuc.gov) is behind a Cloudflare challenge this site doesn't bypass, so this docket's status comes from the Commission's own public hearings page, last checked ${NC_VERIFIED_ON}. It is listed there as ${d.reviewStep === "Hearing scheduled" ? "having a hearing scheduled" : "awaiting a Commission decision"}, and it does not appear in that page's final-orders archive.`,
     ];
@@ -240,8 +245,12 @@ export function ncHandResearchedProjects(): NormalizedProject[] {
       causeSlugs: ["local_state_opposition"],
       causeDetail: `Waiting on a certificate from the North Carolina Utilities Commission — Docket No. ${d.docketNumber}, "${d.caption}"`,
       dataQualityNote: noteParts.join(" "),
-      reviewStep: d.reviewStep,
+      reviewStep: upcoming && upcoming.length > 0 ? "Hearing scheduled" : d.reviewStep,
       reviewStepAt: null,
+      // Undefined when the hearings page couldn't be read this run, so
+      // hearings stored by an earlier run survive; [] clears stale ones.
+      hearings: upcoming?.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
+      hearingDetailsLink: upcoming ? (upcoming[0]?.link ?? null) : undefined,
       sources: [{ label: "NCUC hearings and pending proceedings", url: NC_HEARINGS_URL }],
       externalIds: { ncNcuc: d.docketNumber },
     };

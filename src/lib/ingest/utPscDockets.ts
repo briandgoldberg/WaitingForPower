@@ -271,6 +271,17 @@ function decodeHtmlEntities(s: string): string {
 interface UpcomingHearing {
   date: Date;
   location: string | null;
+  // The event's own type, as its SUMMARY names it (see summaryLabel).
+  label: string | null;
+}
+
+// A SUMMARY leads with the event's type, then the case in parentheses, e.g.
+// "Virtual Technical Conference (DEU's Application to Extend Service to
+// Goshen and Elberta, Utah; 21-057-06)" (see module header PUBLIC HEARING
+// DATES). The part before the parenthesis is that type, used as-is.
+function summaryLabel(summary: string): string | null {
+  const head = summary.split("(")[0].replace(/[\s:;,–-]+$/, "").trim();
+  return head.length > 0 ? head.slice(0, 80) : null;
 }
 
 // See module header LOCATION + CANCELLATION. Matches "CANCEL"/"CANCELED"/
@@ -350,7 +361,7 @@ async function fetchUpcomingHearingsByDocket(): Promise<Map<string, UpcomingHear
     for (const m of text.matchAll(DOCKET_NUMBER_RE)) {
       const docketNo = m[1];
       const arr = map.get(docketNo) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location: loc });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location: loc, label: summaryLabel(summary) });
       map.set(docketNo, arr);
     }
   };
@@ -731,7 +742,7 @@ function normalizeDocket(
     causeDetail: `Waiting on a Certificate of Public Convenience and Necessity determination from the Utah Public Service Commission — Docket No. ${listing.docketNo}, "${listing.matter}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     hearingDetailsLink: hearings.length > 0 ? listing.url : null,
-    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })),
+    hearings: hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })),
     sources: [
       {
         label: `Utah PSC Docket No. ${listing.docketNo}`,

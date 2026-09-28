@@ -329,6 +329,21 @@ interface UpcomingHearing {
   date: Date;
   link: string;
   location: string | null;
+  // The hearing type exactly as the row's description states it, e.g.
+  // "Public Witness Hearing" (the public may testify) or "Expert Witness
+  // Hearing" (parties' witnesses only). Null when the row names neither.
+  label: string | null;
+}
+
+// Every hearing row's description opens with its type, e.g. "Public Witness
+// Hearing - Application of Merry Hill PV I, LLC, ..." or "Expert Witness
+// Hearing: Joint Application of ..." (confirmed against the live page
+// 2026-09-28).
+const HEARING_TYPE_RE = /\b(Public Witness Hearing|Expert Witness Hearing|Public Hearing|Evidentiary Hearing|Oral Argument|Technical Conference)\b/i;
+
+function extractHearingRowLabel(row: string): string | null {
+  const m = HEARING_TYPE_RE.exec(stripTagsAndDecode(row));
+  return m ? m[1].replace(/\b\w/g, (c) => c.toUpperCase()) : null;
 }
 
 function stripHtmlComments(html: string): string {
@@ -363,13 +378,13 @@ function extractHearingRowLocation(row: string): string | null {
 // real upcoming hearing found is kept (not just the earliest) — a docket
 // can genuinely have more than one on the books at once (e.g. a Public
 // Witness Hearing and a separate Expert Witness Hearing, see module header).
-interface HearingsPage {
+export interface HearingsPage {
   upcoming: Map<string, UpcomingHearing[]>;
   // Docket numbers in the "Proceedings Awaiting Decision" table.
   awaitingDecision: Set<string>;
 }
 
-async function fetchUpcomingHearingsByDocket(): Promise<HearingsPage> {
+export async function fetchUpcomingHearingsByDocket(): Promise<HearingsPage> {
   const res = await fetch(HEARINGS_URL, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`NCUC hearings page request failed (${res.status})`);
   const html = await res.text();
@@ -407,11 +422,12 @@ async function fetchUpcomingHearingsByDocket(): Promise<HearingsPage> {
     const noticeMatch = HEARING_NOTICE_RE.exec(row);
     const link = noticeMatch ? noticeMatch[1] : HEARINGS_URL;
     const location = extractHearingRowLocation(row);
+    const label = extractHearingRowLabel(row);
 
     for (const docketMatch of row.matchAll(HEARING_DOCKET_RE)) {
       const docketNumber = decodeHtmlEntities(docketMatch[1]);
       const arr = map.get(docketNumber) ?? [];
-      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link, location });
+      if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, link, location, label });
       map.set(docketNumber, arr);
     }
   }
@@ -794,7 +810,7 @@ function normalizeDocket(
     reviewStepAt: reviewStep === undefined ? undefined : null,
     hearingDetailsLink: hearings.length > 0 ? `${BASE_URL}/NCUC/PSC/DocketDetails.aspx?DocketId=${candidate.docketId}` : null,
     // Undefined when the hearings page could not be read, so stored hearings survive.
-    hearings: hearingsPage ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
+    hearings: hearingsPage ? hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })) : undefined,
     sources: [
       {
         label: `NC NCUC Docket No. ${candidate.docketNumber}`,
@@ -826,7 +842,10 @@ export async function ingestNcNcucDockets(maxCandidates = MAX_CANDIDATES): Promi
     // challenge. Fall back to the weekly hand-researched list. It's a
     // partial list by construction, so vanished-detection is skipped
     // (wasCapped) rather than flagging every other NC project as gone.
-    const { upserted, removedResolved, errors } = await upsertNormalizedProjects(ncHandResearchedProjects(), { wasCapped: true });
+    // The hearings page is on www.ncuc.gov, not the blocked portal, so the
+    // hand-researched dockets still get their real hearing dates from it.
+    const hearingsPage = await fetchUpcomingHearingsByDocket().catch(() => null);
+    const { upserted, removedResolved, errors } = await upsertNormalizedProjects(ncHandResearchedProjects(hearingsPage), { wasCapped: true });
     return {
       candidatesFound: 0,
       processedCandidates: 0,

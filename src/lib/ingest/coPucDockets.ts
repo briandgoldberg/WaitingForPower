@@ -150,6 +150,19 @@ const DOCKET_NUMBER_IN_SUMMARY_RE = /\b\d{2}[A-Z]-\d{3,4}[A-Z]{1,3}\b/g;
 interface UpcomingHearing {
   date: Date;
   location: string | null;
+  // From the event's own code, per the calendar page's legend (see module
+  // header HEARING CALENDAR): PCH, HRG, PHC. Null for any other code.
+  label: string | null;
+}
+
+// The calendar legend's own meanings: "PCH = Public Comment Hearing",
+// "HRG = Hearing: ... to take testimony and evidence in a proceeding",
+// "PHC = Pre-Hearing Conference".
+function labelFromSummary(summary: string): string | null {
+  if (/\bPCH\b/.test(summary)) return "Public comment hearing";
+  if (/\bHRG\b/.test(summary)) return "Evidentiary hearing";
+  if (/\bPHC\b/.test(summary)) return "Pre-hearing conference";
+  return null;
 }
 
 // Minimal RFC5545 unfolding (continuation lines start with a single space)
@@ -212,7 +225,7 @@ async function fetchHearingCalendar(): Promise<{ upcoming: Map<string, UpcomingH
         held.set(docketNo, arr);
       } else {
         const arr = upcoming.get(docketNo) ?? [];
-        if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location });
+        if (!arr.some((h) => h.date.getTime() === date.getTime())) arr.push({ date, location, label: labelFromSummary(summary) });
         upcoming.set(docketNo, arr);
       }
     }
@@ -564,7 +577,7 @@ function normalizeDocket(
       ? { reviewStep: review ? review.step : null, reviewStepAt: review ? review.at : null }
       : {}),
     hearingDetailsLink: hearings.length > 0 ? `${DETAIL_URL}?p_docket_id=${encodeURIComponent(search.docketId)}` : null,
-    hearings: calendar ? hearings.map((h) => ({ date: h.date, endDate: null, label: null, location: h.location })) : undefined,
+    hearings: calendar ? hearings.map((h) => ({ date: h.date, endDate: null, label: h.label, location: h.location })) : undefined,
     sources: [
       {
         label: `Colorado PUC Docket No. ${search.docketId}`,

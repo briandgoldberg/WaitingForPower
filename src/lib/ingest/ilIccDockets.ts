@@ -281,7 +281,7 @@
 // hearing's location. Captured as-is (ALJ name plus any room note,
 // exactly as published) rather than guessed at further.
 //
-// Wired to Vercel Cron daily, 22:00 UTC (see vercel.json and
+// Wired to Vercel Cron every other day, 22:00 UTC (see vercel.json and
 // src/app/api/cron/ingest-il-icc/route.ts) — a real run's timing was
 // measured (64 candidates, 59 real applications) before scheduling this.
 // Also politeness-delayed between requests.

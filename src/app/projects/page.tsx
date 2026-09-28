@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { queryProjects } from "@/lib/queryProjects";
 import { DEFAULT_FILTERS } from "@/lib/filters";
 import { Explorer } from "@/components/Explorer";
+import { getRecentChanges } from "@/lib/changes";
+import { ChangesFeed } from "@/components/ChangesFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,14 @@ export default async function ProjectsPage() {
   // queryProjects() (see src/lib/queryProjects.ts) rather than a raw
   // findMany() here, since the full dataset with all relations included
   // exceeds Prisma Accelerate's per-query response size cap.
-  const projects = await queryProjects(DEFAULT_FILTERS, { allStatuses: true });
+  const [projects, { changes, hasMore }] = await Promise.all([
+    queryProjects(DEFAULT_FILTERS, { allStatuses: true }),
+    getRecentChanges(50, 0, null),
+  ]);
+  // Passed down instead of letting ChangesFeed call `new Date()` itself —
+  // see ChangesFeed's `now` prop comment for the hydration mismatch this
+  // avoids.
+  const now = new Date().toISOString();
 
   return (
     <>
@@ -58,7 +67,16 @@ export default async function ProjectsPage() {
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(DATASET_JSON_LD) }}
       />
+      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 pt-6">
+        <h1 className="text-lg sm:text-xl font-semibold tracking-tight max-w-2xl">
+          Explore the thousands of power projects waiting for permits.
+        </h1>
+      </div>
       <Explorer projects={projects} />
+      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-6 flex flex-col gap-3">
+        <h2 className="text-base font-semibold">Recent project changes</h2>
+        <ChangesFeed initialChanges={changes} initialHasMore={hasMore} now={now} state={null} />
+      </div>
     </>
   );
 }

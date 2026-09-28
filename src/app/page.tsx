@@ -1,11 +1,8 @@
 import Link from "next/link";
-import { getRecentChanges } from "@/lib/changes";
-import { ChangesFeed } from "@/components/ChangesFeed";
 import { AdvocacyFeed } from "@/components/AdvocacyFeed";
 import { Leaderboard } from "@/components/Leaderboard";
 import { getAdvocacyFeed } from "@/lib/advocacyFeed";
 import { getTopAdvocates } from "@/lib/leaderboard";
-import { STATE_NAMES } from "@/lib/data/usStates";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +45,8 @@ const ALERT_MESSAGES: Record<string, string> = {
   "email-taken": "That email already has a saved profile. Sign in with it instead.",
 };
 
-type HomeFeed = "changes" | "advocating" | "leaders";
+type HomeFeed = "advocating" | "leaders";
 const TABS: { value: HomeFeed; label: string }[] = [
-  { value: "changes", label: "Project changes" },
   { value: "advocating", label: "Advocacy activity" },
   { value: "leaders", label: "Top advocates" },
 ];
@@ -58,21 +54,18 @@ const TABS: { value: HomeFeed; label: string }[] = [
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string; alert?: string; feed?: string }>;
+  searchParams: Promise<{ alert?: string; feed?: string }>;
 }) {
-  const { state: stateParam, alert, feed: feedParam } = await searchParams;
-  // Project changes stays the default — the other two tabs start out
-  // thinner and will fill in as people actually use the new advocacy tools.
-  const feed: HomeFeed = feedParam === "advocating" || feedParam === "leaders" ? feedParam : "changes";
-  const state = stateParam && stateParam.toUpperCase() in STATE_NAMES ? stateParam.toUpperCase() : null;
+  const { alert, feed: feedParam } = await searchParams;
+  // Project changes now lives on /projects — this defaults to advocacy
+  // activity instead.
+  const feed: HomeFeed = feedParam === "leaders" ? "leaders" : "advocating";
   const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
 
-  const [changesResult, advocacyResult, leaders] = await Promise.all([
-    feed === "changes" ? getRecentChanges(50, 0, state) : Promise.resolve({ changes: [], hasMore: false }),
+  const [advocacyResult, leaders] = await Promise.all([
     feed === "advocating" ? getAdvocacyFeed(0, 20) : Promise.resolve({ items: [], hasMore: false }),
     feed === "leaders" ? getTopAdvocates(25) : Promise.resolve([]),
   ]);
-  const { changes, hasMore } = changesResult;
   // Passed down instead of letting the feed components call `new Date()`
   // themselves — see ChangesFeed's `now` prop comment for the hydration
   // mismatch this fixes.
@@ -113,7 +106,7 @@ export default async function HomePage({
           {TABS.map((tab) => (
             <Link
               key={tab.value}
-              href={tab.value === "changes" ? "/" : `/?feed=${tab.value}`}
+              href={tab.value === "advocating" ? "/" : `/?feed=${tab.value}`}
               role="tab"
               aria-selected={feed === tab.value}
               className={`shrink-0 -mb-px px-0.5 pb-2.5 pt-1 max-[359px]:text-xs text-[13px] min-[400px]:text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
@@ -126,15 +119,6 @@ export default async function HomePage({
           ))}
         </div>
 
-        {feed === "changes" && (
-          // key={state}: ChangesFeed seeds its own state from initialChanges
-          // via useState's lazy initializer, which only runs once on mount —
-          // a client-side navigation to a new ?state= otherwise leaves the
-          // old filtered list on screen even though this server component
-          // re-rendered with fresh data. Keying by state forces a real
-          // remount when the filter changes.
-          <ChangesFeed key={state ?? "all"} initialChanges={changes} initialHasMore={hasMore} now={now} state={state} />
-        )}
         {feed === "advocating" && (
           <AdvocacyFeed initialItems={advocacyResult.items} initialHasMore={advocacyResult.hasMore} now={now} />
         )}

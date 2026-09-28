@@ -223,11 +223,11 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
                       {formatCapacity(p.capacityValue, p.capacityUnit)}
                     </span>
                   )}
-                  <span className="text-xs text-[var(--text-secondary)]">{commentStatusText(score, p.commentDeadline)}</span>
+                  <span className="text-xs text-[var(--text-secondary)]">{commentStatusText(score, p.commentDeadline, p.state)}</span>
                 </div>
               </div>
 
-              {attend && <AttendHearingBox hearings={attend.hearings} ctx={inviteContext(p)} slug={p.slug} />}
+              {attend && <AttendHearingBox hearings={attend.hearings} ctx={inviteContext(p)} slug={p.slug} state={p.state} />}
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                 {rule?.commentUrl && (

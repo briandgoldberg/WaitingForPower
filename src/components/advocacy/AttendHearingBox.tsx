@@ -10,6 +10,7 @@ import {
   type HearingInviteContext,
 } from "@/lib/calendarInvite";
 import { trackAttributedAction } from "@/lib/attribution";
+import { formatHearingDate } from "@/lib/hearingTime";
 
 type CalendarChoice = "google" | "outlook" | "office365" | "ics";
 
@@ -43,13 +44,13 @@ function saveChoice(c: CalendarChoice | null): void {
   }
 }
 
-const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 // "Attend and speak" on an advocacy project card: lists the public hearings,
 // and clicking it adds them to the visitor's calendar of choice. Google and
 // Outlook links carry one event each, so with several hearings the menu offers
 // one link per date; the .ics file holds them all.
-export function AttendHearingBox({ hearings, ctx, slug }: { hearings: CalendarHearing[]; ctx: HearingInviteContext; slug: string }) {
+export function AttendHearingBox({ hearings, ctx, slug, state }: { hearings: CalendarHearing[]; ctx: HearingInviteContext; slug: string; state: string | null }) {
+  const fmtShort = (iso: string) => formatHearingDate(iso, state);
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState<CalendarChoice | null>(null);
   // After a one-click add with the remembered calendar, says where it went

@@ -94,7 +94,7 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
         {contactColumn}
 
         <Column title="Comments and hearings">
-          <p className="text-sm font-medium">{commentStatusText(score, p.commentDeadline)}</p>
+          <p className="text-sm font-medium">{commentStatusText(score, p.commentDeadline, p.state)}</p>
           {rule?.commentUrl && (
             <p className="text-sm mt-1">
               <ExternalLink href={rule.commentUrl}>How to comment</ExternalLink>

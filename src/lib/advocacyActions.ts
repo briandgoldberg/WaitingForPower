@@ -5,6 +5,7 @@
 // two never drift apart on what counts as a public hearing or an open
 // comment window.
 
+import { formatHearingDate } from "@/lib/hearingTime";
 import { splitStateCodes } from "@/lib/data/usStates";
 import { STATE_COMMENT_RULES, type StateCommentRule } from "@/lib/data/stateCommentRules";
 
@@ -50,11 +51,10 @@ export function commentScore(p: CommentScoreInput, rule: StateCommentRule | unde
   return 2;
 }
 
-const fmtShort = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
-// The three-tier status line: nothing else, no icon.
-export function commentStatusText(score: number, deadline: string | null): string {
-  if (score === 3) return deadline ? `Accepting comments · due ${fmtShort(deadline)}` : "Accepting comments";
+// The three-tier status line: nothing else, no icon. The deadline shows in
+// the project's own time zone (see hearingTime.ts).
+export function commentStatusText(score: number, deadline: string | null, state: string | null = null): string {
+  if (score === 3) return deadline ? `Accepting comments · due ${formatHearingDate(deadline, state)}` : "Accepting comments";
   if (score === 2) return "Maybe accepting comments";
   return "Unlikely to accept comments";
 }

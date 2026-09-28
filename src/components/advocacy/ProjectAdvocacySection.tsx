@@ -104,7 +104,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">
-        Impact approval decisions by submitting public comments at the power projects you care about.
+        Impact approval decisions by submitting public comments at the power projects.
       </h2>
 
       <div className="flex flex-wrap items-center gap-2">

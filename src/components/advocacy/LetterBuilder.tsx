@@ -121,23 +121,11 @@ export function LetterBuilder() {
 
   return (
     <div ref={containerRef} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4 scroll-mt-4">
-      {/* Same title/subtitle pairing as a project page's own heading —
-          text-3xl font-bold for the headline, text-sm text-muted for the
-          line right under it. */}
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Email Congress and Advocate for Change</h2>
-        <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
-          Six bipartisan policies to speed up permit decisions. Inspired by{" "}
-          <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
-            Citizens&rsquo; Climate Lobby
-          </a>
-          .
-        </p>
-      </div>
+      <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Email Congress and Advocate for Change</h2>
 
       {step === 1 && (
         <div className="flex flex-col gap-2.5">
-          <h3 className="text-xl font-bold tracking-tight">What issues do you care about?</h3>
+          <h3 className="text-xl font-bold tracking-tight">Select issues you care about.</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {POLICIES.map((policy) => {
@@ -185,7 +173,7 @@ export function LetterBuilder() {
 
       {step === 2 && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-xl font-bold tracking-tight">What&rsquo;s your political leaning?</h3>
+          <h3 className="text-xl font-bold tracking-tight">Select your political leaning</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {ORIENTATION_OPTIONS.map((opt) => {

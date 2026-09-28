@@ -159,7 +159,9 @@ export function ChangesFeed({
       <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6 text-center text-sm text-[var(--muted)] flex flex-col gap-2 items-center">
         <p>
           {filterSlugs
-            ? "No recent changes match the current filters."
+            ? hasMore
+              ? "None of the changes loaded so far match the current filters — older changes might."
+              : "No changes match the current filters."
             : "No changes detected yet — check back after the next round of source checks."}
         </p>
         {hasMore && filterSlugs && (

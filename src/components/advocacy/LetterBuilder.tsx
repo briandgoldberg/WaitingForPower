@@ -125,7 +125,7 @@ export function LetterBuilder() {
           text-3xl font-bold for the headline, text-sm text-muted for the
           line right under it. */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Demand change from your Senators and Representative.</h2>
+        <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Email Congress and Demand Change</h2>
         <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
           Six bipartisan policies to speed up permit decisions. Inspired by{" "}
           <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">

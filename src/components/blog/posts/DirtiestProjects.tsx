@@ -24,10 +24,10 @@ export async function DirtiestProjects() {
     <div className="flex flex-col gap-5">
       <div className="text-sm leading-relaxed">
         <p>
-          No permitting docket publishes an emissions number, so &ldquo;dirtiest&rdquo; here means the largest
-          fossil-fuel infrastructure still awaiting approval &mdash; gas plants by megawatts, pipelines by MMcf/d,
-          each individually verified, not just size-sorted. Click through for the docket, hearing dates, and how to
-          advocate.
+          No permitting docket publishes an emissions number. So &ldquo;dirtiest&rdquo; here means the largest
+          fossil-fuel infrastructure still awaiting approval. That means gas plants ranked by megawatts and pipelines
+          ranked by MMcf/d. Each one was individually verified, not just size-sorted. Click through for the docket,
+          hearing dates, and how to advocate.
         </p>
       </div>
 

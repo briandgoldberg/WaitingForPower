@@ -29,13 +29,42 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () =
   );
 }
 
-// Picks one or more issues plus a political leaning and assembles a
-// pre-written letter to a member of Congress — see advocacyLetters.ts for
-// why nothing here is generated live. Every combination is a deterministic
-// composition of reviewed text, not a model call. The letter textarea
-// starts short (resizable, not collapsible) so the action buttons below it
-// stay in view without needing to expand anything first.
+type Step = 1 | 2 | 3;
+const STEP_LABELS: Record<Step, string> = { 1: "Choose issues", 2: "Your leaning", 3: "Your letter" };
+
+function NextButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="self-end text-sm font-semibold px-5 py-2.5 rounded-full bg-accent hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-colors whitespace-nowrap"
+      style={{ color: "white" }}
+    >
+      Next →
+    </button>
+  );
+}
+
+function BackButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="self-start text-sm font-semibold px-5 py-2.5 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
+    >
+      ← Back
+    </button>
+  );
+}
+
+// A 3-step flow — pick issues, pick a political leaning, then get the
+// assembled letter — instead of one long page, so a visitor is never
+// looking at more than one decision at a time. See advocacyLetters.ts for
+// why nothing here is generated live: every combination is a deterministic
+// composition of reviewed text, not a model call.
 export function LetterBuilder() {
+  const [step, setStep] = useState<Step>(1);
   const [selected, setSelected] = useState<Set<CauseSlug>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>("moderate");
   const [letterText, setLetterText] = useState("");
@@ -74,84 +103,149 @@ export function LetterBuilder() {
     }
   }
 
-  const ready = causeSlugs.length > 0;
+  const canProceedStep1 = causeSlugs.length > 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
-      <h3 className="text-lg font-bold tracking-tight">Write to your representative or senator</h3>
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-5">
+      {/* Same title/subtitle pairing as a project page's own heading —
+          text-3xl font-bold for the headline, text-sm text-muted for the
+          line right under it. */}
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Demand change from your Senators and Representative!</h2>
+        <p className="text-sm text-[var(--muted)] mt-1 max-w-2xl">
+          Six bipartisan policies to speed up permit decisions, one per bottleneck. Inspired by{" "}
+          <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
+            Citizens&rsquo; Climate Lobby
+          </a>
+          .
+        </p>
+      </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-          Which issues do you care about?
-        </span>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {POLICIES.map((policy) => {
-            const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
-            const active = selected.has(policy.slug);
-            return (
-              <div
-                key={policy.slug}
-                className={`rounded-xl border overflow-hidden transition-colors ${
-                  active ? "border-transparent" : "border-[var(--border)]"
-                }`}
-                style={active ? { boxShadow: `0 0 0 1.5px ${cause.color}` } : undefined}
-              >
-                <div className="h-1.5" style={{ backgroundColor: cause.color }} />
-                <div className="p-3 flex flex-col gap-1.5 bg-[var(--background)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-semibold text-sm leading-snug">{policy.title}</div>
-                      <p className="text-xs text-[var(--muted)] mt-0.5">{policy.oneLiner}</p>
+      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs font-medium text-[var(--muted)]">
+        {([1, 2, 3] as Step[]).map((s, i) => (
+          <div key={s} className="flex items-center gap-2">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                step === s
+                  ? "bg-accent text-white"
+                  : step > s
+                    ? "bg-accent/15 text-[var(--accent)]"
+                    : "bg-black/10 dark:bg-white/10"
+              }`}
+            >
+              {step > s ? "✓" : s}
+            </span>
+            <span className={step === s ? "text-[var(--foreground)] font-semibold" : ""}>{STEP_LABELS[s]}</span>
+            {i < 2 && (
+              <span aria-hidden className="mx-1 text-[var(--border)]">
+                —
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="flex flex-col gap-3">
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">Let&rsquo;s customize your message</h3>
+            <p className="text-sm text-[var(--muted)] mt-0.5">
+              Which issues do you care about? Below are 6 bipartisan changes being reviewed by Congress.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {POLICIES.map((policy) => {
+              const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
+              const active = selected.has(policy.slug);
+              return (
+                <div
+                  key={policy.slug}
+                  className={`rounded-xl border overflow-hidden transition-colors ${
+                    active ? "border-transparent" : "border-[var(--border)]"
+                  }`}
+                  style={active ? { boxShadow: `0 0 0 1.5px ${cause.color}` } : undefined}
+                >
+                  <div className="h-1.5" style={{ backgroundColor: cause.color }} />
+                  <div className="p-3 flex flex-col gap-1.5 bg-[var(--background)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm leading-snug">{policy.title}</div>
+                        <p className="text-xs text-[var(--muted)] mt-0.5">{policy.oneLiner}</p>
+                      </div>
+                      <Toggle
+                        checked={active}
+                        onChange={() => toggleCause(policy.slug)}
+                        label={`Include ${policy.title} in your letter`}
+                      />
                     </div>
-                    <Toggle
-                      checked={active}
-                      onChange={() => toggleCause(policy.slug)}
-                      label={`Include ${policy.title} in your letter`}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-3 mt-0.5">
-                    <a href={`#${policy.slug}`} className="text-xs font-medium text-[var(--accent)] underline">
-                      Learn more →
-                    </a>
-                    <span className="text-xs text-[var(--muted)]">{active ? "In your letter" : "Not included"}</span>
+                    <div className="flex items-center justify-between gap-3 mt-0.5">
+                      <a
+                        href={`#${policy.slug}`}
+                        className="text-xs font-medium text-[var(--accent)] border border-[var(--border)] rounded-full px-2.5 py-1 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                      >
+                        Learn more →
+                      </a>
+                      <span className="text-xs text-[var(--muted)]">{active ? "In your letter" : "Not included"}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              );
+            })}
+          </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">How do you lean?</span>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {ORIENTATION_OPTIONS.map((opt) => {
-            const active = orientation === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setOrientation(opt.value)}
-                aria-pressed={active}
-                className={`text-left rounded-lg border px-3 py-2 transition-colors ${
-                  active
-                    ? "border-[var(--accent)] bg-accent/10"
-                    : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
-                }`}
-              >
-                <div className="text-sm font-semibold" style={active ? { color: "var(--accent)" } : undefined}>
-                  {opt.label}
-                </div>
-                <div className="text-xs text-[var(--muted)] mt-0.5">{opt.description}</div>
-              </button>
-            );
-          })}
+          <NextButton onClick={() => setStep(2)} disabled={!canProceedStep1} />
         </div>
-      </div>
+      )}
 
-      {ready && (
+      {step === 2 && (
+        <div className="flex flex-col gap-3">
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">What&rsquo;s your political leaning?</h3>
+            <p className="text-sm text-[var(--muted)] mt-0.5">
+              Same ask, framed the way that fits you — this only changes the tone of your letter.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {ORIENTATION_OPTIONS.map((opt) => {
+              const active = orientation === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setOrientation(opt.value)}
+                  aria-pressed={active}
+                  className={`text-left rounded-lg border px-3 py-2 transition-colors ${
+                    active
+                      ? "border-[var(--accent)] bg-accent/10"
+                      : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+                  }`}
+                >
+                  <div className="text-sm font-semibold" style={active ? { color: "var(--accent)" } : undefined}>
+                    {opt.label}
+                  </div>
+                  <div className="text-xs text-[var(--muted)] mt-0.5">{opt.description}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <BackButton onClick={() => setStep(1)} />
+            <NextButton onClick={() => setStep(3)} />
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
         <div className="flex flex-col gap-2.5">
-          <span className="text-sm font-semibold">Your letter</span>
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">Your letter is ready</h3>
+            <p className="text-sm text-[var(--muted)] mt-0.5">
+              Edit anything you&rsquo;d like, then copy it or find where to send it.
+            </p>
+          </div>
 
           <textarea
             value={letterText}
@@ -176,10 +270,12 @@ export function LetterBuilder() {
               rel="noreferrer"
               className="text-sm font-semibold px-4 py-2 rounded-full border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-center whitespace-nowrap"
             >
-              Find your representative →
+              Email your Congress member →
             </a>
             {copied && <span className="text-xs text-[var(--muted)] self-center">Copied to clipboard</span>}
           </div>
+
+          <BackButton onClick={() => setStep(2)} />
         </div>
       )}
     </div>

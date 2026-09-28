@@ -5,16 +5,6 @@ import { LetterBuilder } from "./LetterBuilder";
 export function NationalAdvocacySection() {
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <p className="text-sm text-[var(--muted)] max-w-2xl">
-          Six bipartisan policies to speed up permit decisions, one per bottleneck. Inspired by{" "}
-          <a href="https://citizensclimatelobby.org/" target="_blank" rel="noreferrer" className="underline">
-            Citizens&rsquo; Climate Lobby
-          </a>
-          .
-        </p>
-      </div>
-
       <LetterBuilder />
 
       <div className="flex flex-col gap-5">

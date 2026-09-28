@@ -67,11 +67,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="flex items-baseline gap-2">
                 <span className="text-lg font-bold tracking-tight">WaitingForPower</span>
                 <span className="text-xs text-[var(--muted)] hidden sm:inline">
-                  Moving America&rsquo;s Energy Grid Forward
+                  Moving America&rsquo;s energy grid forward
                 </span>
               </span>
             </Link>
-            {/* Five tabs: one row beside the logo on wider screens, a full-width row under it on phones. */}
+            {/* Six tabs: one row beside the logo on wider screens, a full-width row under it on phones. */}
             <SiteNav />
           </div>
         </header>

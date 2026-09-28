@@ -1,6 +1,7 @@
 // Scheduled load of the hand-researched local (city/county) hearings — see
 // src/app/api/cron/ingest-eia/route.ts for the pattern this follows
-// (CRON_SECRET auth, weekly schedule via vercel.json "crons").
+// (CRON_SECRET auth, daily schedule via vercel.json "crons": the list is a
+// handful of rows, and daily puts a new entry on the site within a day).
 
 import { NextRequest, NextResponse } from "next/server";
 import { ingestLocalHearings } from "@/lib/ingest/localHearings";

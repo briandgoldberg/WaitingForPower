@@ -1,7 +1,9 @@
-// Hand-researched city and county hearings on energy projects in big metros —
-// the planning commissions, city councils and county boards that state
-// regulators' dockets (every other module here) never cover, and where most
-// big-city energy fights actually happen. A weekly research pass (the Claude
+// Hand-researched city and county hearings on energy projects in and around
+// big metros (suburbs included) — the planning commissions, city councils,
+// zoning boards and county boards that state regulators' dockets (every other
+// module here) never cover, and where most metro energy fights actually
+// happen. Also the odd state proceeding a state module's search misses (see
+// the Virginia entry). A weekly research pass (the Claude
 // Code routine that also maintains handResearched.ts) adds and updates
 // entries; see ingest/README.md "Local hearings".
 //
@@ -9,8 +11,11 @@
 //   - Only a hearing the public can speak at (a public hearing, public
 //     comment period at a meeting, or public forum), still ahead, and
 //     confirmed on the government body's own page (agenda, hearing notice,
-//     or official press release). News coverage can lead you to it but
-//     can't confirm it.
+//     or official press release) where one exists. Until the body posts its
+//     agenda, a date reported by at least one named local outlet from the
+//     meeting itself (a continuance announced on the record) may go in with
+//     `dateFrom` naming that outlet; the site then says the date is from
+//     local news. Replace it with the official page once posted.
 //   - Each entry is its own project (matchKey "local:<id>"). Skip a project
 //     some state source already tracks, rather than attaching to it — an
 //     upsert here would overwrite that source's own fields.
@@ -26,6 +31,9 @@ interface LocalHearing {
   date: string; // ISO date-time with offset, e.g. "2026-10-13T19:00:00-07:00"
   label: string; // as the notice names it, e.g. "Public hearing", "City Council public hearing"
   location: string | null; // venue or remote-access line, as published
+  // Set when no official page confirms the date yet: the outlet that
+  // reported it, e.g. "Patch". Shown on the site next to the label.
+  dateFrom?: string;
 }
 
 interface LocalHearingEntry {
@@ -43,13 +51,102 @@ interface LocalHearingEntry {
   // Official page(s) confirming the hearing: agenda, notice, press release.
   sources: { label: string; url: string }[];
   verifiedOn: string; // YYYY-MM-DD, the date the sources were last read
+  // Written-comment deadline, if the notice gives one (ISO date-time).
+  commentDeadline?: string;
+  // Overrides the default "waiting on a local land-use decision" wording,
+  // e.g. for a state proceeding.
+  causeDetail?: string;
+  // A state regulator's case the state importer misses, not a local body's.
+  stateProceeding?: boolean;
   resolved?: { outcome: "approved" | "denied" | "withdrawn"; evidence: string };
 }
 
-// Empty until the weekly pass confirms one; see the rules above. (Checked
-// 2026-09-28: every big-city project hearing found was already past, e.g.
-// Covina's June 2026 BESS hearings and Staten Island's May 2024 one.)
-export const LOCAL_HEARINGS: LocalHearingEntry[] = [];
+// Checked 2026-09-28. Every entry's hearings and sources were read that day.
+export const LOCAL_HEARINGS: LocalHearingEntry[] = [
+  {
+    id: "va-morrisville-wishing-star-500kv",
+    name: "Morrisville–Wishing Star 500 kV transmission line (VA SCC PUR-2026-00021)",
+    state: "VA",
+    county: "Loudoun",
+    city: "Washington, DC suburbs (Loudoun, Prince William and Fauquier counties)",
+    authority: "Virginia State Corporation Commission",
+    projectType: "transmission",
+    fuelType: "transmission",
+    capacityMw: null,
+    applicant: "Dominion Energy Virginia",
+    hearings: [
+      {
+        date: "2026-09-30T10:00:00-04:00",
+        label: "Public witness hearing (Microsoft Teams, webcast)",
+        location: "Microsoft Teams; speaker pre-registration closed Sept 25, written comments open through Oct 30",
+      },
+    ],
+    // The state importer (vaSccDockets.ts) searches captions for
+    // "Certificate of Public Convenience and Necessity"; this case's caption
+    // ("For approval & certification of electric transmission facilities")
+    // doesn't use the phrase, so it's not double-tracked.
+    sources: [
+      { label: "Loudoun County: SCC schedule for the Morrisville–Wishing Star case", url: "https://www.loudoun.gov/m/newsflash/Home/Detail/10742" },
+      { label: "Virginia SCC docket PUR-2026-00021", url: "https://scc.virginia.gov/docketsearch" },
+    ],
+    verifiedOn: "2026-09-28",
+    commentDeadline: "2026-10-30T23:59:00-04:00",
+    stateProceeding: true,
+    causeDetail: "Waiting on a Virginia State Corporation Commission decision on the transmission certificate; evidentiary hearing Nov 16, 2026.",
+  },
+  {
+    id: "nj-bridgewater-rockland-bess",
+    name: "Rockland APV / Bridgewater Energy battery storage, 760 East Main Street",
+    state: "NJ",
+    county: "Somerset",
+    city: "New York City area (Bridgewater Township)",
+    authority: "Bridgewater Township Zoning Board of Adjustment",
+    projectType: "storage",
+    fuelType: "storage",
+    capacityMw: null,
+    applicant: "Rockland APV / Bridgewater Energy LLC",
+    hearings: [
+      {
+        date: "2026-10-27T19:00:00-04:00",
+        label: "Zoning Board public hearing (continued)",
+        location: "Bridgewater Township Zoning Board of Adjustment meeting; see the township's agenda for room and access",
+        dateFrom: "Patch",
+      },
+    ],
+    sources: [
+      { label: "Bridgewater Township Zoning Board of Adjustment agendas", url: "https://bridgewaternj.gov/agenda-library/board-of-adjustment-meetings" },
+      { label: "Patch: hearing carried to Oct. 27 at 7 p.m.", url: "https://patch.com/new-jersey/bridgewater/battery-storage-plan-pressed-flooding-security-fire-safety-bridgewater" },
+    ],
+    verifiedOn: "2026-09-28",
+  },
+  {
+    id: "ca-menifee-seaflower-bess",
+    name: "Seaflower Battery Energy Storage System (up to 400 MWh)",
+    state: "CA",
+    county: "Riverside",
+    city: "Los Angeles area (Menifee, Inland Empire)",
+    authority: "Menifee Planning Commission",
+    projectType: "storage",
+    fuelType: "storage",
+    capacityMw: null,
+    applicant: null,
+    hearings: [
+      {
+        date: "2026-10-28T18:00:00-07:00",
+        label: "Planning Commission public hearing",
+        location: "Menifee City Hall, 29844 Haun Road, Menifee, CA",
+        dateFrom: "Menifee 24/7",
+      },
+    ],
+    sources: [
+      { label: "City of Menifee environmental notices (Seaflower BESS draft IS/MND)", url: "https://www.menifee.ca.gov/325/Environmental-Notices-Documents" },
+      { label: "Menifee 24/7: Planning Commission hearing Oct. 28", url: "https://menifee247.com/2026/09/planning-commission-to-consider-third-battery-storage-facility-in-menifee.html" },
+    ],
+    verifiedOn: "2026-09-28",
+    // Written comments on the draft Mitigated Negative Declaration.
+    commentDeadline: "2026-10-21T23:59:00-07:00",
+  },
+];
 
 export function localHearingProjects(entries: LocalHearingEntry[] = LOCAL_HEARINGS): NormalizedProject[] {
   return entries.map((e) => {
@@ -64,7 +161,7 @@ export function localHearingProjects(entries: LocalHearingEntry[] = LOCAL_HEARIN
       capacityUnit: e.capacityMw != null ? "MW" : null,
       applicant: e.applicant,
       causeSlugs: ["local_state_opposition" as const],
-      causeDetail: `Waiting on a local land-use decision from the ${e.authority}.`,
+      causeDetail: e.causeDetail ?? `Waiting on a local land-use decision from the ${e.authority}.`,
       sources: e.sources,
       externalIds: { local: e.id },
     };
@@ -83,11 +180,17 @@ export function localHearingProjects(entries: LocalHearingEntry[] = LOCAL_HEARIN
       ...base,
       currentStatus: `Pending before the ${e.authority} (hand-checked ${e.verifiedOn})`,
       currentStage: "local_review",
-      dataQualityNote: `Hand-researched local hearing (${e.city}), not auto-updating: this project is decided by a city or county body, not a state regulator, so it comes from that body's own published notice, last checked ${e.verifiedOn}. No coordinates are published, so it will not appear on the map until geocoded another way.`,
+      dataQualityNote: `Hand-researched hearing (${e.city}), not auto-updating: ${e.stateProceeding ? "this state case isn't picked up by the automatic state docket search" : "this project is decided by a city or county body, not a state regulator"}, so it comes from published notices and local reporting, last checked ${e.verifiedOn}. No coordinates are published, so it will not appear on the map until geocoded another way.`,
       reviewStep: upcoming.length > 0 ? "Hearing scheduled" : null,
       reviewStepAt: null,
-      hearings: e.hearings.map((h) => ({ date: new Date(h.date), endDate: null, label: h.label, location: h.location })),
+      hearings: e.hearings.map((h) => ({
+        date: new Date(h.date),
+        endDate: null,
+        label: h.dateFrom ? `${h.label} (date per ${h.dateFrom}; agenda not yet posted)` : h.label,
+        location: h.location,
+      })),
       hearingDetailsLink: e.sources[0]?.url ?? null,
+      commentDeadline: e.commentDeadline && new Date(e.commentDeadline).getTime() > Date.now() ? new Date(e.commentDeadline) : null,
     } satisfies NormalizedProject;
   });
 }

@@ -207,7 +207,7 @@
     },
     {
       "path": "/api/cron/ingest-local-hearings",
-      "schedule": "15 16 1-31/2 * *"
+      "schedule": "15 18 * * *"
     }
   ]
 }

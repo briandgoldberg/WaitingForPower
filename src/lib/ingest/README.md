@@ -100,14 +100,16 @@ them), which prints them as plain text in its job log. The
 main one: an entry changes only when the state's own public page shows the
 change, and entries whose sources contradict each other stay out.
 
-## Local hearings (big-city planning commissions and councils)
+## Local hearings (metro and suburban planning commissions, councils, zoning boards)
 
 `localHearings.ts` holds hand-verified public hearings on energy projects
-held by city and county bodies in big metros (planning commissions, city
-councils, county boards). No state source covers these, and they are where
-most big-city energy fights happen. Each entry is its own project
-(`local:<id>`); the cron at `/api/cron/ingest-local-hearings` loads them
-every other day. The same weekly Claude Code routine that maintains
+held by city, township and county bodies in and around big metros (planning
+commissions, city councils, zoning boards, county boards), plus the odd
+state case a state module's search misses. No state source covers the local
+ones, and they are where most metro energy fights happen. Each entry is its
+own project (`local:<id>`); the cron at `/api/cron/ingest-local-hearings`
+loads them daily (18:xx UTC), so a new entry is on the site within a day of
+deploy. Vercel's plan allows cron jobs at most once a day. The same weekly Claude Code routine that maintains
 `handResearched.ts` searches roughly ten metros for newly announced
 hearings, confirms each on the body's own notice or agenda, and adds it.
 The rules are at the top of `localHearings.ts`.

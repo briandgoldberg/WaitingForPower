@@ -30,34 +30,90 @@ function fold(line: string): string {
 
 // Timed hearings get a two-hour block; the notices don't publish end times.
 const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function buildHearingsIcs(opts: { projectName: string; projectUrl: string; detailsUrl: string | null; hearings: CalendarHearing[]; uidPrefix: string }): string {
+export interface HearingInviteContext {
+  projectName: string;
+  projectUrl: string;
+  detailsUrl: string | null;
+}
+
+interface EventDetails {
+  title: string;
+  description: string;
+  location: string | null;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+}
+
+// The one place an event's wording and times are decided, shared by the .ics
+// file and the Google/Outlook links. Null for an unparseable date.
+function eventDetails(h: CalendarHearing, ctx: HearingInviteContext): EventDetails | null {
+  const start = new Date(h.date);
+  if (Number.isNaN(start.getTime())) return null;
+  const label = h.label ?? "Public hearing";
+  const allDay = isDateOnly(start);
+  return {
+    title: `${label}: ${ctx.projectName}`,
+    description: [
+      `${label} on ${ctx.projectName}. The public can attend and speak.`,
+      ctx.detailsUrl ? `Hearing details: ${ctx.detailsUrl}` : null,
+      `Project: ${ctx.projectUrl}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    location: h.location,
+    start,
+    end: new Date(start.getTime() + (allDay ? DAY_MS : DEFAULT_DURATION_MS)),
+    allDay,
+  };
+}
+
+export function buildHearingsIcs(opts: HearingInviteContext & { hearings: CalendarHearing[]; uidPrefix: string }): string {
   const now = utcStamp(new Date());
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//WaitingForPower//Hearings//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
   for (const h of opts.hearings) {
-    const start = new Date(h.date);
-    if (Number.isNaN(start.getTime())) continue;
-    const label = h.label ?? "Public hearing";
-    const description = [
-      `${label} on ${opts.projectName}. The public can attend and speak.`,
-      opts.detailsUrl ? `Hearing details: ${opts.detailsUrl}` : null,
-      `Project: ${opts.projectUrl}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    lines.push("BEGIN:VEVENT", `UID:${opts.uidPrefix}-${start.getTime()}@waitingforpower.com`, `DTSTAMP:${now}`);
-    if (isDateOnly(start)) {
-      const next = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-      lines.push(`DTSTART;VALUE=DATE:${dateStamp(start)}`, `DTEND;VALUE=DATE:${dateStamp(next)}`);
-    } else {
-      lines.push(`DTSTART:${utcStamp(start)}`, `DTEND:${utcStamp(new Date(start.getTime() + DEFAULT_DURATION_MS))}`);
-    }
-    lines.push(`SUMMARY:${esc(`${label}: ${opts.projectName}`)}`, `DESCRIPTION:${esc(description)}`, `URL:${opts.detailsUrl ?? opts.projectUrl}`);
-    if (h.location) lines.push(`LOCATION:${esc(h.location)}`);
+    const e = eventDetails(h, opts);
+    if (!e) continue;
+    lines.push("BEGIN:VEVENT", `UID:${opts.uidPrefix}-${e.start.getTime()}@waitingforpower.com`, `DTSTAMP:${now}`);
+    if (e.allDay) lines.push(`DTSTART;VALUE=DATE:${dateStamp(e.start)}`, `DTEND;VALUE=DATE:${dateStamp(e.end)}`);
+    else lines.push(`DTSTART:${utcStamp(e.start)}`, `DTEND:${utcStamp(e.end)}`);
+    lines.push(`SUMMARY:${esc(e.title)}`, `DESCRIPTION:${esc(e.description)}`, `URL:${opts.detailsUrl ?? opts.projectUrl}`);
+    if (e.location) lines.push(`LOCATION:${esc(e.location)}`);
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";
+}
+
+// Google Calendar's "new event" page, prefilled (one event per link).
+export function googleCalendarUrl(h: CalendarHearing, ctx: HearingInviteContext): string | null {
+  const e = eventDetails(h, ctx);
+  if (!e) return null;
+  const dates = e.allDay ? `${dateStamp(e.start)}/${dateStamp(e.end)}` : `${utcStamp(e.start)}/${utcStamp(e.end)}`;
+  const q = new URLSearchParams({ action: "TEMPLATE", text: e.title, dates, details: e.description });
+  if (e.location) q.set("location", e.location);
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
+
+// Outlook's "new event" page, prefilled: outlook.live.com for personal
+// accounts, outlook.office.com for Microsoft 365 (work/school).
+export function outlookCalendarUrl(h: CalendarHearing, ctx: HearingInviteContext, kind: "outlook" | "office365"): string | null {
+  const e = eventDetails(h, ctx);
+  if (!e) return null;
+  const host = kind === "outlook" ? "outlook.live.com" : "outlook.office.com";
+  const q = new URLSearchParams({
+    path: "/calendar/action/compose",
+    rru: "addevent",
+    subject: e.title,
+    body: e.description,
+    startdt: e.allDay ? e.start.toISOString().slice(0, 10) : e.start.toISOString(),
+    enddt: e.allDay ? e.end.toISOString().slice(0, 10) : e.end.toISOString(),
+    allday: String(e.allDay),
+  });
+  if (e.location) q.set("location", e.location);
+  return `https://${host}/calendar/0/deeplink/compose?${q}`;
 }
 
 // Hands the file to the browser. On iOS/macOS Safari this opens the "Add to

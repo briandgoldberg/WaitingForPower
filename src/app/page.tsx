@@ -108,7 +108,7 @@ export default async function HomePage({
           href="/projects"
           className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
         >
-          Explore projects →
+          Explore energy projects →
         </Link>
         <Link
           href="/activity"

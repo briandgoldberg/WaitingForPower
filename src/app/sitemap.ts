@@ -20,9 +20,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/policies`, changeFrequency: "monthly", priority: 0.6 },
     // Individual topic threads (/board/{id}) are deliberately not enumerated
     // here, same reasoning as project comments never getting their own
-    // sitemap entry — unmoderated UGC, discoverable via this index page's
-    // own links rather than proactively submitted one by one.
-    { url: `${BASE_URL}/board`, changeFrequency: "daily", priority: 0.5 },
+    // sitemap entry — unmoderated UGC, discoverable via this hub page's
+    // own links rather than proactively submitted one by one. /board itself
+    // now just redirects here (see src/app/board/page.tsx).
+    { url: `${BASE_URL}/activity`, changeFrequency: "daily", priority: 0.5 },
     { url: `${BASE_URL}/methodology`, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE_URL}/data-licensing`, changeFrequency: "monthly", priority: 0.4 },
   ];

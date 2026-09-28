@@ -63,7 +63,7 @@ export function AdvocacyPlatformRedesign() {
           &ldquo;I Reached Out!&rdquo;
         </Link>{" "}
         for logging a contact with your state energy regulator or a member of Congress, and a new{" "}
-        <Link href="/board" className="underline text-[var(--accent)]">
+        <Link href="/activity" className="underline text-[var(--accent)]">
           Board
         </Link>{" "}
         for open discussion, tagged by which reform issue it touches. The Board is conversation, not

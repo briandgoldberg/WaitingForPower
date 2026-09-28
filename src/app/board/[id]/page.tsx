@@ -29,7 +29,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
-      <Link href="/board" className="text-xs text-[var(--muted)] hover:underline w-fit">
+      <Link href="/activity" className="text-xs text-[var(--muted)] hover:underline w-fit">
         ← Board
       </Link>
 

@@ -7,17 +7,21 @@ const LINKS = [
   { href: "/", label: "Home" },
   { href: "/projects", label: "Projects" },
   { href: "/policies", label: "Advocate" },
-  { href: "/activity", label: "Activity" },
-  { href: "/board", label: "Board" },
+  // Board (/board/[id] topic threads) folded into this same tab — see
+  // src/app/activity/page.tsx's "board" sub-tab — so a topic thread page
+  // still reads as this tab being active even though its URL doesn't
+  // start with /activity.
+  { href: "/activity", label: "Community", extraActivePrefixes: ["/board"] },
   { href: "/blog", label: "Blog" },
 ];
 
 // "/" only matches the homepage itself; every other link also matches its
 // own subpages (e.g. /blog/some-post) so the parent tab still reads as
 // active while reading an individual post.
-function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+function isActive(pathname: string, link: (typeof LINKS)[number]): boolean {
+  if (link.href === "/") return pathname === "/";
+  if (pathname === link.href || pathname.startsWith(`${link.href}/`)) return true;
+  return (link.extraActivePrefixes ?? []).some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export function SiteNav() {
@@ -27,7 +31,7 @@ export function SiteNav() {
     <nav className="w-full sm:w-auto">
       <div className="flex items-center justify-between sm:justify-start gap-0.5 sm:gap-1 text-sm">
         {LINKS.map((link) => {
-          const active = isActive(pathname, link.href);
+          const active = isActive(pathname, link);
           return (
             <Link
               key={link.href}

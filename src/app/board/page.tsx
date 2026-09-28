@@ -1,25 +1,8 @@
-import type { Metadata } from "next";
-import { getForumTopics } from "@/lib/forum";
-import { NewTopicForm } from "@/components/board/NewTopicForm";
-import { TopicList } from "@/components/board/TopicList";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Board | WaitingForPower",
-  description: "Discuss permitting reform with people tracking stuck energy projects, as a guest or a confirmed name.",
-  alternates: { canonical: "/board" },
-};
-
-export default async function BoardPage() {
-  const { items, hasMore } = await getForumTopics(0, 20);
-  const now = new Date().toISOString();
-
-  return (
-    <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
-      <NewTopicForm />
-
-      <TopicList initialItems={items} initialHasMore={hasMore} now={now} />
-    </div>
-  );
+// The Board index folded into the Community hub's "board" tab (the
+// default tab at /activity) — individual topic threads keep their own
+// /board/[id] URL (see that route), only this index moved.
+export default function BoardIndexRedirect() {
+  redirect("/activity");
 }

@@ -80,16 +80,16 @@ export default async function HomePage({
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
 
-        <div className="relative mx-auto max-w-5xl w-full px-4 sm:px-6 py-16 sm:py-24 flex flex-col gap-6">
+        <div className="relative mx-auto max-w-5xl w-full px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-4">
           <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[#f2b866]">
             Energy Permitting Reform
           </span>
-          <p className="text-2xl sm:text-4xl font-bold tracking-tight leading-tight max-w-3xl">
+          <p className="text-xl sm:text-3xl font-bold tracking-tight leading-tight max-w-3xl">
             America&rsquo;s demand for power is rising rapidly but critical energy projects spend years stuck in
             permitting processes and legal challenges. Billions in investment are delayed while America continues to
             rely on aging power infrastructure and a convoluted state-by-state approval system.
           </p>
-          <p className="text-lg sm:text-2xl font-semibold tracking-tight leading-snug max-w-3xl text-[#f2b866]">
+          <p className="text-base sm:text-xl font-semibold tracking-tight leading-snug max-w-3xl text-[#f2b866]">
             America needs comprehensive, bipartisan energy permitting reform to build faster and deliver the
             affordable, reliable, and clean power our economy demands.
           </p>
@@ -114,13 +114,7 @@ export default async function HomePage({
           href="/activity"
           className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
         >
-          See community activity →
-        </Link>
-        <Link
-          href="/board"
-          className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
-        >
-          Join the discussion →
+          Join the community →
         </Link>
       </div>
     </>

@@ -192,11 +192,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
           return (
             <div
               key={p.slug}
-              className={`rounded-xl border p-4 flex flex-col gap-2.5 ${
-                attend
-                  ? "border-amber-400 dark:border-amber-600 bg-amber-50/60 dark:bg-amber-950/10"
-                  : "border-[var(--border)] bg-[var(--panel)]"
-              }`}
+              className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -219,7 +215,7 @@ export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projec
               </div>
 
               {attend && (
-                <div className="rounded-lg bg-amber-100/70 dark:bg-amber-900/20 px-3 py-2.5 flex gap-2.5 text-xs">
+                <div className="rounded-lg border-l-4 border-amber-400 dark:border-amber-600 bg-amber-100/70 dark:bg-amber-900/20 px-3 py-2.5 flex gap-2.5 text-xs">
                   <span aria-hidden className="w-4 shrink-0 text-center">
                     📅
                   </span>

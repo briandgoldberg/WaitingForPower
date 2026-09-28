@@ -49,7 +49,21 @@ function saveChoice(c: CalendarChoice | null): void {
 // and clicking it adds them to the visitor's calendar of choice. Google and
 // Outlook links carry one event each, so with several hearings the menu offers
 // one link per date; the .ics file holds them all.
-export function AttendHearingBox({ hearings, ctx, slug, state }: { hearings: CalendarHearing[]; ctx: HearingInviteContext; slug: string; state: string | null }) {
+// `compact` renders just an "Add to calendar" button (and its menu), for cards
+// that show the hearing details themselves.
+export function AttendHearingBox({
+  hearings,
+  ctx,
+  slug,
+  state,
+  compact = false,
+}: {
+  hearings: CalendarHearing[];
+  ctx: HearingInviteContext;
+  slug: string;
+  state: string | null;
+  compact?: boolean;
+}) {
   const fmtShort = (iso: string) => formatHearingDate(iso, state);
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState<CalendarChoice | null>(null);
@@ -91,34 +105,49 @@ export function AttendHearingBox({ hearings, ctx, slug, state }: { hearings: Cal
 
   const linkClass = "rounded-full border border-amber-400/70 dark:border-amber-600/70 px-2.5 py-1 font-medium text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40";
 
-  return (
-    <div className="rounded-lg border-l-4 border-amber-400 dark:border-amber-600 bg-amber-100/70 dark:bg-amber-900/20 text-xs">
-      <button
-        type="button"
-        onClick={onBoxClick}
-        aria-expanded={open}
-        title="Add to your calendar"
-        className="w-full text-left rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/35 px-3 py-2.5 flex gap-2.5 cursor-pointer transition-colors"
-      >
-        <span aria-hidden className="w-4 shrink-0 text-center">
-          📅
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold text-amber-800 dark:text-amber-400">
-            Attend and speak
-            <span className="ml-2 font-medium underline">Add to calendar</span>
-          </div>
-          {hearings.map((h, i) => (
-            <div key={i} className="text-[var(--muted)]">
-              {fmtShort(h.date)} · {h.label ?? "Public hearing"}
-              {h.location ? " · " + h.location : ""}
-            </div>
-          ))}
+  const trigger = compact ? (
+    <button
+      type="button"
+      onClick={onBoxClick}
+      aria-expanded={open}
+      className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-2)] px-4 py-2 text-sm font-semibold text-white dark:text-gray-900 hover:opacity-90 transition-opacity"
+    >
+      <span aria-hidden>📅</span> Add to calendar
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={onBoxClick}
+      aria-expanded={open}
+      title="Add to your calendar"
+      className="w-full text-left rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/35 px-3 py-2.5 flex gap-2.5 cursor-pointer transition-colors"
+    >
+      <span aria-hidden className="w-4 shrink-0 text-center">
+        📅
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-amber-800 dark:text-amber-400">
+          Attend and speak
+          <span className="ml-2 font-medium underline">Add to calendar</span>
         </div>
-      </button>
+        {hearings.map((h, i) => (
+          <div key={i} className="text-[var(--muted)]">
+            {fmtShort(h.date)} · {h.label ?? "Public hearing"}
+            {h.location ? " · " + h.location : ""}
+          </div>
+        ))}
+      </div>
+    </button>
+  );
+  // Menu rows line up under the text in the full box, flush in compact mode.
+  const indent = compact ? "px-0 pt-2" : "px-3 pl-9";
+
+  return (
+    <div className={compact ? "text-xs" : "rounded-lg border-l-4 border-amber-400 dark:border-amber-600 bg-amber-100/70 dark:bg-amber-900/20 text-xs"}>
+      {trigger}
 
       {justAdded && !open && saved && (
-        <div className="px-3 pb-2.5 pl-9 flex flex-wrap gap-x-2 text-[var(--muted)]">
+        <div className={`${indent} pb-2.5 flex flex-wrap gap-x-2 text-[var(--muted)]`}>
           <span>{saved === "ics" ? "Calendar file downloaded." : `Opened in ${CHOICES.find((c) => c.id === saved)?.label}.`}</span>
           <button
             type="button"
@@ -134,7 +163,7 @@ export function AttendHearingBox({ hearings, ctx, slug, state }: { hearings: Cal
       )}
 
       {open && (
-        <div className="px-3 pb-3 pl-9 flex flex-col gap-2">
+        <div className={`${indent} pb-3 flex flex-col gap-2`}>
           <span className="font-medium">Add to which calendar?</span>
           {hearings.length === 1 ? (
             <div className="flex flex-wrap gap-1.5">

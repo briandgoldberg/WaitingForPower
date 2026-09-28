@@ -2,93 +2,108 @@ import Link from "next/link";
 import type { SpeakUpHearing } from "@/lib/homeHighlights";
 import { AttendHearingBox } from "@/components/advocacy/AttendHearingBox";
 import { talkingPointsFor } from "@/lib/data/talkingPoints";
-import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { displayZone, isBareDate } from "@/lib/hearingTime";
 
 function dateParts(iso: string, state: string | null) {
   const d = new Date(iso);
-  const dateOnly = isBareDate(iso);
   const timeZone = displayZone(iso, state);
   return {
     month: d.toLocaleDateString("en-US", { month: "short", timeZone }),
     day: d.toLocaleDateString("en-US", { day: "numeric", timeZone }),
     weekday: d.toLocaleDateString("en-US", { weekday: "short", timeZone }),
-    time: dateOnly ? null : d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone }).replace(":00", ""),
+    time: isBareDate(iso) ? null : d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone }).replace(":00", ""),
   };
 }
 
+// Local-hearing project names end with the deciding body in parentheses
+// ("Seaflower BESS (Menifee Planning Commission)"); split it off to show on
+// its own line.
+function splitName(name: string): { project: string; body: string | null } {
+  const m = /^(.*\S)\s*\(([^()]+)\)$/.exec(name);
+  return m ? { project: m[1], body: m[2] } : { project: name, body: null };
+}
+
+// Home page: upcoming local battery-storage hearings (see getStorageHearings).
 export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
   if (groups.length === 0) return null;
   return (
-    <section className="mx-auto max-w-5xl w-full px-4 sm:px-6 pt-8 flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[var(--accent-2)]">Speak up</span>
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Show up at a public hearing</h2>
-        <p className="text-sm text-[var(--text-secondary)] max-w-2xl">
-          Local boards hear mostly from opponents. A few supportive neighbors at the microphone can change the outcome.
+    <section className="mx-auto max-w-5xl w-full px-4 sm:px-6 pt-10 pb-12 flex flex-col gap-5">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[var(--accent-2)]">Clean energy needs storage</span>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">A few supporters can make the difference</h2>
+        <p className="text-sm sm:text-base text-[var(--text-secondary)] max-w-2xl">
+          Solar and wind need batteries to keep the lights on after sunset. Local boards mostly hear from opponents, so
+          a handful of neighbors speaking up for storage can change the outcome.
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {groups.map((g) => {
-          const first = dateParts(g.hearings[0].date, g.state);
-          const place = splitStateCodes(g.state).map((c) => STATE_NAMES[c] ?? c).join(", ");
-          const fuel = FUEL_TYPE_BY_VALUE[g.fuelType as keyof typeof FUEL_TYPE_BY_VALUE]?.label ?? g.fuelType;
+          const h = g.hearings[0];
+          const when = dateParts(h.date, g.state);
+          const { project, body } = splitName(g.name);
+          const state = splitStateCodes(g.state).map((c) => STATE_NAMES[c] ?? c).join(", ");
+          const fromNews = /date per /i.test(h.label ?? "");
+          const venue = h.location && h.location.length <= 60 ? h.location : null;
           return (
-            <article key={g.slug} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-3 min-w-0">
-              <div className="flex items-start gap-3">
-                <div className="shrink-0 w-14 rounded-lg overflow-hidden border border-[var(--border)] text-center">
-                  <div className="bg-[var(--accent-2)] text-white text-[11px] font-bold uppercase py-0.5">{first.month}</div>
-                  <div className="text-2xl font-bold leading-tight py-0.5">{first.day}</div>
-                  <div className="text-[10px] text-[var(--muted)] pb-1">{first.weekday}</div>
+            <article key={g.slug} className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 flex flex-col gap-4 min-w-0 shadow-sm">
+              <div className="flex items-start gap-4">
+                <div className="shrink-0 w-16 rounded-xl overflow-hidden border border-[var(--border)] text-center">
+                  <div className="bg-[var(--accent-2)] text-white text-xs font-bold uppercase py-1">{when.month}</div>
+                  <div className="text-3xl font-bold leading-tight pt-0.5">{when.day}</div>
+                  <div className="text-[11px] text-[var(--muted)] pb-1">{when.weekday}</div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-[var(--muted)]">
-                    {place || "Location n/a"} · {fuel}
-                    {g.capacityValue != null && <> · {formatCapacity(g.capacityValue, g.capacityUnit)}</>}
-                    {first.time && <> · {first.time}</>}
+                <div className="min-w-0 flex flex-col gap-1">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    {state}
+                    {when.time && <> · {when.time}</>}
                   </div>
-                  <Link href={`/project/${g.slug}`} className="font-semibold text-sm leading-snug text-[var(--accent)] underline line-clamp-3">
-                    {g.name}
+                  <Link href={`/project/${g.slug}`} className="font-bold leading-snug hover:underline">
+                    {project}
                   </Link>
+                  {(body || venue) && (
+                    <div className="text-sm text-[var(--text-secondary)]">
+                      {body}
+                      {body && venue && " · "}
+                      {venue}
+                    </div>
+                  )}
+                  {fromNews && <div className="text-xs text-[var(--muted)]">Date from local news; confirm on the posted agenda.</div>}
                 </div>
               </div>
 
-              <AttendHearingBox
-                hearings={g.hearings}
-                ctx={{
-                  projectName: g.name,
-                  projectUrl: `https://waitingforpower.com/project/${g.slug}`,
-                  detailsUrl: g.hearingLink && /^https?:\/\//.test(g.hearingLink) ? g.hearingLink : null,
-                }}
-                slug={g.slug}
-                state={g.state}
-              />
-
-              <details className="group text-xs">
-                <summary className="cursor-pointer font-semibold text-[var(--accent)] select-none list-none flex items-center gap-1">
-                  <span className="transition-transform group-open:rotate-90" aria-hidden>
-                    ▸
-                  </span>
-                  What to say
-                </summary>
-                <ul className="mt-2 ml-4 list-disc flex flex-col gap-1.5 text-[var(--text-secondary)]">
-                  {talkingPointsFor(g.fuelType).map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-[var(--muted)]">
-                  Keep it to two minutes, say you live nearby if you do, and be specific about why the project matters to you.
-                </p>
-              </details>
+              <div className="flex flex-col gap-3">
+                <AttendHearingBox
+                  compact
+                  hearings={g.hearings}
+                  ctx={{
+                    projectName: project,
+                    projectUrl: `https://waitingforpower.com/project/${g.slug}`,
+                    detailsUrl: g.hearingLink && /^https?:\/\//.test(g.hearingLink) ? g.hearingLink : null,
+                  }}
+                  slug={g.slug}
+                  state={g.state}
+                />
+                <details className="group text-sm">
+                  <summary className="cursor-pointer font-semibold text-[var(--accent)] select-none list-none flex items-center gap-1">
+                    <span className="transition-transform group-open:rotate-90" aria-hidden>
+                      ▸
+                    </span>
+                    What to say
+                  </summary>
+                  <ul className="mt-2 ml-4 list-disc flex flex-col gap-1.5 text-[var(--text-secondary)]">
+                    {talkingPointsFor(g.fuelType).map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-[var(--muted)]">Two minutes is plenty. Say you live nearby if you do.</p>
+                </details>
+              </div>
             </article>
           );
         })}
       </div>
-      <Link href="/policies?tab=hearings" className="text-sm font-medium text-[var(--accent)] underline w-fit">
-        See every upcoming hearing →
-      </Link>
     </section>
   );
 }

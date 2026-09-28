@@ -1,4 +1,4 @@
-// Data for the home page's headline number and "Speak up" hearings strip.
+// Data for the home page's headline number and storage hearings.
 // Both are small aggregate queries so the landing page stays fast.
 
 import { prisma } from "@/lib/db";
@@ -36,17 +36,16 @@ export interface SpeakUpHearing {
   capacityValue: number | null;
   capacityUnit: string | null;
   hearingLink: string | null;
-  handResearched: boolean;
   hearings: { date: string; label: string | null; location: string | null }[];
 }
 
-// The next few projects with a public hearing the public can speak at.
-// Hand-verified local hearings (localHearings.ts, matchKey "local:") come
-// first since they're the ones residents can most easily attend, then the
-// rest by date.
-export async function getSpeakUpHearings(limit = 3): Promise<SpeakUpHearing[]> {
+// The next local battery-storage hearings the public can speak at: the
+// hand-verified ones (localHearings.ts, matchKey "local:"), soonest first.
+// The home page's message is that clean energy needs storage, and these are
+// the local fights where a few supporters make a difference.
+export async function getStorageHearings(limit = 3): Promise<SpeakUpHearing[]> {
   const rows = await prisma.projectHearing.findMany({
-    where: { date: { gte: new Date() }, project: WAITING },
+    where: { date: { gte: new Date() }, project: { ...WAITING, fuelType: "storage", matchKey: { startsWith: "local:" } } },
     orderBy: { date: "asc" },
     take: 200,
     select: {
@@ -54,7 +53,7 @@ export async function getSpeakUpHearings(limit = 3): Promise<SpeakUpHearing[]> {
       label: true,
       location: true,
       project: {
-        select: { slug: true, name: true, state: true, fuelType: true, capacityValue: true, capacityUnit: true, hearingDetailsLink: true, matchKey: true },
+        select: { slug: true, name: true, state: true, fuelType: true, capacityValue: true, capacityUnit: true, hearingDetailsLink: true },
       },
     },
   });
@@ -77,10 +76,8 @@ export async function getSpeakUpHearings(limit = 3): Promise<SpeakUpHearing[]> {
       capacityValue: p.capacityValue,
       capacityUnit: p.capacityUnit,
       hearingLink: p.hearingDetailsLink,
-      handResearched: p.matchKey?.startsWith("local:") ?? false,
       hearings: [h],
     });
   }
-  const all = [...bySlug.values()];
-  return [...all.filter((g) => g.handResearched), ...all.filter((g) => !g.handResearched)].slice(0, limit);
+  return [...bySlug.values()].slice(0, limit);
 }

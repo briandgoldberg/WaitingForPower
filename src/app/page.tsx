@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCleanEnergyWaiting, getSpeakUpHearings, type SpeakUpHearing } from "@/lib/homeHighlights";
+import { getCleanEnergyWaiting, getStorageHearings, type SpeakUpHearing } from "@/lib/homeHighlights";
 import { SpeakUpHearings } from "@/components/home/SpeakUpHearings";
 import { CleanEnergyHeadline } from "@/components/home/CleanEnergyHeadline";
 
@@ -57,7 +57,7 @@ export default async function HomePage({
   let clean: { homes: number; mw: number } | null = null;
   let speakUp: SpeakUpHearing[] = [];
   try {
-    [clean, speakUp] = await Promise.all([getCleanEnergyWaiting(), getSpeakUpHearings(3)]);
+    [clean, speakUp] = await Promise.all([getCleanEnergyWaiting(), getStorageHearings(2)]);
   } catch (err) {
     console.error("Home highlights failed:", err);
   }
@@ -116,24 +116,9 @@ export default async function HomePage({
         </div>
       </section>
 
-      {clean && <CleanEnergyHeadline homes={clean.homes} mw={clean.mw} />}
+      {clean && <CleanEnergyHeadline homes={clean.homes} />}
 
       <SpeakUpHearings groups={speakUp} />
-
-      <div className="mx-auto max-w-5xl w-full px-4 sm:px-6 py-8 flex flex-wrap gap-3 text-sm">
-        <Link
-          href="/projects"
-          className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
-        >
-          Explore energy projects →
-        </Link>
-        <Link
-          href="/activity"
-          className="flex-1 min-w-[180px] rounded-xl border border-[var(--border)] bg-[var(--panel)] px-5 py-4 font-medium hover:border-[var(--accent)] transition-colors"
-        >
-          Join the community →
-        </Link>
-      </div>
     </>
   );
 }

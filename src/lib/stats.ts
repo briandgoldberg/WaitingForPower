@@ -1,6 +1,7 @@
 import type { AggregateStats } from "@/lib/types";
 import type { ProjectDTO } from "@/lib/types";
 import { RESOLVED_STAGES, ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
+import { homesPowered } from "@/lib/calc/homesPowered";
 
 // Aggregate stats deliberately exclude `isAggregateExample` projects —
 // e.g. a regional/ISO-wide statistic standing in for many individual
@@ -46,6 +47,8 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
     }
   }
 
+  const totalHomesPowered = stillWaitingProjects.reduce((sum, p) => sum + (homesPowered(p.fuelType, p.capacityValue, p.capacityUnit) ?? 0), 0);
+
   return {
     totalProjects: realProjects.length,
     totalCapacityMw,
@@ -53,5 +56,6 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
     investmentWaitingCoverageCount,
     totalCleanCapacityMw,
     cleanCapacityProjectCount,
+    homesPowered: totalHomesPowered,
   };
 }

@@ -128,7 +128,7 @@ export function LetterBuilder() {
 
   return (
     <div ref={containerRef} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4 scroll-mt-4">
-      <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Email Congress and Advocate for Change</h2>
+      <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Email Congress and Advocate for Change.</h2>
 
       {step === 1 && (
         <div className="flex flex-col gap-2.5">

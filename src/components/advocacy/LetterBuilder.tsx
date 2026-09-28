@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { POLICIES } from "@/lib/data/policies";
@@ -68,6 +68,21 @@ export function LetterBuilder() {
   const [orientation, setOrientation] = useState<Orientation>("moderate");
   const [letterText, setLetterText] = useState("");
   const [copied, setCopied] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  // Step 1's card grid is tall enough on mobile that reaching "Next" means
+  // scrolling well down the page — the next step is much shorter, so
+  // without this the same scroll offset lands past its content instead of
+  // on it. Scrolls the whole widget back to the top on every step change,
+  // skipping the initial mount so loading the page doesn't itself scroll.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [step]);
 
   const causeSlugs = useMemo(() => [...selected], [selected]);
 
@@ -105,7 +120,7 @@ export function LetterBuilder() {
   const canProceedStep1 = causeSlugs.length > 0;
 
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4">
+    <div ref={containerRef} className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 sm:p-5 flex flex-col gap-4 scroll-mt-4">
       {/* Same title/subtitle pairing as a project page's own heading —
           text-3xl font-bold for the headline, text-sm text-muted for the
           line right under it. */}
@@ -122,12 +137,7 @@ export function LetterBuilder() {
 
       {step === 1 && (
         <div className="flex flex-col gap-2.5">
-          <div>
-            <h3 className="text-xl font-bold tracking-tight">Let&rsquo;s customize your message</h3>
-            <p className="text-sm text-[var(--muted)] mt-0.5">
-              Which issues do you care about? Below are 6 bipartisan changes being reviewed by Congress.
-            </p>
-          </div>
+          <h3 className="text-xl font-bold tracking-tight">What issues do you care about?</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {POLICIES.map((policy) => {
@@ -161,7 +171,7 @@ export function LetterBuilder() {
                       >
                         Learn more →
                       </a>
-                      <span className="text-xs text-[var(--muted)]">{active ? "In your letter" : "Not included"}</span>
+                      <span className="text-xs text-[var(--muted)]">{active ? "Added to your letter" : "Not included"}</span>
                     </div>
                   </div>
                 </div>

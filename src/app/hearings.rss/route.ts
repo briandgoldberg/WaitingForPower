@@ -1,3 +1,4 @@
+import { formatHearingDate } from "@/lib/hearingTime";
 import { getUpcomingPublicHearingGroups } from "@/lib/hearings";
 
 // RSS 2.0 feed of every real upcoming public hearing across all tracked
@@ -19,21 +20,12 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function formatDateRange(date: string, endDate: string | null): string {
-  const start = new Date(date).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+// In the project's own time zone (see hearingTime.ts).
+function formatDateRange(date: string, endDate: string | null, state: string | null): string {
+  const opts = { year: "numeric", month: "short", day: "numeric" } as const;
+  const start = formatHearingDate(date, state, opts);
   if (!endDate) return start;
-  const end = new Date(endDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-  return `${start} – ${end}`;
+  return `${start} – ${formatHearingDate(endDate, state, opts)}`;
 }
 
 export async function GET() {
@@ -48,7 +40,7 @@ export async function GET() {
       const link = `${BASE_URL}/project/${g.project.slug}`;
       const titleParts = [g.project.name];
       if (g.project.state) titleParts.push(`(${g.project.state})`);
-      const title = `${titleParts.join(" ")} — ${formatDateRange(h.date, h.endDate)}${h.label ? ` · ${h.label}` : ""}`;
+      const title = `${titleParts.join(" ")} — ${formatDateRange(h.date, h.endDate, g.project.state)}${h.label ? ` · ${h.label}` : ""}`;
       const descriptionParts = [];
       if (h.location) descriptionParts.push(`Where: ${h.location}`);
       if (g.project.hearingDetailsLink && /^https?:\/\//.test(g.project.hearingDetailsLink)) {

@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { getCleanEnergyWaiting, getSpeakUpHearings, type SpeakUpHearing } from "@/lib/homeHighlights";
+import { SpeakUpHearings } from "@/components/home/SpeakUpHearings";
+import { CleanEnergyHeadline } from "@/components/home/CleanEnergyHeadline";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +51,16 @@ export default async function HomePage({
 }) {
   const { alert } = await searchParams;
   const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
+
+  // Live figures; the page still renders (without these sections) if the
+  // database is unreachable.
+  let clean: { homes: number; mw: number } | null = null;
+  let speakUp: SpeakUpHearing[] = [];
+  try {
+    [clean, speakUp] = await Promise.all([getCleanEnergyWaiting(), getSpeakUpHearings(3)]);
+  } catch (err) {
+    console.error("Home highlights failed:", err);
+  }
 
   return (
     <>
@@ -102,6 +115,10 @@ export default async function HomePage({
           </Link>
         </div>
       </section>
+
+      {clean && <CleanEnergyHeadline homes={clean.homes} mw={clean.mw} />}
+
+      <SpeakUpHearings groups={speakUp} />
 
       <div className="mx-auto max-w-5xl w-full px-4 sm:px-6 py-8 flex flex-wrap gap-3 text-sm">
         <Link

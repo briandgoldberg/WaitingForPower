@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { AggregateStats, ProjectDTO } from "@/lib/types";
 import { STATUS_BUCKETS, type StatusBucket } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
+import { formatHomes, homesPowered } from "@/lib/calc/homesPowered";
 import { HelpTooltip } from "@/components/HelpTooltip";
 
 function ExampleNote({ children }: { children: React.ReactNode }) {
@@ -74,6 +75,7 @@ export function StatsHeader({
     {
       label: "Capacity waiting",
       value: `${Math.round(stats.totalCapacityMw).toLocaleString("en-US")} MW`,
+      sub: stats.homesPowered > 0 ? `${formatHomes(stats.homesPowered)} powered` : undefined,
       help: (
         <>
           <p>
@@ -81,11 +83,22 @@ export function StatsHeader({
             a different unit (LNG&rsquo;s MTPA, a pipeline&rsquo;s length/diameter) aren&rsquo;t
             included in this MW total.
           </p>
+          <p className="mt-2">
+            Homes: each generating project&rsquo;s MW &times; its fuel&rsquo;s typical U.S. capacity
+            factor (EIA; e.g. solar 23%, onshore wind 33%, gas 45%, nuclear 93%) &times; 8,760 hours,
+            divided by an average home&rsquo;s 10,791 kWh a year (EIA). Storage and transmission
+            don&rsquo;t generate power, so they add MW but no homes.
+          </p>
           {ex && ex.capacityUnit === "MW" && ex.capacityValue != null && (
             <ExampleNote>
               E.g. <strong>{ex.name}</strong> alone contributes{" "}
               {Math.round(ex.capacityValue).toLocaleString("en-US")} MW of the{" "}
-              {Math.round(stats.totalCapacityMw).toLocaleString("en-US")} MW total.
+              {Math.round(stats.totalCapacityMw).toLocaleString("en-US")} MW total
+              {(() => {
+                const h = homesPowered(ex.fuelType, ex.capacityValue, ex.capacityUnit);
+                return h != null ? <>, enough for {formatHomes(h).replace("≈ ", "about ")}</> : null;
+              })()}
+              .
             </ExampleNote>
           )}
         </>
@@ -144,6 +157,7 @@ export function StatsHeader({
       {items.map((item) => (
         <div key={item.label} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-2">
           <div className="text-lg font-bold">{item.value}</div>
+          {"sub" in item && item.sub && <div className="text-xs font-medium text-[var(--text-secondary)] -mt-0.5">{item.sub}</div>}
           <div className="text-xs text-[var(--muted)] mt-0.5 flex items-center gap-1">
             {item.label}
             <HelpTooltip label={item.label}>{item.help}</HelpTooltip>

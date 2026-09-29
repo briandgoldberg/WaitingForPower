@@ -7,10 +7,15 @@ import { createHash } from "crypto";
 // ?src= tag naming the channel a link came from.
 
 const MAX_BODY_CHARS = 64_000;
+// Tool arguments are stored so the digest can show what was actually asked;
+// capped so one oversized call can't bloat the log table.
+const MAX_ARGS_CHARS = 500;
 
 export interface RequestDetails {
   rpcMethod: string | null;
   toolName: string | null;
+  // JSON of the first tools/call's arguments, truncated.
+  toolArgs: string | null;
   clientName: string | null;
   ipHash: string | null;
   src: string | null;
@@ -36,12 +41,18 @@ export function srcTag(req: Request): string | null {
   }
 }
 
-type RpcMessage = { method?: unknown; params?: { name?: unknown; clientInfo?: { name?: unknown } } };
+type RpcMessage = { method?: unknown; params?: { name?: unknown; arguments?: unknown; clientInfo?: { name?: unknown } } };
 
 // Reads a JSON-RPC body (single message or batch) for the method, the tool
-// called, and the client name sent with `initialize`. Never throws.
-export function describeRpcBody(text: string): Pick<RequestDetails, "rpcMethod" | "toolName" | "clientName"> {
-  const out = { rpcMethod: null as string | null, toolName: null as string | null, clientName: null as string | null };
+// called and its arguments, and the client name sent with `initialize`.
+// Never throws.
+export function describeRpcBody(text: string): Pick<RequestDetails, "rpcMethod" | "toolName" | "toolArgs" | "clientName"> {
+  const out = {
+    rpcMethod: null as string | null,
+    toolName: null as string | null,
+    toolArgs: null as string | null,
+    clientName: null as string | null,
+  };
   if (!text || text.length > MAX_BODY_CHARS) return out;
   try {
     const parsed = JSON.parse(text) as RpcMessage | RpcMessage[];
@@ -50,7 +61,11 @@ export function describeRpcBody(text: string): Pick<RequestDetails, "rpcMethod" 
     for (const m of messages) {
       if (typeof m?.method !== "string") continue;
       if (!methods.includes(m.method)) methods.push(m.method);
-      if (m.method === "tools/call" && !out.toolName && typeof m.params?.name === "string") out.toolName = m.params.name.slice(0, 80);
+      if (m.method === "tools/call" && !out.toolName && typeof m.params?.name === "string") {
+        out.toolName = m.params.name.slice(0, 80);
+        const args = m.params.arguments;
+        if (args && typeof args === "object" && Object.keys(args).length > 0) out.toolArgs = JSON.stringify(args).slice(0, MAX_ARGS_CHARS);
+      }
       if (m.method === "initialize" && !out.clientName && typeof m.params?.clientInfo?.name === "string") {
         out.clientName = m.params.clientInfo.name.slice(0, 80);
       }

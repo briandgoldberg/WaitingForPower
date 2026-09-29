@@ -16,9 +16,17 @@ const BOT_KEYWORDS = [
   "bot", "probe", "crawler", "monitor", "census", "audit", "watch",
   "witness", "check", "spike", "tripwire", "scan", "liveness", "health",
   "index", "observatory", "reputation", "trust", "drift", "beat",
+  // Added after the 2026-09-29 digest: registry syncers, MCP security
+  // research scanners, and directory explorers ("sondes" = probes).
+  "research", "registry", "sync", "explorer", "sonde",
 ];
 
-const AMBIGUOUS_EXACT_PREFIXES = ["node", "undici", "curl/", "python-httpx", "go-http-client", "deno"];
+// Generic HTTP libraries with no identifying string. python/aiohttp and
+// python-requests were 153 of the 2026-09-29 digest's "212 real" calls.
+const AMBIGUOUS_EXACT_PREFIXES = [
+  "node", "undici", "curl/", "python-httpx", "go-http-client", "deno",
+  "python/", "python-requests", "python-urllib", "aiohttp", "bun/", "axios", "okhttp", "java/", "wget",
+];
 
 export type UserAgentClass = "bot" | "ambiguous" | "real";
 

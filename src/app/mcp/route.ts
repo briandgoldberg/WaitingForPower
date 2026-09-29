@@ -476,12 +476,15 @@ const handler = createMcpHandler(
 // log write must never break the actual MCP response.
 async function logMcpRequest(copy: Request) {
   try {
-    const rpc = copy.method === "POST" ? describeRpcBody(await copy.text()) : { rpcMethod: null, toolName: null, clientName: null };
+    const { toolArgs, ...rpc } =
+      copy.method === "POST" ? describeRpcBody(await copy.text()) : { rpcMethod: null, toolName: null, toolArgs: null, clientName: null };
     await prisma.apiRequestLog.create({
       data: {
         endpoint: "mcp",
         method: copy.method,
         userAgent: copy.headers.get("user-agent"),
+        // MCP has no URL query; the tool's arguments are its equivalent.
+        query: toolArgs,
         ...rpc,
         ipHash: hashIp(copy),
         src: srcTag(copy),

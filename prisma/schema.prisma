@@ -533,9 +533,9 @@ model ApiRequestLog {
   endpoint   String
   method     String
   userAgent  String?
-  // Raw query string for api_projects/api_export/api_snapshots; null for
-  // mcp (its params are in the JSON-RPC body, not the URL, and not worth
-  // parsing just for a log row).
+  // Raw query string for api_projects/api_export/api_snapshots. For mcp,
+  // the JSON of a tools/call's arguments (truncated to 500 chars; null
+  // for other RPC methods and on mcp rows logged before 2026-09-29).
   query      String?
   // MCP only: JSON-RPC method(s), the tool called, and the client name sent
   // with `initialize`. ipHash is a salted SHA-256 prefix (never the raw IP);

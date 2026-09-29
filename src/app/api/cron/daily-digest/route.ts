@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendDailyDigestEmail } from "@/lib/dailyDigestEmail";
-import { classifyUserAgent } from "@/lib/classifyUserAgent";
+import { summarizeApiTraffic } from "@/lib/apiTrafficSummary";
 import { describeAdvocacyEntry, describeContactTarget, STANCE_INFO, type AdvocacyType, type ContactTargetType, type Stance } from "@/lib/data/advocacyPoints";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,8 @@ export async function GET(req: NextRequest) {
   const [apiLogs, feedbackRows, newComments, newContacts, newLikeCount] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
-      select: { endpoint: true, userAgent: true },
+      select: { createdAt: true, endpoint: true, userAgent: true, query: true, rpcMethod: true, toolName: true, clientName: true, ipHash: true, src: true },
+      orderBy: { createdAt: "asc" },
     }),
     prisma.visitorFeedback.findMany({
       where: { createdAt: { gte: since } },
@@ -72,21 +73,22 @@ export async function GET(req: NextRequest) {
   ]);
 
   const apiCallsByEndpoint = new Map<string, number>();
-  // Real vs. discovery-bot breakdown — see classifyUserAgent.ts for why this
-  // exists: raw call counts are dominated by the MCP registry/directory
-  // crawler ecosystem (confirmed live 2026-09-08: ~79% of one day's /mcp
-  // traffic was self-described liveness/health/census bots), so a plain
-  // "N calls today" number reads as far more real usage than it is.
-  const trafficBreakdown = { bot: 0, ambiguous: 0, real: 0 };
-  const realUaCounts = new Map<string, number>();
-  for (const log of apiLogs) {
-    apiCallsByEndpoint.set(log.endpoint, (apiCallsByEndpoint.get(log.endpoint) ?? 0) + 1);
-    const cls = classifyUserAgent(log.userAgent);
-    trafficBreakdown[cls]++;
-    if (cls === "real" && log.userAgent) {
-      realUaCounts.set(log.userAgent, (realUaCounts.get(log.userAgent) ?? 0) + 1);
-    }
-  }
+  for (const log of apiLogs) apiCallsByEndpoint.set(log.endpoint, (apiCallsByEndpoint.get(log.endpoint) ?? 0) + 1);
+
+  // Which of today's callers have been seen before — the difference between
+  // "someone new found the MCP server" and "the same script ran again".
+  const todaysIpHashes = [...new Set(apiLogs.map((l) => l.ipHash).filter((h): h is string => h != null))];
+  const priorRows =
+    todaysIpHashes.length === 0
+      ? []
+      : await prisma.apiRequestLog.findMany({
+          where: { createdAt: { lt: since }, ipHash: { in: todaysIpHashes } },
+          select: { ipHash: true },
+          distinct: ["ipHash"],
+        });
+  // Real vs. discovery-bot classification lives in summarizeApiTraffic —
+  // see classifyUserAgent.ts for why raw call counts mislead.
+  const apiSummary = summarizeApiTraffic(apiLogs, new Set(priorRows.map((r) => r.ipHash!)));
 
   // Unified list of what real people and guests actually did: project
   // advocacy entries ("I Advocated") and site-wide official-contact entries
@@ -141,13 +143,7 @@ export async function GET(req: NextRequest) {
   const result = await sendDailyDigestEmail({
     windowLabel,
     apiCalls: [...apiCallsByEndpoint.entries()].map(([endpoint, count]) => ({ endpoint, count })),
-    apiTrafficBreakdown: trafficBreakdown,
-    // Capped — a genuinely new real client showing up in volume would still
-    // be worth seeing, but this isn't meant to survive a targeted flood.
-    apiRealUserAgents: [...realUaCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 20)
-      .map(([userAgent, count]) => ({ userAgent, count })),
+    api: apiSummary,
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
     newPosts: posts.slice(0, 50).map((x) => x.post),
@@ -162,7 +158,9 @@ export async function GET(req: NextRequest) {
     ok: true,
     windowLabel,
     apiCallCount: apiLogs.length,
-    apiTrafficBreakdown: trafficBreakdown,
+    apiTrafficBreakdown: apiSummary.callsByClass,
+    apiCallersByClass: apiSummary.callersByClass,
+    mcpFunnel: apiSummary.mcpFunnel,
     feedbackCount: feedbackRows.length,
     newPostCount: posts.length,
     newLikeCount,

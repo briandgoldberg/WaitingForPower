@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import type { ApiTrafficSummary, ApiCaller } from "@/lib/apiTrafficSummary";
 
 // Same verified sending domain as feedSubscriptionEmail.ts (see that file's
 // header — waitingforpower.com, confirmed verified 2026-09-02).
@@ -16,13 +17,12 @@ function escapeHtml(s: string): string {
 export interface DailyDigestData {
   windowLabel: string;
   apiCalls: { endpoint: string; count: number }[];
-  // See src/lib/classifyUserAgent.ts — "bot" is a self-described MCP
-  // directory/registry crawler, "ambiguous" is a bare generic HTTP client
-  // (curl/node/python-httpx/...) with no identifying string either way,
-  // "real" is everything else (a real browser, a named company, a
-  // specific AI-agent client). Only "real" is a genuine usage signal.
-  apiTrafficBreakdown: { bot: number; ambiguous: number; real: number };
-  apiRealUserAgents: { userAgent: string; count: number }[];
+  // See src/lib/apiTrafficSummary.ts and classifyUserAgent.ts — "bot" is a
+  // self-described MCP directory/registry crawler, "ambiguous" is a bare
+  // generic HTTP client (curl/python/node/...) with no identifying string
+  // either way, "real" is everything else (a real browser, a named company,
+  // a specific AI-agent client). Only "real" is a genuine usage signal.
+  api: ApiTrafficSummary;
   feedbackTotal: number;
   feedbackDetails: { feedbackText: string | null; contactEmail: string | null; path: string }[];
   // Everything real people and guests actually did: project "I Advocated"
@@ -58,20 +58,76 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
   }
   const resend = new Resend(apiKey);
 
-  const totalApiCalls = data.apiCalls.reduce((s, c) => s + c.count, 0);
-  const { bot: botCalls, ambiguous: ambiguousCalls, real: realCalls } = data.apiTrafficBreakdown;
+  const api = data.api;
+  const totalApiCalls = api.totalCalls;
+  const muted = (t: string) => `<span style="color:#666;">${t}</span>`;
+  const fmtTime = (d: Date) => d.toLocaleTimeString("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" });
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+  const headline = `${plural(api.callersByClass.real, "real caller")} · ${api.callersByClass.ambiguous} unidentified · ${api.callersByClass.bot} crawlers`;
+  const subline = `${api.newCallers} new today · ${totalApiCalls} calls (${api.callsByClass.real} real · ${api.callsByClass.ambiguous} unidentified · ${api.callsByClass.bot} crawler)`;
+  const f = api.mcpFunnel;
+  const funnel = `${f.connected} connected → ${f.initialized} initialized → ${f.listedTools} listed tools → ${f.calledTools} called a tool`;
+  const callerDetail = (c: ApiCaller) =>
+    [
+      plural(c.calls, "call"),
+      c.mcpStage && c.mcpStage !== "called tools" ? `stopped at: ${c.mcpStage}` : null,
+      c.tools.length > 0 ? c.tools.map((t) => `${t.name}×${t.count}`).join(", ") : null,
+      c.endpoints.filter((e) => e !== "mcp").join(", ") || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const callerTag = (c: ApiCaller) => `${c.cls === "ambiguous" ? "[unidentified] " : ""}${c.isNew ? "[NEW] " : ""}`;
 
   const apiSectionHtml =
     totalApiCalls === 0
       ? "<p>No requests.</p>"
-      : `<p style="font-size:22px;font-weight:700;color:#1B6B3C;margin:0;">${realCalls} real</p>
-         <p style="color:#666;font-size:12px;margin:2px 0 8px;">${totalApiCalls} total · ${ambiguousCalls} ambiguous · ${botCalls} crawler</p>
-         <p style="font-size:13px;margin:0 0 6px;">${data.apiCalls.map((c) => `${escapeHtml(c.endpoint)} (${c.count})`).join(" · ")}</p>
+      : `<p style="font-size:22px;font-weight:700;color:#1B6B3C;margin:0;">${escapeHtml(headline)}</p>
+         <p style="color:#666;font-size:12px;margin:2px 0 10px;">${escapeHtml(subline)}</p>
+         <p style="font-size:13px;margin:0 0 4px;"><strong>MCP funnel</strong> ${muted("(non-crawler callers)")}: ${escapeHtml(funnel)}</p>
+         <p style="font-size:13px;margin:0 0 10px;"><strong>Tools called:</strong> ${
+           api.toolCalls.length === 0
+             ? muted("none")
+             : api.toolCalls.map((t) => `${escapeHtml(t.name)} ${muted(`${t.calls}× by ${plural(t.callers, "caller")}`)}`).join(" · ")
+         }</p>
          ${
-           data.apiRealUserAgents.length > 0
-             ? `<p style="color:#1B6B3C;font-size:13px;margin:0;"><strong>Real clients:</strong> ${data.apiRealUserAgents.map((u) => `${escapeHtml(u.userAgent)} (${u.count})`).join(", ")}</p>`
+           api.callers.length > 0
+             ? `<p style="font-size:13px;margin:0 0 2px;"><strong>Who called</strong> ${muted("(crawlers hidden)")}</p>
+                <ul style="font-size:13px;margin:0 0 10px;padding-left:20px;">${api.callers
+                  .map((c) => `<li><strong>${escapeHtml(callerTag(c))}${escapeHtml(c.label)}</strong> ${muted(escapeHtml(callerDetail(c)))}</li>`)
+                  .join("")}</ul>`
              : ""
-         }`;
+         }
+         ${
+           api.questions.length > 0
+             ? `<p style="font-size:13px;margin:0 0 2px;"><strong>What they asked</strong></p>
+                <ul style="font-size:12px;margin:0 0 10px;padding-left:20px;font-family:ui-monospace,Menlo,monospace;">${api.questions
+                  .map(
+                    (q) =>
+                      `<li>${muted(escapeHtml(fmtTime(q.at)))} ${escapeHtml(q.caller)}: ${escapeHtml(q.what)}${q.count > 1 ? ` ${muted(`×${q.count}`)}` : ""}</li>`,
+                  )
+                  .join("")}</ul>`
+             : ""
+         }
+         ${api.sources.length > 0 ? `<p style="font-size:13px;margin:0 0 6px;"><strong>?src= tags:</strong> ${escapeHtml(api.sources.map((x) => `${x.src} (${x.count})`).join(" · "))}</p>` : ""}
+         <p style="color:#666;font-size:12px;margin:0;">${escapeHtml(data.apiCalls.map((c) => `${c.endpoint} (${c.count})`).join(" · "))}</p>`;
+
+  const apiText =
+    totalApiCalls === 0
+      ? ["No requests."]
+      : [
+          headline,
+          subline,
+          `MCP funnel (non-crawler callers): ${funnel}`,
+          `Tools called: ${api.toolCalls.length === 0 ? "none" : api.toolCalls.map((t) => `${t.name} ${t.calls}× by ${plural(t.callers, "caller")}`).join(" · ")}`,
+          ...(api.callers.length > 0 ? ["", "Who called (crawlers hidden):", ...api.callers.map((c) => `- ${callerTag(c)}${c.label} — ${callerDetail(c)}`)] : []),
+          ...(api.questions.length > 0
+            ? ["", "What they asked:", ...api.questions.map((q) => `- ${fmtTime(q.at)} ${q.caller}: ${q.what}${q.count > 1 ? ` ×${q.count}` : ""}`)]
+            : []),
+          ...(api.sources.length > 0 ? ["", `?src= tags: ${api.sources.map((x) => `${x.src} (${x.count})`).join(" · ")}`] : []),
+          "",
+          data.apiCalls.map((c) => `${c.endpoint} (${c.count})`).join(" · "),
+        ];
 
   const feedbackSectionHtml =
     data.feedbackTotal === 0
@@ -118,11 +174,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     `WaitingForPower daily digest — ${data.windowLabel}`,
     "",
     "API TRAFFIC",
-    totalApiCalls === 0 ? "No requests." : `${realCalls} real (${totalApiCalls} total · ${ambiguousCalls} ambiguous · ${botCalls} crawler)`,
-    data.apiCalls.map((c) => `${c.endpoint} (${c.count})`).join(" · "),
-    data.apiRealUserAgents.length > 0
-      ? `Real clients: ${data.apiRealUserAgents.map((u) => `${u.userAgent} (${u.count})`).join(", ")}`
-      : "",
+    ...apiText,
     "",
     "VISITOR FEEDBACK",
     data.feedbackTotal === 0 ? "No responses." : `${data.feedbackTotal} total.`,

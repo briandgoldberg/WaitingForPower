@@ -469,7 +469,7 @@ const handler = createMcpHandler(
     );
   },
   {
-    serverInfo: { name: "waitingforpower", version: "1.4.0" },
+    serverInfo: { name: "waitingforpower", version: "1.5.0" },
   },
 );
 

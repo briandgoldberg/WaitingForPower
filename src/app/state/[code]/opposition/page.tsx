@@ -97,19 +97,15 @@ export default async function StateOppositionPage({ params }: { params: Promise<
           </Link>{" "}
           ›
         </p>
-        <h1 className="text-2xl font-bold tracking-tight mt-1">{name} energy projects with opposition on record</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-prose">
-          Formal intervenors, local government votes and moratoria, lawsuits and organized groups, each linked to where
-          it&rsquo;s on public record. Individual residents are not named. A project missing here may still be opposed; it
-          means no record has been found yet.
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight mt-1">{name} energy project opposition</h1>
+        <p className="text-sm text-[var(--muted)] mt-0.5">Sourced public records, by county. Not a complete list.</p>
       </div>
 
       {projects.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">
-          No opposition records for {name} yet.{" "}
+          None on record yet.{" "}
           <Link href={`/state/${upper}`} className="underline">
-            Back to {name} projects
+            Back to {name} →
           </Link>
         </p>
       ) : (

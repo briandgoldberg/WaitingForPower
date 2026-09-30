@@ -118,17 +118,17 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
         <h1 className="text-2xl font-bold tracking-tight">{name} energy projects waiting for approval</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">
           {stats.totalProjects} waiting for a decision.{" "}
-          <Link href="/states" className="underline text-[var(--accent)]">
-            All states →
-          </Link>
           {contested > 0 && (
             <>
-              {" · "}
-              <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)]">
-                Opposition ({contested}) →
+              <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)] whitespace-nowrap">
+                {contested} with opposition →
               </Link>
+              {" · "}
             </>
           )}
+          <Link href="/states" className="underline text-[var(--accent)] whitespace-nowrap">
+            All states →
+          </Link>
         </p>
       </div>
 

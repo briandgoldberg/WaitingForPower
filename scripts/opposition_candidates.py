@@ -49,6 +49,15 @@ STATES = {
 }
 
 
+FUELS_BY_TYPE = {
+    "solar": {"solar"},
+    "wind": {"wind_onshore", "wind_offshore"},
+    "battery storage": {"storage"},
+    "storage": {"storage"},
+    "transmission": {"transmission"},
+}
+
+
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=120) as r:
@@ -105,7 +114,6 @@ def main():
             print(json.dumps(r, ensure_ascii=False)[:3000])
         return
 
-    col = lambda r, *names: next((r[k] for k in r if any(n in k.lower() for n in names) and r[k]), "")
     ours = list(csv.DictReader(io.StringIO(get(EXPORT)[0].decode("utf-8-sig", "replace"))))
     by_state = {}
     for p in ours:
@@ -115,25 +123,31 @@ def main():
 
     shown = 0
     for r in rows:
-        name = col(r, "project name", "name", "project")
-        state = col(r, "state")
-        code = STATES.get(state.strip(), state.strip()[:2].upper())
-        county = col(r, "county", "location", "jurisdiction")
-        sw = words(name)
-        counties = {norm_county(c) for c in re.split(r",| and |;|/", county) if c.strip()}
+        # "Origis Energy Solar Farm (Covington County)" -> the name without the place.
+        name = re.sub(r"\s*\([^)]*\)\s*$", "", r.get("Title", "")).strip()
+        code = (r.get("State") or "").strip().upper()
+        counties = {norm_county(c) for c in re.split(r",| and |;|/", r.get("County") or "") if c.strip()}
+        fuels = FUELS_BY_TYPE.get((r.get("Type") or "").strip().lower(), set())
+        pending = (r.get("Status") or "").strip().lower() == "pending"
+        sw = words(name) | words(r.get("Municipality"))
         cands = []
         for p in by_state.get(code, []):
             pw = words(p["name"]) | words(p.get("applicant"))
             shared = sw & pw
             same_county = bool(counties) and norm_county(p.get("county")) in counties
-            if shared and (same_county or len(shared) >= 2 or not p.get("county")):
-                cands.append((len(shared) + same_county, p, shared, same_county))
+            same_fuel = p.get("fuel_type") in fuels
+            # A shared distinctive word, or (for a project Sabin lists as
+            # still pending) the same county and technology.
+            if (shared and (same_county or len(shared) >= 2 or not p.get("county"))) or (pending and same_county and same_fuel):
+                cands.append((2 * len(shared) + same_county + same_fuel, p, shared, same_county))
         if not cands:
             continue
         cands.sort(key=lambda c: -c[0])
         shown += 1
         print("=" * 100)
-        print("SABIN:", json.dumps(r, ensure_ascii=False)[:4000])
+        print(f"SABIN #{r.get('Post iD')}: {r.get('Title')} | {code} | {r.get('Municipality')} | {r.get('Type')} {r.get('Capacity')}MW | status={r.get('Status')} last_event={r.get('Date of Last Event')} litigation={r.get('Litigation')}")
+        print("  CONTENT:", (r.get("Content") or "")[:1500])
+        print("  CITATIONS:", (r.get("Citations") or "")[:1200])
         for score, p, shared, same_county in cands[:4]:
             print(
                 f"  CANDIDATE score={score} county_match={same_county} shared={sorted(shared)} "

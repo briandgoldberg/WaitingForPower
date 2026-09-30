@@ -55,7 +55,8 @@
     "ingest:nd-psc": "tsx src/lib/ingest/ndPscDockets.ts",
     "ingest:nc-ncuc": "tsx src/lib/ingest/ncNcucDockets.ts",
     "ingest:wy-isc": "tsx src/lib/ingest/wyIscDockets.ts",
-    "ingest:ga-psc": "tsx src/lib/ingest/gaPscDockets.ts"
+    "ingest:ga-psc": "tsx src/lib/ingest/gaPscDockets.ts",
+    "seo:indexnow": "tsx src/lib/seo/indexNow.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

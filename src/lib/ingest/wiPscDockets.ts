@@ -674,7 +674,7 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
   const review = resolution.resolution === null && events ? classifyWiReviewStep(events, now) : null;
   const managed = resolution.resolution !== null || events !== null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Public Service Commission of Wisconsin's Case Management System, Wisconsin's Certificate of Public Convenience and Necessity (Wis. Stat. § 196.491) / Certificate of Authority (Wis. Stat. § 196.49) siting-certificate docket records.",

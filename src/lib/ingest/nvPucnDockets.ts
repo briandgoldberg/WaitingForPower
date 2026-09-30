@@ -544,7 +544,7 @@ function normalizeDocket(candidate: DocketSearchResult, resolution: DocketResolu
   else if (resolution.resolution === "denied" || resolution.resolution === "dismissed") currentStage = "cancelled";
   else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Public Utilities Commission of Nevada's Utility Environmental Protection Act (UEPA) docket records (legacy docket list plus the PUCN Document Search system).",

@@ -12,7 +12,8 @@ import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
-import { projectSeoDescription, projectSeoTitle, projectStatusLine } from "@/lib/seo/projectSnippet";
+import { oppositionSummary, projectSeoDescription, projectSeoTitle, projectStatusLine } from "@/lib/seo/projectSnippet";
+import { MIN_VISITOR_REPORTS, OppositionSection, type VisitorStances } from "@/components/project/OppositionSection";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { SectionPills, type PillSection } from "@/components/project/SectionPills";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
@@ -27,7 +28,7 @@ export const dynamic = "force-dynamic";
 // component (both invoked separately by Next.js for the same request)
 // don't double the DB round trip.
 const getProject = cache(async (slug: string) => {
-  const include = { causes: true, sources: true, milestones: true, hearings: true } as const;
+  const include = { causes: true, sources: true, milestones: true, hearings: true, opposition: true } as const;
   let project = await prisma.project.findUnique({ where: { slug }, include });
   // A duplicate merged into another project (see src/lib/dedupe.ts) shows that
   // project instead; the page redirects to its slug.
@@ -104,6 +105,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
+  // What visitors who logged contacting the regulator said they asked for,
+  // one vote per person and stance.
+  const stanceRows = await prisma.projectComment.findMany({
+    where: { projectId: p.id, advocacyType: { not: null }, stance: { in: ["approve", "deny"] } },
+    select: { predictorId: true, stance: true },
+    distinct: ["predictorId", "stance"],
+  });
+  const against = stanceRows.filter((r) => r.stance === "deny").length;
+  const inFavor = stanceRows.length - against;
+  const stances: VisitorStances | null = stanceRows.length >= MIN_VISITOR_REPORTS ? { against, inFavor } : null;
+  const opposedBy = oppositionSummary(p);
   const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
@@ -168,18 +180,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           className="grid gap-x-5 gap-y-4"
           style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}
         >
-          {!resolved && (
+          {/* Nothing shown at the top of the page is repeated here: stage,
+              review step, filing month, location, developer and the
+              headline numbers all appear above the pills. Only the queue
+              position, which the top line leaves out, stays. */}
+          {!resolved && (p.interconnectionQueueStage || p.queueCluster) && (
             <Detail
-              label="Stage"
-              value={PROJECT_STAGE_BY_VALUE[p.currentStage] ?? p.currentStage.replace(/_/g, " ")}
-              rows={[
-                p.interconnectionQueueStage ? ["Queue stage", p.interconnectionQueueStage] : null,
-                p.queueCluster ? ["Queue cluster", p.queueCluster] : null,
-                p.reviewStep ? ["Review step", `${p.reviewStep}${p.reviewStepAt ? ` (since ${new Date(p.reviewStepAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })})` : ""}`] : null,
-              ]}
+              label={p.interconnectionQueueStage ? "Queue stage" : "Queue cluster"}
+              value={(p.interconnectionQueueStage ?? p.queueCluster)!}
+              rows={[p.interconnectionQueueStage && p.queueCluster ? ["Queue cluster", p.queueCluster] : null]}
             />
           )}
-          {p.applicationFiledDate && (
+          {resolved && waitedYears != null && p.applicationFiledDate && (
             <Detail
               label="Filed"
               value={`${new Date(p.applicationFiledDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}${p.dateConfidence === "approximate" ? " (estimated)" : ""}`}
@@ -262,6 +274,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
     ...(p.milestones.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
+    ...(p.opposition.length > 0 || stances
+      ? [{ id: "opposition", label: "Opposition", content: <OppositionSection records={p.opposition} stances={stances} /> }]
+      : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
@@ -336,6 +351,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 "<project> hearing" finds it without opening a panel. */}
             {outcome === "pending" && (
               <p className="text-sm text-[var(--muted)] mt-0.5">{projectStatusLine(p, nowMs)}</p>
+            )}
+            {opposedBy && (
+              <p className="text-sm text-[var(--muted)] mt-0.5">
+                Opposition on record:{" "}
+                <a href="#opposition" className="underline">
+                  {opposedBy}
+                </a>
+              </p>
             )}
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />

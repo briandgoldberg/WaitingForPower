@@ -842,7 +842,7 @@ function normalizeDocket(
     currentStage = "cancelled";
   } else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Rhode Island Energy Facility Siting Board (EFSB)'s public docket list and each docket's own filed-document list, not the Public Utilities Commission (PUC) — EFSB, a separate three-member board only administratively housed at PUC's office, is the body that actually issues Rhode Island's license for a \"major energy facility\" (generation ≥40 MW, transmission ≥69 kV, LNG/LPG storage-conversion, and related facility types) under R.I. Gen. Laws § 42-98; PUC's own docket types (rate cases, tariffs, renewable-program compliance, etc.) carry no siting authority. See the ingestion module header for the full statutory citation.",

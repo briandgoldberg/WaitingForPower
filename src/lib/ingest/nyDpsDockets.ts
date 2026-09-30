@@ -691,7 +691,7 @@ function normalizeMatter(
   // Undefined when the calendar could not be read, so stored hearings survive.
   const hearings = upcoming ? [...detail.pastHearings, ...upcoming] : undefined;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const trackLabel =
     track === "article7"

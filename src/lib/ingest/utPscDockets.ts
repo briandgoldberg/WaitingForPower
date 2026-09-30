@@ -704,7 +704,7 @@ function normalizeDocket(
   // A resolved docket gets null; a pending one is classified from its document list.
   const review = currentStage === "local_review" ? classifyUtReviewStep(resolution.docs) : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Utah Public Service Commission's public electric docket listing and each docket's own filed-document list.",

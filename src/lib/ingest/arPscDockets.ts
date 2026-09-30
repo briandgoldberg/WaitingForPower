@@ -964,7 +964,7 @@ function normalizeDocket(detail: DocketDetail, resolution: ResolutionResult, hea
 
   const review = classifyArStep(detail, resolution, hearings);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Arkansas Public Service Commission's public \"olsv2\" docket search (Certificate of Environmental Compatibility and Public Need, Ark. Code Ann. §23-18-501 et seq.; Certificate of Convenience and Necessity, Ark. Code Ann. §23-3-201 et seq.; or, for an out-of-state facility, Notice and Authority to Proceed under Ark. Code Ann. §23-18-104).",

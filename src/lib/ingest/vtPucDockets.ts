@@ -1012,7 +1012,7 @@ function normalizeCandidate(
 
   const statusLabel = CASE_STATUS_LABELS[record.statusCode] ?? record.statusCode;
   const currentStage: ProjectStage = resolution?.stage ?? "local_review";
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
   const calendarHearings = upcomingHearings.get(record.caseNumber) ?? [];
   // A still-pending case is classified from its case log; a decided one gets
   // null. With no log (fetch failed, or a decided case) the step is left

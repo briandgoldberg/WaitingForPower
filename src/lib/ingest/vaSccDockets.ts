@@ -4,7 +4,7 @@
 // and Necessity (CPCN) proceedings, which for many generation/storage
 // projects are the actual bottleneck, not anything federal or ISO-level.
 // Today those projects (if tracked at all) fall into the vague
-// "local_state_opposition" cause with no real docket, date, or procedural
+// "state_local_review" cause with no real docket, date, or procedural
 // detail — this gives that category its first real data.
 //
 // FETCHING: scc.virginia.gov's public docket-search tool
@@ -389,7 +389,7 @@ function normalizeCase(search: CaseSearchResult, detail: CaseDetail, activities:
     dataQualityNoteParts.push("No structured location field is published for this docket; this project will not appear on the map until geocoded another way.");
   }
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   return {
     matchKey,

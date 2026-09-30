@@ -571,7 +571,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, heari
   // identically either way.
   const currentStage: ProjectStage = detail.resolved ? "approved_awaiting_construction" : "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Illinois Commerce Commission's public eDocket case search.",

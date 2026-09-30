@@ -19,6 +19,7 @@ export type CauseSlug =
   | "transmission_siting_land_rights"
   | "litigation_legal_challenge"
   | "local_state_opposition"
+  | "state_local_review"
   | "financing_supply_chain_other";
 
 export interface CauseCategory {
@@ -78,6 +79,10 @@ export const CAUSE_CATEGORIES: CauseCategory[] = [
       "The project has been approved but is facing a court challenge to that approval, or its realistic timeline has to include the litigation risk that comes standard with major energy infrastructure permits today.",
     color: "#dc2626",
   },
+  // Set only when the project has at least one opposition record on file
+  // (see ProjectOpposition in schema.prisma and src/lib/ingest/opposition.ts),
+  // never as an ingest default. A project that is simply before a state or
+  // local regulator is state_local_review below.
   {
     slug: "local_state_opposition",
     label: "Local/state opposition",
@@ -85,6 +90,17 @@ export const CAUSE_CATEGORIES: CauseCategory[] = [
     description:
       "A local government, county board, ballot measure, or state-level action has blocked or is blocking the project — for example a zoning denial or a countywide moratorium on a technology type.",
     color: "#0891b2",
+  },
+  // The default for every state docket and local land-use source: the
+  // project is waiting on a state commission or local body's decision. Says
+  // nothing about whether anyone objects.
+  {
+    slug: "state_local_review",
+    label: "State/local review",
+    shortLabel: "State/local review",
+    description:
+      "The project is waiting on a decision from a state utility or siting commission, or a local land-use body such as a county board or planning commission.",
+    color: "#0e7490",
   },
   {
     slug: "financing_supply_chain_other",

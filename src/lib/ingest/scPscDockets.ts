@@ -608,7 +608,7 @@ function normalizeDocket(
   else if (detail.resolution === "denied" || detail.resolution === "dismissed" || closedOut) currentStage = "cancelled";
   else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the South Carolina Public Service Commission's public Docket Management System.",

@@ -743,7 +743,7 @@ function normalizeFacility(
   const resolvedStage = resolvedStageFromLead(statusLead);
   const currentStage: ProjectStage = resolvedStage ?? "local_review";
   const resolutionInfo = resolvedStage ? extractResolutionDate(facility.Status_x0020_details, facility.Date_x0020_Terminated) : null;
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Oregon Department of Energy's Energy Facility Siting Council (EFSC) facility list via its public SharePoint REST API (the human-facing page renders the same data client-side via JavaScript), not the Oregon Public Utility Commission — OPUC's own eDockets \"PCN\" (Public Convenience and Necessity) dockets cover utility service-territory certification, not generation/storage/transmission facility siting; that authority sits with EFSC under ORS 469.300 instead.",

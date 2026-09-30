@@ -643,7 +643,7 @@ function normalizeFacility(
       : null;
   const resolutionDate = RESOLVED_STAGES.includes(currentStage) ? findResolutionDate(currentStage, detail.documents) : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Washington Energy Facility Site Evaluation Council (EFSEC)'s public facility pages, not the Washington Utilities and Transportation Commission (WUTC) — WUTC's own case-docket system has no CPCN/siting-certificate authority over generation or transmission facilities in Washington (confirmed by hand: searching its Electric-industry dockets for certificate/siting/CPCN terms returns essentially nothing relevant); that authority sits with EFSEC under RCW 80.50 instead, so this module ingests EFSEC's facility list.",

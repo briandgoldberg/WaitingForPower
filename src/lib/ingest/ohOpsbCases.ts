@@ -368,7 +368,7 @@ function normalizeCase(c: OpsbCase, page: HearingPage | null, stillWaiting: bool
   const capacityMw = extractCapacityMw(c.project);
   const filedDate = parseOpenDate(c.openDate);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Ohio Power Siting Board's public case list.",

@@ -670,7 +670,7 @@ function normalizeCase(row: CpcnListRow, resolution: Resolution, docs: MailLogDo
   const upcoming = schedule ? (schedule.get(row.caseNum) ?? []).filter((h) => h.date.getTime() >= Date.now()) : null;
   const review = resolution ? null : classifyMdReviewStep(docs, (upcoming?.length ?? 0) > 0);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Maryland Public Service Commission's public Document and Matter Management system (Certificate of Public Convenience and Necessity applications).",

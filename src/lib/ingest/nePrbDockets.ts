@@ -915,7 +915,7 @@ function normalizeCase(
   // pending case is left undefined so a stored one survives (see PROCEDURAL STEP).
   const review = currentStage === "local_review" && upcomingHearings ? classifyNeReviewStep(sortedMentions, hearings.length > 0) : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   // Stable labels regardless of which meeting dates end up filling them —
   // common.ts upserts sources by (projectId, label), never deletes a label

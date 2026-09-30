@@ -479,7 +479,7 @@ function normalizeDocket(
     currentStage = "local_review";
   }
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   // A resolved docket has no live step; a docket with no documents listed
   // leaves any stored step alone (undefined).

@@ -441,7 +441,7 @@ function normalizeDocket(search: DocketSearchResult, filings: DocketFiling[]): N
 
   const review = classifyReviewStep(filings);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Texas Public Utility Commission's public Interchange docket search.",

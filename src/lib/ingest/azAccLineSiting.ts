@@ -423,7 +423,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail): Norm
   const resolutionDateConfidence = resolutionDate ? "exact" : undefined;
   const review = currentStage === "local_review" ? classifyReviewStep(detail.stepEvents, AZ_STEP_SIGNALS) : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Arizona Corporation Commission's public eDocket system, Line Siting Committee dockets.",

@@ -788,7 +788,7 @@ function normalizeCandidate(
   const capacityValue = extractCapacityMw(detail.capacityText);
   const county = extractCounty(detail.location);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the California Energy Commission's power plant licensing docket system — an Application for Certification (AFC, traditional ≥50MW thermal/geothermal siting process) or Opt-In certification (AB 205, streamlined ≥50MW solar/wind or ≥200MWh storage siting process).",

@@ -559,7 +559,7 @@ function normalizeCase(row: OpenCaseRow, detail: CaseDetail): NormalizedProject 
   // (staleness), not currently observed live but checked defensively.
   const resolved = detail.status != null && CLOSED_STATUS_RE.test(detail.status);
   const currentStage: ProjectStage = resolved ? "cancelled" : "local_review";
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   // No documents parsed (page changed) leaves any stored step alone.
   const review = resolved ? null : classifyIdReviewStep(detail.events);

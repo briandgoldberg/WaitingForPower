@@ -1,0 +1,28 @@
+# Lists likely matches between the Sabin Center's contested-projects data
+# (oppositionreport.org) and this site's tracked projects, for a person or
+# the weekly research routine to verify and add to
+# src/lib/ingest/opposition.ts. Read-only; prints to the job log. See
+# scripts/opposition_candidates.py. Manual trigger only.
+name: opposition-candidates
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "inspect (the data file's format), match (print candidates) or dump (full rows for ids)"
+        required: false
+        default: "match"
+      ids:
+        description: "For dump: Sabin Post iDs, space-separated"
+        required: false
+        default: ""
+jobs:
+  candidates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q openpyxl
+      - env:
+          MODE: ${{ inputs.mode }}
+          IDS: ${{ inputs.ids }}
+        # IDS is left unquoted on purpose so each id is its own argument.
+        run: python3 scripts/opposition_candidates.py "$MODE" $IDS

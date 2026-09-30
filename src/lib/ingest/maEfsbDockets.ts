@@ -507,7 +507,7 @@ function normalizeDocket(search: DocketSearchResult, detail: DocketDetail, resol
   // step alone (undefined).
   const review = resolution ? null : classifyMaReviewStep(detail, new Date());
   const managed = resolution !== null || detail.Filings.length > 0;
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Massachusetts Energy Facilities Siting Board (EFSB)'s public docket records in the DPU e-Filing (\"Fileroom\") system, not the Department of Public Utilities' own separate \"Siting\" industry docket track — EFSB is the board that actually issues Massachusetts's Certificate of Environmental Impact and Public Interest (the state's real CPCN equivalent for large energy facilities); DPU's own Siting-industry dockets are overwhelmingly zoning-exemption and eminent-domain matters plus companion filings to an EFSB docket already tracked here. See the ingestion module header for the full comparison.",

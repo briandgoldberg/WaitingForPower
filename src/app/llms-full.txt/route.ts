@@ -32,7 +32,11 @@ ${causes}
 
 Coverage note: cause tagging is populated by only some ingestion sources
 today (LBNL Queued Up tags every row interconnection_queue_backlog by
-definition; several state docket sources tag local_state_opposition).
+definition; state docket and local-hearing sources tag state_local_review,
+which means only "before a state or local regulator"). local_state_opposition
+is set only on projects with at least one sourced opposition record, which
+the project page lists with links (intervenors, local government actions,
+lawsuits, moratoria, organized groups).
 EIA-860M, the Permitting Dashboard, ORNL hydropower relicensing, and EIA's
 pipeline tracker do not publish a cause and currently ship with an empty
 causeSlugs array rather than a guessed one — do not assume every project

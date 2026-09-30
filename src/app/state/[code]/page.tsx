@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import { computeAggregateStats } from "@/lib/stats";
-import { STATE_NAMES, stateName } from "@/lib/data/usStates";
+import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { StatsHeader } from "@/components/StatsHeader";
 import { ProjectList } from "@/components/ProjectList";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,14 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
   const name = stateName(upper);
   const projects = await queryProjects(toFilterState({ state: upper }));
   const stats = computeAggregateStats(projects);
+  // Projects in this state with opposition on record, for the link to
+  // /state/[code]/opposition. Counts resolved projects too, like that page.
+  const contested = (
+    await prisma.project.findMany({
+      where: { mergedIntoId: null, state: { contains: upper }, opposition: { some: {} } },
+      select: { state: true },
+    })
+  ).filter((r) => splitStateCodes(r.state).includes(upper)).length;
 
   // Same "grounds the stat tooltips in a real project" pattern as the
   // /projects Explorer — see src/components/Explorer.tsx.
@@ -114,6 +123,13 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
             See every state →
           </Link>
         </p>
+        {contested > 0 && (
+          <p className="text-sm mt-1">
+            <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)]">
+              {contested} project{contested === 1 ? "" : "s"} with opposition on record, by county →
+            </Link>
+          </p>
+        )}
       </div>
 
       <StatsHeader stats={stats} exampleProject={exampleProject} status="in_permitting" />

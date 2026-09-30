@@ -10,6 +10,14 @@ on:
         description: "Extra pages to fetch and print as text (space-separated), e.g. a city hearing notice"
         required: false
         default: ""
+      max_chars:
+        description: "How much of each extra page to print (long PDFs such as the Sabin Center opposition report need more)"
+        required: false
+        default: "20000"
+      skip_chars:
+        description: "Characters to skip at the start of each extra page, to read a long document in parts"
+        required: false
+        default: "0"
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -44,13 +52,17 @@ jobs:
         if: ${{ inputs.urls != '' }}
         env:
           URLS: ${{ inputs.urls }}
+          MAX: ${{ inputs.max_chars }}
+          SKIP: ${{ inputs.skip_chars }}
         run: |
           UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
           sudo apt-get install -y -qq poppler-utils >/dev/null
           for u in $URLS; do
             echo "===== $u"
             curl -sSL -o page -A "$UA" --max-time 60 "$u" || { echo "FETCH FAILED"; continue; }
-            if head -c 5 page | grep -q '%PDF'; then pdftotext -layout page - | head -c 20000; else
-              python3 -c "import html,re,sys; s=open('page',errors='replace').read(); s=re.sub(r'<(script|style)[^>]*>.*?</\\1>','',s,flags=re.S|re.I); print(re.sub(r'\\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',s)))[:20000])"; fi
+            if head -c 5 page | grep -q '%PDF'; then pdftotext -layout page - | tail -c +$((SKIP + 1)) | head -c "$MAX"; else
+              python3 -c "import html,os,re,sys; s=open('page',errors='replace').read(); s=re.sub(r'<(script|style)[^>]*>.*?</\\1>','',s,flags=re.S|re.I); print(re.sub(r'\\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',s)))[int(os.environ['SKIP']):int(os.environ['SKIP'])+int(os.environ['MAX'])])"
+              echo "----- document links on this page"
+              grep -oiE 'href="[^"]*(\.pdf|viewcontent|download)[^"]*"' page | sort -u | head -40; fi
             echo
           done

@@ -761,7 +761,7 @@ function normalizeCandidate(c: Candidate): NormalizedProject | null {
 
   const review = c.doahEvents && c.doahEvents.length > 0 ? classifyFlStep(c.doahEvents) : undefined;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
   const caseLabel = c.depDetail?.caseNumber ?? (c.pscDocket ? `PSC Docket ${c.pscDocket.docketnum}` : sourceId);
 
   return {

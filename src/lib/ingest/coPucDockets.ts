@@ -541,7 +541,7 @@ function normalizeDocket(
   const mostRecentMilestone = milestones.length > 0 ? [...milestones].sort((a, b) => b.date.getTime() - a.date.getTime())[0] : null;
   const company = search.title.split(/\s*-\s*CPCN\b/i)[0].trim();
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Colorado Public Utilities Commission's public e-filing search.",

@@ -31,7 +31,18 @@ type Snippet = Pick<
   | "yearsWaiting"
   | "commentDeadline"
   | "hearings"
+  | "opposition"
 >;
+
+// "Halifax County Board of Supervisors", "A and B", "A and 2 others": the
+// distinct parties on record, newest first. Null when there are none.
+export function oppositionSummary(p: Pick<ProjectDTO, "opposition">): string | null {
+  const parties = [...new Set(p.opposition.map((o) => o.party))];
+  if (parties.length === 0) return null;
+  if (parties.length === 1) return parties[0];
+  if (parties.length === 2) return `${parties[0]} and ${parties[1]}`;
+  return `${parties[0]} and ${parties.length - 1} others`;
+}
 
 function monthYear(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -111,6 +122,8 @@ export function projectSeoDescription(p: Snippet, nowMs: number): string {
     const events = eventParts(p, nowMs);
     // "Public hearing Oct 14; comments due Oct 10."
     if (events.length > 0) parts.push(`${events.map((e, i) => (i === 0 ? e : e.charAt(0).toLowerCase() + e.slice(1))).join("; ")}.`);
+    const opposed = oppositionSummary(p);
+    if (opposed) parts.push(`Opposition on record: ${opposed}.`);
   }
   parts.push(factsSentence(p));
   return parts.join(" ");
@@ -137,9 +150,13 @@ function eventParts(p: Snippet, nowMs: number): string[] {
 }
 
 // The visible one-liner under the project name, for a pending project:
-// "Pending since Jul 2023 · Awaiting commission order · Public hearing Oct 14
-// · Comments due Oct 10". Resolved projects have OutcomeBanner instead.
+// "Pending since Jul 2023 · Regulatory approvals pending · Awaiting
+// commission order · Public hearing Oct 14 · Comments due Oct 10". It carries
+// both the stage and the docket's review step, so the Details panel doesn't
+// repeat either. Resolved projects have OutcomeBanner instead.
 export function projectStatusLine(p: Snippet, nowMs: number): string {
-  const [since, stage] = pendingParts(p);
-  return [since, stage, ...eventParts(p, nowMs)].filter(Boolean).join(" · ");
+  const [since] = pendingParts(p);
+  const stage = PROJECT_STAGE_BY_VALUE[p.currentStage] ?? null;
+  const step = p.reviewStep && p.reviewStep !== stage ? p.reviewStep : null;
+  return [since, stage, step, ...eventParts(p, nowMs)].filter(Boolean).join(" · ");
 }

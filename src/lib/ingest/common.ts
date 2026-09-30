@@ -423,9 +423,15 @@ export async function upsertNormalizedProject(p: NormalizedProject, options: { s
       });
 
 
+  // local_state_opposition isn't any source's to set: it follows the
+  // project's opposition records (src/lib/ingest/opposition.ts), so it
+  // survives this source rewriting its own causes.
+  const hasOpposition = (await prisma.projectOpposition.count({ where: { projectId: project.id } })) > 0;
+  const causeSlugs = new Set<CauseSlug>(p.causeSlugs.filter((s) => s !== "local_state_opposition"));
+  if (hasOpposition) causeSlugs.add("local_state_opposition");
   await prisma.projectCause.deleteMany({ where: { projectId: project.id } });
   await prisma.projectCause.createMany({
-    data: p.causeSlugs.map((causeSlug) => ({ projectId: project.id, causeSlug })),
+    data: [...causeSlugs].map((causeSlug) => ({ projectId: project.id, causeSlug })),
   });
 
   // Upsert-by-(projectId, label) rather than delete-all-then-recreate: when

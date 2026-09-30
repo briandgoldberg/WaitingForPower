@@ -26,6 +26,18 @@ export interface HearingDTO {
   location: string | null;
 }
 
+export type OppositionKind = "intervenor" | "local_government" | "lawsuit" | "moratorium" | "organized_group";
+
+// One sourced opposition fact — see ProjectOpposition in schema.prisma.
+export interface OppositionDTO {
+  kind: OppositionKind;
+  party: string;
+  action: string;
+  date: string | null; // ISO date
+  sourceLabel: string;
+  sourceUrl: string;
+}
+
 export interface ProjectDTO {
   id: string;
   slug: string;
@@ -96,6 +108,10 @@ export interface ProjectDTO {
   // see schema.prisma's ProjectHearing model. Can be more than one (e.g. a
   // separate local public hearing and evidentiary hearing).
   hearings: HearingDTO[];
+  // Sourced opposition records, newest first. Empty when none are on file,
+  // which means none were found, not that nobody objects. Only filled by
+  // callers that load the relation (the project page, state pages).
+  opposition: OppositionDTO[];
 
   // computed
   daysWaiting: number | null;

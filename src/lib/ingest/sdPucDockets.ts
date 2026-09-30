@@ -571,7 +571,7 @@ async function normalizeCandidate(
   const { value: capacityValue, unit: capacityUnit } = extractCapacity(listing.rawTitle);
   const counties = extractCounties(listing.rawTitle);
   const applicant = extractApplicant(listing.rawTitleHtml);
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
   const now = Date.now();
   const docketUrl = `${BASE_URL}/${listing.year}/${listing.docketNumber}.aspx`;
   const pageHearings = parsePageHearings(docketHtml, Number(listing.year));

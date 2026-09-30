@@ -891,7 +891,7 @@ function normalizeCandidate(detail: DocketDetail, resolution: ResolutionResult, 
 
   const review = classifyDocs(docs, resolution);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Alabama Public Service Commission's public docket search (Certificate of Convenience and Necessity, Ala. Code §37-4-28).",

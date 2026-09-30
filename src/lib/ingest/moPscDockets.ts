@@ -702,7 +702,7 @@ function normalizeCase(
   else if (resolution === "denied" || resolution === "closed-unclear") currentStage = "cancelled";
   else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Missouri Public Service Commission's EFIS docket system, Certificate of Convenience and Necessity applications (RSMo 393.170).",

@@ -167,7 +167,7 @@ export function localHearingProjects(entries: LocalHearingEntry[] = LOCAL_HEARIN
       capacityValue: e.capacityMw,
       capacityUnit: e.capacityMw != null ? "MW" : null,
       applicant: e.applicant,
-      causeSlugs: ["local_state_opposition" as const],
+      causeSlugs: ["state_local_review" as const],
       causeDetail: e.causeDetail ?? `Waiting on a local land-use decision from the ${e.authority}.`,
       sources: e.sources,
       externalIds: { local: e.id },

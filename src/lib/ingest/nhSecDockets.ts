@@ -698,7 +698,7 @@ function normalizeCandidate(
   // A closed docket gets null. Unlike the hearings, the step comes from the
   // filings alone, so it is set even when the events feed could not be read.
   const review = resolution ? null : classifyNhReviewStep(filings, hearings.length > 0);
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the New Hampshire Site Evaluation Committee (SEC)'s docket records, hosted (since a December 2025 restructuring) inside the Public Utilities Commission's own Virtual File Room under the \"SEC\" docket prefix — SEC, not the PUC itself, is the body that actually issues New Hampshire's Certificate of Site and Facility (the state's real CPCN equivalent for large energy facilities) under RSA 162-H; the PUC's 3 commissioners are 3 of SEC's 5 statutory members and cannot alone constitute a quorum. See the ingestion module header for the full statutory citation.",

@@ -254,6 +254,7 @@ model Project {
   changes     ProjectChange[]
   predictions Prediction[]
   comments    ProjectComment[]
+  opposition  ProjectOpposition[]
 
   @@index([projectType])
   @@index([fuelType])
@@ -383,6 +384,39 @@ model ProjectChange {
 
   @@index([projectId])
   @@index([createdAt])
+}
+
+// One public, sourced fact about opposition to a project: a party that
+// formally intervened in the docket, a local government's vote or
+// moratorium, a lawsuit, or an organized group. Each row names who and what,
+// with a link to where it's on record, so the site never says "opposed"
+// without showing why. Only organizations and governments are named, never
+// private individuals. Written by src/lib/ingest/opposition.ts, which owns
+// every row (it replaces a project's rows each run from its own list).
+// A project with any row here also carries the local_state_opposition cause.
+model ProjectOpposition {
+  id        Int     @id @default(autoincrement())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // "intervenor" | "local_government" | "lawsuit" | "moratorium" | "organized_group"
+  kind   String
+  // Who: "Halifax County Board of Supervisors", "Citizens for Responsible Solar"
+  party  String
+  // What, in one line: "Voted 5-2 to deny the special-use permit"
+  action String
+  date   DateTime?
+
+  sourceLabel String
+  sourceUrl   String
+  // Where the record came from: "hand_research" | "sabin_center" | "docket"
+  origin      String
+  verifiedOn  DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([kind])
 }
 
 model ProjectCause {

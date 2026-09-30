@@ -656,7 +656,7 @@ function normalizeCandidate(candidate: Candidate, source: DocketSource, docs: Do
   const review = docs.length > 0 ? classifyReviewStep(docs, DE_SIGNALS) : undefined;
   const reviewStepAt = review ? (review.step === "Application filed" ? review.at ?? candidate.filingDate : review.at) : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     `Sourced from the Delaware Public Service Commission's public DelaFile docket search (${source.docketTypeLabel} dockets under Utility Type "${source.utilityTypeLabel}", ${source.statute}).`,

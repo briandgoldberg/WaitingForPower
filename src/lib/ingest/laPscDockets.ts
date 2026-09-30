@@ -914,7 +914,7 @@ function normalizeDocket(
   else if (resolution === "denied" || resolution === "dismissed") currentStage = "cancelled";
   else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Louisiana Public Service Commission's public Valence docket portal (Docket Search, Docket Details, and Order Search).",

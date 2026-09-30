@@ -815,7 +815,7 @@ function normalizeCandidate(
   // it listed no dated lines and no hearing is on the calendar).
   const review = !resolved && detail ? classifyCtStep(detail.events, hearings) : null;
   const stepManaged = resolved || (detail !== null && (detail.events.length > 0 || hearings.length > 0));
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   return {
     matchKey,

@@ -55,6 +55,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
+  // A state's opposition page, only once it has at least one record (an
+  // empty one is noindex; see src/app/state/[code]/opposition/page.tsx).
+  const contestedRows = await prisma.project.findMany({
+    where: { mergedIntoId: null, opposition: { some: {} } },
+    select: { state: true },
+  });
+  const contestedStates = new Set(contestedRows.flatMap((r) => splitStateCodes(r.state)));
+  const oppositionRoutes: MetadataRoute.Sitemap = [...contestedStates].map((code) => ({
+    url: `${BASE_URL}/state/${code}/opposition`,
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }));
+
   const blogRoutes: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
     url: `${BASE_URL}/blog/${post.slug}`,
     lastModified: new Date(post.publishedAt),
@@ -62,5 +75,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...projectRoutes, ...stateRoutes, ...blogRoutes];
+  return [...staticRoutes, ...projectRoutes, ...stateRoutes, ...oppositionRoutes, ...blogRoutes];
 }

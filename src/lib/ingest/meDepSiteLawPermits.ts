@@ -492,7 +492,7 @@ function normalizeRecord(r: DepRecord): NormalizedProject {
   const capacityMw = extractCapacityMw(desc);
   const filedDate = parseReceivedDate(r.RECEIVED_DATE);
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     'Sourced from the Maine Department of Environmental Protection (DEP)\'s public Land Bureau permit records — not the Public Utilities Commission (PUC). Maine deregulated electric generation in 2000, so generation and storage projects need no PUC certificate at any size, and PUC\'s own Certificate of Public Convenience and Necessity under 35-A M.R.S. §3132 covers only standalone (non-interconnection) transmission lines ≥100kV. DEP\'s Site Location of Development Act ("Site Law") is the real broad construction gate for generation, storage, and (since a 2023 amendment) high-impact transmission projects in Maine. See the ingestion module header for the full comparison.',

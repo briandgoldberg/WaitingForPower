@@ -745,7 +745,7 @@ async function buildCleanupPlaceholder(row: SearchResultRow): Promise<Normalized
     state: "IN",
     currentStatus: `Indiana IURC Cause No. ${row.docketNumber}: ${row.caseStatus.toLowerCase() || "resolved"}`,
     currentStage: "completed",
-    causeSlugs: ["local_state_opposition"],
+    causeSlugs: ["state_local_review"],
     causeDetail: `Indiana IURC Cause No. ${row.docketNumber} is no longer an open Certificate of Public Convenience and Necessity application awaiting a Commission determination.`,
     ...(finalOrderDate ? { resolutionDate: finalOrderDate, resolutionDateConfidence: "exact" as const } : {}),
     hearingDetailsLink: null,
@@ -771,7 +771,7 @@ function buildActiveProject(row: SearchResultRow, caption: string, hearingRows: 
   const county = extractCounty(caption);
 
   const currentStage: ProjectStage = LITIGATION_STATUSES.has(row.caseStatus) ? "litigation" : "local_review";
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Indiana Utility Regulatory Commission's public Certificate of Public Convenience and Necessity (CPCN, Ind. Code ch. 8-1-8.5) docket search.",

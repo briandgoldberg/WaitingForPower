@@ -581,7 +581,7 @@ function normalizeDocket(detail: DocketDetail): NormalizedProject {
   // are left undefined and the stored value is kept.
   const review = currentStage === "local_review" ? classifyTnReviewStep(detail) : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the Tennessee Public Utility Commission's public electronic docket system, Certificate of Public Convenience and Necessity applications (Tenn. Code Ann. § 65-4-201 et seq., and for wind facilities specifically, § 65-17-101 et seq.).",

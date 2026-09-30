@@ -764,7 +764,7 @@ function normalizeDocket(
     else reviewStep = "Application filed";
   }
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the North Carolina Utilities Commission's public eDocket system (Dockets and Orders search).",

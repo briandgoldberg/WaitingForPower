@@ -266,7 +266,7 @@ async function normalizeCandidate(entry: DriveEntry): Promise<NormalizedProject 
     dateConfidence: "approximate",
     currentStatus: `Wyoming ISC docket ${docketNumber ?? entry.title}: ${currentStage === "local_review" ? "pending" : currentStage}`,
     currentStage,
-    causeSlugs: ["local_state_opposition"] as CauseSlug[],
+    causeSlugs: ["state_local_review"] as CauseSlug[],
     causeDetail: `Waiting on a permit from the Wyoming Industrial Siting Council — Docket ${docketNumber ?? entry.title}, "${name || entry.title}"`,
     dataQualityNote: dataQualityNoteParts.join(" "),
     sources: [

@@ -525,7 +525,7 @@ function normalizeCase(
 
   const projectType: ProjectType = "transmission";
   const fuelType: FuelType = "transmission";
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   // A resolved case has no live step; a case with no documents leaves any
   // stored step alone (undefined).

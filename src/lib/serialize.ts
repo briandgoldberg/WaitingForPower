@@ -1,7 +1,7 @@
-import type { Project, ProjectCause, ProjectSource, Milestone, ProjectHearing } from "@prisma/client";
+import type { Project, ProjectCause, ProjectSource, Milestone, ProjectHearing, ProjectOpposition } from "@prisma/client";
 import { daysWaiting, yearsWaiting } from "@/lib/calc/dates";
 import { estimateInvestmentWaiting } from "@/lib/calc/investmentWaiting";
-import type { ProjectDTO } from "@/lib/types";
+import type { OppositionKind, ProjectDTO } from "@/lib/types";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import { RESOLVED_STAGES, type FuelType, type ProjectStage, type ProjectType, type VerificationStatus } from "@/lib/data/taxonomies";
 
@@ -12,6 +12,8 @@ export type ProjectWithRelations = Project & {
   // Optional — most callers (e.g. the full-table Explorer fetch in
   // queryProjects.ts) don't need hearing dates and skip this relation.
   hearings?: ProjectHearing[];
+  // Optional too: only the project page and state pages show it.
+  opposition?: ProjectOpposition[];
 };
 
 export function serializeProject(p: ProjectWithRelations): ProjectDTO {
@@ -95,6 +97,18 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
         endDate: h.endDate ? h.endDate.toISOString() : null,
         label: h.label,
         location: h.location,
+      })),
+    // Dated records newest first, undated ones last.
+    opposition: (p.opposition ?? [])
+      .slice()
+      .sort((a, b) => (b.date?.getTime() ?? -Infinity) - (a.date?.getTime() ?? -Infinity))
+      .map((o) => ({
+        kind: o.kind as OppositionKind,
+        party: o.party,
+        action: o.action,
+        date: o.date ? o.date.toISOString() : null,
+        sourceLabel: o.sourceLabel,
+        sourceUrl: o.sourceUrl,
       })),
     daysWaiting: days,
     yearsWaiting: years,

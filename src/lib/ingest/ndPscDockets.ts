@@ -593,7 +593,7 @@ async function normalizeCandidate(
   const { value: capacityValue, unit: capacityUnit } = extractCapacity(listing.description);
   const counties = extractCounties(listing.description);
   const applicant = listing.entities.length > 0 ? listing.entities.join(" and ") : null;
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     "Sourced from the North Dakota Public Service Commission's public case search, scoped to Energy Conversion and Transmission Facility siting applications (N.D.C.C. Ch. 49-22) — see the ingestion module header for why the ND PSC (unlike several sibling states in this series) really is the direct siting authority.",

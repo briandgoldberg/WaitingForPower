@@ -578,7 +578,7 @@ function normalizeCase(detail: CaseDetail, upcomingHearings: Map<string, Upcomin
     currentStage = "cancelled";
   } else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
   const hearings = upcomingHearings.get(detail.caseNumber) ?? [];
   // A resolved case has no live step; a case whose filing list could not be
   // parsed leaves any stored step alone (undefined).

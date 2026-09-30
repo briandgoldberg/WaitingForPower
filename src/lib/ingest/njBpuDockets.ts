@@ -687,7 +687,7 @@ function normalizeCandidate(candidate: TrackedCandidate, resolution: DocketResol
   else if (resolution.resolution === "denied") currentStage = "cancelled";
   else currentStage = "local_review";
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   // A resolved docket has no live step. The document list only carries
   // titles (no hearing dates), so no hearings are set, only the step.

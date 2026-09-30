@@ -828,7 +828,7 @@ function normalizeCase(
   // didn't parse, rather than guessed at.
   const resolutionDate = resolution !== null ? resolutionOrderDate : null;
 
-  const causeSlugs: CauseSlug[] = ["local_state_opposition"];
+  const causeSlugs: CauseSlug[] = ["state_local_review"];
 
   const dataQualityNoteParts: string[] = [
     `Sourced from the West Virginia Public Service Commission's public WebDocket case search and case activity log (${docketLabel} dockets).`,

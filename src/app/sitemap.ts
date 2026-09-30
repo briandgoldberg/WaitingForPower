@@ -6,6 +6,15 @@ import { BLOG_POSTS } from "@/lib/data/blogPosts";
 
 const BASE_URL = "https://waitingforpower.com";
 
+// Bumped whenever a change to the shared project-page template (title,
+// layout, metadata — anything rendered from code rather than from a
+// project's own row) should count as a real content change for every
+// project URL's sitemap lastmod, without writing to Project.updatedAt —
+// that column is also the cron-health heartbeat (src/app/api/health/crons/
+// route.ts), so bulk-touching it there would mask a genuinely broken
+// ingest cron for up to its staleness threshold (36h-9d).
+const PROJECT_TEMPLATE_UPDATED_AT = new Date("2026-09-29T20:44:36-07:00"); // status-first search titles/descriptions (#25)
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const projects = await prisma.project.findMany({
     where: { mergedIntoId: null },
@@ -30,7 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const projectRoutes: MetadataRoute.Sitemap = projects.map((p) => ({
     url: `${BASE_URL}/project/${p.slug}`,
-    lastModified: p.updatedAt,
+    lastModified: p.updatedAt > PROJECT_TEMPLATE_UPDATED_AT ? p.updatedAt : PROJECT_TEMPLATE_UPDATED_AT,
     changeFrequency: "weekly",
     priority: 0.7,
   }));

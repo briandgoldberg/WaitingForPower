@@ -245,6 +245,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
           <p className="mt-2 text-xs text-[var(--muted)]">* Approximate / developer-estimated date, not a firm commitment.</p>
         )}
+        {(p.opposition.length > 0 || stances) && (
+          <section className="mt-5 pt-4 border-t border-[var(--border)]" aria-labelledby="opposition-heading">
+            <h3 id="opposition-heading" className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">
+              Opposition
+            </h3>
+            <OppositionSection records={p.opposition} stances={stances} />
+          </section>
+        )}
     </>
   );
   const timelineContent =
@@ -274,9 +282,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
     ...(p.milestones.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
-    ...(p.opposition.length > 0 || stances
-      ? [{ id: "opposition", label: "Opposition", content: <OppositionSection records={p.opposition} stances={stances} /> }]
-      : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
@@ -355,7 +360,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             {opposedBy && (
               <p className="text-sm text-[var(--muted)] mt-0.5">
                 Opposition on record:{" "}
-                <a href="#opposition" className="underline">
+                <a href="#details" className="underline">
                   {opposedBy}
                 </a>
               </p>

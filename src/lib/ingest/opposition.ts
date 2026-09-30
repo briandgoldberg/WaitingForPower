@@ -2,7 +2,7 @@
 // intervened in a docket, local government votes and moratoria, lawsuits,
 // and organized groups. Loaded daily by /api/cron/ingest-opposition into
 // ProjectOpposition (see schema.prisma), which the project page shows under
-// its Opposition pill and each state's contested-projects page lists. The
+// the Opposition section of its Details panel and each state's contested-projects page lists. The
 // weekly hand-research routine adds entries; see ingest/README.md
 // "Opposition".
 //

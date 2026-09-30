@@ -22,7 +22,7 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" });
 }
 
-// The content of the Opposition pill: each sourced record (who, what, when,
+// The Opposition part of the Details panel: each sourced record (who, what, when,
 // and where it's on record), then what the site's own visitors reported
 // telling the regulator, once enough of them have.
 export function OppositionSection({ records, stances }: { records: OppositionDTO[]; stances: VisitorStances | null }) {

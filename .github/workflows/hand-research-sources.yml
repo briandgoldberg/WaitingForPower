@@ -63,6 +63,6 @@ jobs:
             if head -c 5 page | grep -q '%PDF'; then pdftotext -layout page - | tail -c +$((SKIP + 1)) | head -c "$MAX"; else
               python3 -c "import html,os,re,sys; s=open('page',errors='replace').read(); s=re.sub(r'<(script|style)[^>]*>.*?</\\1>','',s,flags=re.S|re.I); print(re.sub(r'\\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',s)))[int(os.environ['SKIP']):int(os.environ['SKIP'])+int(os.environ['MAX'])])"
               echo "----- document links on this page"
-              grep -oiE 'href="[^"]*(\.pdf|viewcontent|download)[^"]*"' page | sort -u | head -40; fi
+              grep -oiE 'href="[^"]*(\.pdf|\.csv|\.xlsx?|\.json|viewcontent|download|data)[^"]*"' page | sort -u | head -40; fi
             echo
           done

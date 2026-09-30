@@ -114,6 +114,27 @@ deploy. Vercel's plan allows cron jobs at most once a day. The same weekly Claud
 hearings, confirms each on the body's own notice or agenda, and adds it.
 The rules are at the top of `localHearings.ts`.
 
+## Opposition (intervenors, local votes, moratoria, lawsuits, organized groups)
+
+`opposition.ts` holds hand-verified, sourced opposition to tracked projects,
+one record per fact, each with the public page it's on record in. The cron
+at `/api/cron/ingest-opposition` loads it daily (18:45 UTC) into
+`ProjectOpposition`, which the project page shows under its Opposition pill
+and `/state/<code>/opposition` lists by county. A project with any record
+carries the `local_state_opposition` cause. That tag is no ingest's default
+any more: state docket and local-hearing modules tag `state_local_review`,
+which only says the project is before a state or local regulator.
+
+Sources, in the order to prefer them: the docket's own filings or service
+list (petitions to intervene, and the orders granting them), the local
+body's minutes, agenda or press release, a court docket, a named news
+outlet, and the Sabin Center's yearly "Opposition to Renewable Energy
+Facilities in the United States" report (contested projects by state). The
+weekly hand-research routine adds records; the rules are at the top of
+`opposition.ts`. Automatic intervenor extraction from docket party lists is
+not built yet: those parsers need checking against live docket pages, which
+the cloud environment can't reach (use `hand-research-sources.yml`).
+
 ## Iowa: deliberately not a 42nd state module
 
 Investigated 2026-09-03 (real search demand for it showed up in Search

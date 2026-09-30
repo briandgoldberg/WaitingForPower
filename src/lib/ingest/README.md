@@ -119,7 +119,7 @@ The rules are at the top of `localHearings.ts`.
 `opposition.ts` holds hand-verified, sourced opposition to tracked projects,
 one record per fact, each with the public page it's on record in. The cron
 at `/api/cron/ingest-opposition` loads it daily (18:45 UTC) into
-`ProjectOpposition`, which the project page shows under its Opposition pill
+`ProjectOpposition`, which the project page shows in the Opposition section of its Details panel
 and `/state/<code>/opposition` lists by county. A project with any record
 carries the `local_state_opposition` cause. That tag is no ingest's default
 any more: state docket and local-hearing modules tag `state_local_review`,

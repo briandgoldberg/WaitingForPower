@@ -36,7 +36,10 @@ definition; state docket and local-hearing sources tag state_local_review,
 which means only "before a state or local regulator"). local_state_opposition
 is set only on projects with at least one sourced opposition record, which
 the project page lists with links (intervenors, local government actions,
-lawsuits, moratoria, organized groups).
+lawsuits, moratoria, organized groups) and every project in the REST API and
+MCP server carries as its opposition array (kind, party, action, date,
+sourceLabel, sourceUrl). An empty array means none were found, not that
+nobody objects.
 EIA-860M, the Permitting Dashboard, ORNL hydropower relicensing, and EIA's
 pipeline tracker do not publish a cause and currently ship with an empty
 causeSlugs array rather than a guessed one — do not assume every project

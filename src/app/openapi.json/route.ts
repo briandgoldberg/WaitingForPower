@@ -47,6 +47,34 @@ const projectSchema = {
     causeSlugs: { type: "array", items: { type: "string" } },
     yearsWaiting: { type: "number", nullable: true },
     verificationStatus: { type: "string", enum: ["verified", "user_submitted_pending", "user_submitted_verified"] },
+    hearings: {
+      type: "array",
+      description: "Public hearings on file, past and upcoming.",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string", format: "date-time" },
+          endDate: { type: "string", format: "date-time", nullable: true },
+          label: { type: "string", nullable: true },
+          location: { type: "string", nullable: true },
+        },
+      },
+    },
+    opposition: {
+      type: "array",
+      description: "Sourced opposition records, newest first. Empty when none are on file — not evidence that there is none.",
+      items: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["intervenor", "local_government", "lawsuit", "moratorium", "organized_group"] },
+          party: { type: "string" },
+          action: { type: "string" },
+          date: { type: "string", format: "date-time", nullable: true },
+          sourceLabel: { type: "string" },
+          sourceUrl: { type: "string" },
+        },
+      },
+    },
   },
 };
 
@@ -54,7 +82,7 @@ const spec = {
   openapi: "3.1.0",
   info: {
     title: "WaitingForPower API",
-    version: "1.1.0",
+    version: "1.2.0",
     description:
       "Read-only REST access to WaitingForPower's tracked U.S. energy permitting projects. CORS-open, no API key required. " +
       "See https://waitingforpower.com/llms.txt for the full list of machine-readable surfaces (including the MCP server), " +

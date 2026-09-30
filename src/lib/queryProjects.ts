@@ -111,12 +111,16 @@ export function toFilterState(q: ProjectQuery): FilterState {
 }
 
 // Prisma Accelerate hard-caps a single query's response at 5MB — the full
-// dataset with all three relations included is already past that (8MB+ and
+// dataset with its relations included is already past that (8MB+ and
 // growing), so this fetches it in pages instead of one findMany(). Every
 // caller (this site's own API routes, the MCP server's search_projects/
 // get_stats) goes through here, so this fixes all of them at once rather
 // than each route working around the limit separately.
 const FETCH_PAGE_SIZE = 250;
+
+// Hearings and opposition records hang off the canonical row only (merged
+// duplicates never carry their own), so children skip them.
+const PROJECT_INCLUDE = { causes: true, sources: true, milestones: true, hearings: true, opposition: true } as const;
 
 export async function queryProjects(filters: FilterState, opts: { allStatuses?: boolean } = {}): Promise<ProjectDTO[]> {
   const where: Prisma.ProjectWhereInput = { mergedIntoId: null, ...whereFromFilters(filters, { ignoreStatus: opts.allStatuses }) };
@@ -126,7 +130,7 @@ export async function queryProjects(filters: FilterState, opts: { allStatuses?: 
     Array.from({ length: pageCount }, (_, i) =>
       prisma.project.findMany({
         where,
-        include: { causes: true, sources: true, milestones: true },
+        include: PROJECT_INCLUDE,
         orderBy: { createdAt: "asc" },
         skip: i * FETCH_PAGE_SIZE,
         take: FETCH_PAGE_SIZE,
@@ -152,11 +156,11 @@ export async function queryProjects(filters: FilterState, opts: { allStatuses?: 
 export async function getProjectBySlug(slug: string): Promise<ProjectDTO | null> {
   let project = await prisma.project.findUnique({
     where: { slug },
-    include: { causes: true, sources: true, milestones: true },
+    include: PROJECT_INCLUDE,
   });
   // A slug that was merged into another project resolves to that project.
   if (project?.mergedIntoId) {
-    project = await prisma.project.findUnique({ where: { id: project.mergedIntoId }, include: { causes: true, sources: true, milestones: true } });
+    project = await prisma.project.findUnique({ where: { id: project.mergedIntoId }, include: PROJECT_INCLUDE });
   }
   if (!project) return null;
   return serializeProject(overlayMerged(project, await mergedChildren([project.id])));

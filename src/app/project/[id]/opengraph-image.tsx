@@ -57,7 +57,7 @@ export default async function OgImage({ params }: { params: Promise<{ id: string
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <div style={{ width: 14, height: 14, borderRadius: 7, background: fuel.color }} />
             <div style={{ display: "flex", fontSize: 22, textTransform: "uppercase", letterSpacing: 1, color: "#6b7280" }}>
-              {`${p!.projectType} · ${fuel.label}`}
+              {p!.projectType === p!.fuelType ? fuel.label : `${p!.projectType} · ${fuel.label}`}
             </div>
           </div>
         )}

@@ -1,0 +1,25 @@
+# Lists likely matches between the Sabin Center's contested-projects data
+# (oppositionreport.org) and this site's tracked projects, for a person or
+# the weekly research routine to verify and add to
+# src/lib/ingest/opposition.ts. Read-only; prints to the job log. See
+# scripts/opposition_candidates.py. Manual trigger only.
+name: opposition-candidates
+on:
+  push: # TEMP: remove before merging
+    branches: [claude/sweet-turing-t83ean]
+    paths: [scripts/opposition_candidates.py, .github/workflows/opposition-candidates.yml]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "inspect (show the data file's format) or match (print candidates)"
+        required: false
+        default: "match"
+jobs:
+  candidates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q openpyxl
+      - run: python3 scripts/opposition_candidates.py inspect
+        if: ${{ github.event_name == 'push' }}
+      - run: python3 scripts/opposition_candidates.py "${{ inputs.mode || 'match' }}"

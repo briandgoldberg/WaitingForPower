@@ -7,6 +7,7 @@ import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { StatsHeader } from "@/components/StatsHeader";
 import { ProjectList } from "@/components/ProjectList";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -115,17 +116,15 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
       />
 
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{name} energy projects waiting for approval</h1>
+        <Breadcrumbs items={[{ label: "All projects", href: "/projects" }, { label: name }]} />
+        <h1 className="text-2xl font-bold tracking-tight mt-1">{name} energy projects waiting for approval</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">
-          {stats.totalProjects} waiting for a decision.{" "}
-          <Link href="/states" className="underline text-[var(--accent)]">
-            All states →
-          </Link>
+          {stats.totalProjects} waiting for a decision.
           {contested > 0 && (
             <>
-              {" · "}
-              <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)]">
-                Opposition ({contested}) →
+              {" "}
+              <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)] whitespace-nowrap">
+                {contested} with opposition →
               </Link>
             </>
           )}

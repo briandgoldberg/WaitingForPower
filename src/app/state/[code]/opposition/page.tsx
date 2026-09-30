@@ -9,6 +9,7 @@ import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { FUEL_TYPE_BY_VALUE, formatCapacity, PROJECT_STAGE_BY_VALUE } from "@/lib/data/taxonomies";
 import { outcomeOf } from "@/lib/projectOutcome";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 export const dynamic = "force-dynamic";
 
@@ -91,12 +92,9 @@ export default async function StateOppositionPage({ params }: { params: Promise<
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <div>
-        <p className="text-sm text-[var(--muted)]">
-          <Link href={`/state/${upper}`} className="underline">
-            {name}
-          </Link>{" "}
-          ›
-        </p>
+        <Breadcrumbs
+          items={[{ label: "All projects", href: "/projects" }, { label: name, href: `/state/${upper}` }, { label: "Opposition" }]}
+        />
         <h1 className="text-2xl font-bold tracking-tight mt-1">{name} energy project opposition</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">Sourced public records, by county. Not a complete list.</p>
       </div>

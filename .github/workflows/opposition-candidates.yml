@@ -5,22 +5,24 @@
 # scripts/opposition_candidates.py. Manual trigger only.
 name: opposition-candidates
 on:
-  push: # TEMP: remove before merging
-    branches: [claude/sweet-turing-t83ean]
-    paths: [scripts/opposition_candidates.py, .github/workflows/opposition-candidates.yml]
   workflow_dispatch:
     inputs:
       mode:
-        description: "inspect (show the data file's format) or match (print candidates)"
+        description: "inspect (the data file's format), match (print candidates) or dump (full rows for ids)"
         required: false
         default: "match"
+      ids:
+        description: "For dump: Sabin Post iDs, space-separated"
+        required: false
+        default: ""
 jobs:
   candidates:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: pip install -q openpyxl
-      - run: python3 scripts/opposition_candidates.py dump 3877 3882 3893 3923 3959 4010 4022 4024 4026 4027 4034 4039 4127 4141 4149 4151 4158 4159 4166 4167 4170 4173 4174 4176 4183 4185 4192 4195 4199 4201 4203 4204 4205 4206 4207 4208 4209 4210 4211 4212 4213 4216 4217 4218 4219 4222 4224 4225 4226 4237 4238 4239 4269 4295 4302 4328 4330 4342 4345 4352 4357 4363 4364 4369 4370 4386 4388 4400 4403 4412 4416 4417 4429
-        if: ${{ github.event_name == 'push' }}
-      - run: python3 scripts/opposition_candidates.py "${{ inputs.mode }}"
-        if: ${{ github.event_name != 'push' }}
+      - env:
+          MODE: ${{ inputs.mode }}
+          IDS: ${{ inputs.ids }}
+        # IDS is left unquoted on purpose so each id is its own argument.
+        run: python3 scripts/opposition_candidates.py "$MODE" $IDS

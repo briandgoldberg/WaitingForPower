@@ -18,7 +18,8 @@ export interface VisitorStances {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+  // Month and year only: many sources give no day.
+  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" });
 }
 
 // The content of the Opposition pill: each sourced record (who, what, when,

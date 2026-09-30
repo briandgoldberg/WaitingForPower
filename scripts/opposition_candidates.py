@@ -12,6 +12,8 @@ adds a record to src/lib/ingest/opposition.ts by hand.
 Modes:
   inspect  print the data file's link, format and first rows
   match    print candidate matches
+  dump     print the full text of the Sabin rows whose Post iD is listed
+           after it (space-separated), with HTML stripped
 """
 
 import csv
@@ -106,6 +108,13 @@ def main():
     link = data_link()
     body, ctype = get(link)
     rows = rows_from(body, ctype, link)
+    if mode == "dump":
+        want = set(sys.argv[2:])
+        for r in rows:
+            if r.get("Post iD") in want:
+                clean = {k: re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", v or ""))).strip() for k, v in r.items()}
+                print(json.dumps(clean, ensure_ascii=False))
+        return
     if mode == "inspect":
         print("DATA LINK:", link)
         print("CONTENT-TYPE:", ctype, "ROWS:", len(rows))

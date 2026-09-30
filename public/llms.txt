@@ -10,12 +10,22 @@
 > Full taxonomy reference (cause categories, fuel/stage enums, states covered):
 > https://waitingforpower.com/llms-full.txt
 
+## What's new
+
+- 2026-09-30 — Every project from the REST API, `/api/export`, the MCP server and
+  `/api/snapshots` captures from now on carries its `hearings` (date, endDate, label, location) and sourced
+  `opposition` records (kind, party, action, date, sourceLabel, sourceUrl). Both were
+  previously returned as empty arrays even where records existed. `search_projects`
+  summaries add `oppositionCount` and `nextHearingDate`; the CSV export adds
+  `opposition_count`. OpenAPI spec 1.2.0, MCP server 1.5.0. Full history:
+  https://github.com/briandgoldberg/WaitingForPower/blob/main/CHANGELOG.md
+
 ## MCP server
 
 - `https://waitingforpower.com/mcp` — a remote MCP server for agents that support tool calls
   (Claude and others). Add it as a connector/remote MCP server at that URL — no API key or auth
   required. Read tools: `search_projects` (filter + paginate, summarized for context budget),
-  `get_project` (full detail by slug — sources, milestone timeline), `get_stats` (aggregate
+  `get_project` (full detail by slug — sources, milestone timeline, hearings, opposition records), `get_stats` (aggregate
   numbers, same filters as search), `list_causes`, `list_policies`, `list_states`,
   `submit_feedback` (report bugs, confusing data, or a missing capability — read directly
   by a human, not published anywhere).
@@ -61,7 +71,10 @@
   Each object includes: project identity (`name`, `slug`, `projectType`, `fuelType`),
   location (`lat`, `lon`, `state`, `county`), `capacityValue`/`capacityUnit`,
   `currentStage`, why it's stuck (`causeSlugs`, `causeDetail`), `sources` (label + URL
-  per citation), a `milestones` timeline, computed fields (`daysWaiting`,
+  per citation), a `milestones` timeline, `hearings` (past and upcoming public hearings),
+  `opposition` (sourced records — intervenors, local government actions, lawsuits, moratoria,
+  organized groups — each with a source link; an empty array means none were found, not that
+  nobody objects), computed fields (`daysWaiting`,
   `yearsWaiting`, `investmentWaiting`), and — for interconnection-queue-sourced
   projects only — `interconnectionQueueStage` (e.g. "Feasibility Study", "System
   Impact Study") and `networkUpgradeCostUsd` (null for most projects; see

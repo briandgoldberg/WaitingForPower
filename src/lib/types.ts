@@ -110,7 +110,8 @@ export interface ProjectDTO {
   hearings: HearingDTO[];
   // Sourced opposition records, newest first. Empty when none are on file,
   // which means none were found, not that nobody objects. Only filled by
-  // callers that load the relation (the project page, state pages).
+  // callers that load the relation (the project page, state pages, and
+  // queryProjects — so the REST API, MCP server and export).
   opposition: OppositionDTO[];
 
   // computed

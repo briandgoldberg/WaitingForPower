@@ -44,6 +44,7 @@ const COLUMNS: { header: string; get: (p: ProjectDTO) => string | number | boole
   { header: "data_quality_note", get: (p) => p.dataQualityNote },
   { header: "milestone_count", get: (p) => p.milestones.length },
   { header: "hearing_count", get: (p) => p.hearings.length },
+  { header: "opposition_count", get: (p) => p.opposition.length },
   { header: "sources", get: (p) => p.sources.map((s) => `${s.label} (${s.url})`).join(";") },
 ];
 

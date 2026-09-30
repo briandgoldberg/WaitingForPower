@@ -118,16 +118,14 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
       <div>
         <Breadcrumbs items={[{ label: "All projects", href: "/projects" }, { label: name }]} />
         <h1 className="text-2xl font-bold tracking-tight mt-1">{name} energy projects waiting for approval</h1>
-        {contested > 0 && (
-          <p className="text-sm text-[var(--muted)] mt-0.5">
-            <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)] whitespace-nowrap">
-              {contested} with opposition →
-            </Link>
-          </p>
-        )}
       </div>
 
-      <StatsHeader stats={stats} exampleProject={exampleProject} status="in_permitting" />
+      <StatsHeader
+        stats={stats}
+        exampleProject={exampleProject}
+        status="in_permitting"
+        opposition={{ count: contested, href: `/state/${upper}/opposition` }}
+      />
 
       {projects.length > 0 ? (
         <ProjectList projects={projects} />

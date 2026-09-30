@@ -98,10 +98,14 @@ export function StatsHeader({
   stats,
   exampleProject,
   status,
+  opposition,
 }: {
   stats: AggregateStats;
   exampleProject: ProjectDTO | null;
   status: StatusBucket;
+  // Shown as a link under the Projects tile's count, e.g. on a state page.
+  // Omitted (not just zero) wherever there's no opposition scope to link to.
+  opposition?: { count: number; href: string };
 }) {
   const ex = exampleProject;
 
@@ -117,6 +121,11 @@ export function StatsHeader({
       label: "Projects",
       tone: "neutral" as const,
       value: stats.totalProjects.toLocaleString("en-US"),
+      sub: opposition && opposition.count > 0 && (
+        <Link href={opposition.href} className="underline text-[var(--accent)]">
+          {opposition.count} with opposition →
+        </Link>
+      ),
       help: (
         <>
           <p>

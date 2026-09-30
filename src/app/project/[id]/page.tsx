@@ -12,6 +12,7 @@ import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
+import { projectSeoDescription, projectSeoTitle, projectStatusLine } from "@/lib/seo/projectSnippet";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { SectionPills, type PillSection } from "@/components/project/SectionPills";
 import { ProjectDiscussion } from "@/components/ProjectDiscussion";
@@ -38,7 +39,9 @@ const getProject = cache(async (slug: string) => {
 // Facebook's share dialog scrapes these Open Graph tags for its post text
 // rather than taking a URL param — see src/components/ShareButtons.tsx.
 // Kept as one function so the share-button text and the OG text can't
-// drift apart.
+// drift apart. The search result's title and description are separate (see
+// src/lib/seo/projectSnippet.ts), since a searcher wants status, hearing,
+// location and developer rather than a post.
 function shareText(p: ProjectDTO): string {
   const outcome = outcomeOf(p);
   if (outcome === "approved") return `${p.name} has been approved. Tracked on WaitingForPower.`;
@@ -56,9 +59,10 @@ export async function generateMetadata({
   if (!p) return {};
 
   const description = shareText(p);
+  const nowMs = Date.now();
   return {
-    title: `${p.name} | WaitingForPower`,
-    description,
+    title: projectSeoTitle(p, nowMs),
+    description: projectSeoDescription(p, nowMs),
     alternates: { canonical: `/project/${p.slug}` },
     openGraph: {
       title: p.name,
@@ -94,6 +98,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         select: { createdAt: true, previousStage: true },
       })
     : null;
+  // The last time the project's record actually changed, for dateModified.
+  const lastChange = await prisma.projectChange.findFirst({
+    where: { projectId: p.id },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
   const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
@@ -104,6 +114,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     hearings: p.hearings,
     stateCode: singleStateCode,
   });
+  const nowMs = new Date().getTime();
+  const webPageJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: projectSeoTitle(p, nowMs),
+    url: `https://waitingforpower.com/project/${p.slug}`,
+    description: projectSeoDescription(p, nowMs),
+    ...(lastChange ? { dateModified: lastChange.createdAt.toISOString() } : {}),
+  };
   const breadcrumbJsonLd = buildBreadcrumbJsonLd([
     { name: "Home", url: "https://waitingforpower.com" },
     { name: "Projects", url: "https://waitingforpower.com/projects" },
@@ -143,7 +162,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   }
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
 
-  const nowMs = new Date().getTime();
   const detailsContent = (
     <>
         <div
@@ -262,6 +280,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       {hearingEventsJsonLd && (
@@ -308,6 +331,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 Developer: {p.applicant}
                 {p.ownerSector && ` (${p.ownerSector})`}
               </p>
+            )}
+            {/* Status in words, so a search for "<project> approved" or
+                "<project> hearing" finds it without opening a panel. */}
+            {outcome === "pending" && (
+              <p className="text-sm text-[var(--muted)] mt-0.5">{projectStatusLine(p, nowMs)}</p>
             )}
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />

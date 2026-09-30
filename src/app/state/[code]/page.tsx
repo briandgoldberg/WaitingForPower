@@ -117,19 +117,19 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{name} energy projects waiting for approval</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">
-          {stats.totalProjects} project{stats.totalProjects === 1 ? "" : "s"} currently waiting on a
-          permitting decision in {name}, tracked live from public federal and state sources.{" "}
+          {stats.totalProjects} waiting for a decision.{" "}
           <Link href="/states" className="underline text-[var(--accent)]">
-            See every state →
+            All states →
           </Link>
+          {contested > 0 && (
+            <>
+              {" · "}
+              <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)]">
+                Opposition ({contested}) →
+              </Link>
+            </>
+          )}
         </p>
-        {contested > 0 && (
-          <p className="text-sm mt-1">
-            <Link href={`/state/${upper}/opposition`} className="underline text-[var(--accent)]">
-              {contested} project{contested === 1 ? "" : "s"} with opposition on record, by county →
-            </Link>
-          </p>
-        )}
       </div>
 
       <StatsHeader stats={stats} exampleProject={exampleProject} status="in_permitting" />

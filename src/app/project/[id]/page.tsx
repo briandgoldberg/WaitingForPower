@@ -329,7 +329,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             style={{ backgroundColor: fuel?.color ?? "#6b7280" }}
           />
           <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
-            {p.projectType} · {fuel?.label ?? p.fuelType}
+            {/* transmission, storage, lng and pipeline are both a project type
+                and a fuel type — show the label once instead of "storage · Storage". */}
+            {p.projectType === p.fuelType ? (fuel?.label ?? p.fuelType) : `${p.projectType} · ${fuel?.label ?? p.fuelType}`}
           </span>
         </div>
         <div className="flex items-start justify-between gap-3 flex-wrap">

@@ -56,6 +56,14 @@ function HouseIcon() {
   );
 }
 
+function PowerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 text-slate-500 dark:text-slate-400">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function CoinIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className="h-8 w-8 sm:h-10 sm:w-10 shrink-0">
@@ -120,6 +128,7 @@ export function StatsHeader({
     {
       label: "Projects",
       tone: "neutral" as const,
+      visual: <PowerIcon />,
       value: stats.totalProjects.toLocaleString("en-US"),
       sub: opposition && opposition.count > 0 && (
         <Link href={opposition.href} className="underline text-[var(--accent)]">

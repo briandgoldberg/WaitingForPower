@@ -34,12 +34,12 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">A few supporters can make the difference</h2>
         <p className="text-sm sm:text-base text-[var(--text-secondary)] max-w-2xl">
           Solar and wind need batteries to keep the lights on after sunset. Local boards mostly hear from opponents, so
-          a handful of neighbors speaking up for storage can change the outcome.
+          a handful of neighbors speaking up for battery storage can change permit decisions.
         </p>
         <p className="text-sm sm:text-base text-[var(--text-secondary)]">
-          Attend one of the hearings below in person, or{" "}
+          Advocate for battery storage at one of the meetings below, or{" "}
           <Link href="/policies?tab=project&upcoming=1" className="font-semibold text-[var(--accent)] underline">
-            browse every upcoming hearing near you →
+            browse every upcoming public hearing →
           </Link>
         </p>
       </div>

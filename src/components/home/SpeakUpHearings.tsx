@@ -37,9 +37,9 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
           a handful of neighbors speaking up for storage can change the outcome.
         </p>
         <p className="text-sm sm:text-base text-[var(--text-secondary)]">
-          Attend a meeting below, or{" "}
-          <Link href="/policies?tab=project&upcoming=1" className="font-semibold text-[var(--accent)] underline whitespace-nowrap">
-            see all upcoming →
+          Attend one of the hearings below in person, or{" "}
+          <Link href="/policies?tab=project&upcoming=1" className="font-semibold text-[var(--accent)] underline">
+            browse every upcoming hearing near you →
           </Link>
         </p>
       </div>

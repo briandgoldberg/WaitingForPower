@@ -36,6 +36,12 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
           Solar and wind need batteries to keep the lights on after sunset. Local boards mostly hear from opponents, so
           a handful of neighbors speaking up for storage can change the outcome.
         </p>
+        <p className="text-sm sm:text-base text-[var(--text-secondary)] max-w-2xl">
+          Want to attend one of these meetings, or find others near you?{" "}
+          <Link href="/policies?tab=project&upcoming=1" className="font-semibold text-[var(--accent)] underline">
+            See every upcoming hearing →
+          </Link>
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

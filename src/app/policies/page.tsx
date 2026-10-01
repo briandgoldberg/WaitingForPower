@@ -27,12 +27,13 @@ const COMMENT_BUCKETS: Record<string, number> = { all: 0, unlikely: 1, maybe: 2,
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; comments?: string }>;
+  searchParams: Promise<{ tab?: string; comments?: string; upcoming?: string }>;
 }) {
-  const { tab, comments } = await searchParams;
+  const { tab, comments, upcoming } = await searchParams;
   // The old Public Hearings tab was folded into Projects.
   const defaultTab = TABS.find((t) => t === tab) ?? "national";
   const initialBucket = comments ? (COMMENT_BUCKETS[comments] ?? 0) : 0;
+  const initialUpcomingOnly = upcoming === "1";
   const advocacyProjects = await getAdvocacyProjects();
 
   return (
@@ -41,7 +42,9 @@ export default async function PoliciesPage({
         defaultTab={defaultTab}
         nationalAdvocacy={<NationalAdvocacySection />}
         stateAdvocacy={<StateAdvocacySection />}
-        projectAdvocacy={<ProjectAdvocacySection projects={advocacyProjects} initialBucket={initialBucket} />}
+        projectAdvocacy={
+          <ProjectAdvocacySection projects={advocacyProjects} initialBucket={initialBucket} initialUpcomingOnly={initialUpcomingOnly} />
+        }
       />
     </div>
   );

@@ -70,11 +70,19 @@ function actionsFor(p: AdvocacyProject, rule: StateCommentRule | undefined): { a
   return { attend, score };
 }
 
-export function ProjectAdvocacySection({ projects, initialBucket = 0 }: { projects: AdvocacyProject[]; initialBucket?: number }) {
+export function ProjectAdvocacySection({
+  projects,
+  initialBucket = 0,
+  initialUpcomingOnly = false,
+}: {
+  projects: AdvocacyProject[];
+  initialBucket?: number;
+  initialUpcomingOnly?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [bucket, setBucket] = useState(initialBucket);
-  const [upcomingOnly, setUpcomingOnly] = useState(false);
+  const [upcomingOnly, setUpcomingOnly] = useState(initialUpcomingOnly);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const rows = useMemo(

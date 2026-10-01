@@ -98,13 +98,13 @@ export default async function HomePage({
             Energy Permitting Reform
           </span>
           <p className="text-xl sm:text-3xl font-bold tracking-tight leading-tight max-w-3xl">
-            While America&rsquo;s demand for power rises rapidly, critical energy projects spend years stuck in
+            While America&rsquo;s demand for power rapidly rises, critical energy projects spend years stuck in
             convoluted permitting processes and legal challenges. Billions in investment are delayed and Americans
             continue to rely on aging power infrastructure.
           </p>
           <p className="text-base sm:text-xl font-semibold tracking-tight leading-snug max-w-3xl text-[#f2b866]">
-            America needs comprehensive, bipartisan energy permitting reform to build faster and deliver the
-            affordable, reliable, and clean power our citizens demand.
+            America needs bipartisan energy permitting reform to build affordable, reliable, and clean power our
+            citizens demand.
           </p>
           <Link
             href="/policies"

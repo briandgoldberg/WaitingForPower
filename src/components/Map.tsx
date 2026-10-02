@@ -163,15 +163,29 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
           approx = multiState ? "multi-state" : county ? "county-only" : "state-only";
         }
 
-        const size = capacityRadius(p) * 2;
         const color = FUEL_TYPE_BY_VALUE[p.fuelType]?.color ?? "#6b7280";
         const el = document.createElement("div");
-        el.style.cssText = `
-          width:${size}px;height:${size}px;border-radius:50%;
-          background:${color};opacity:0.9;
-          border:1.5px ${approx ? "dashed" : "solid"} #ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.4);
-          cursor:pointer;
-        `;
+        // A single-project page's map has exactly one marker to find, so it
+        // gets a bigger bullseye instead of the explorer's small
+        // capacity-scaled dot — concentric rings via box-shadow, still one
+        // element. The explorer (many markers) keeps the plain small dot;
+        // a bullseye per marker there would be visual noise.
+        if (projectsRef.current.length === 1) {
+          el.style.cssText = `
+            width:14px;height:14px;border-radius:50%;
+            background:${color};
+            box-shadow:0 0 0 5px white, 0 0 0 8px ${color}, 0 0 0 12px white, 0 1px 4px rgba(0,0,0,0.35);
+            cursor:pointer;
+          `;
+        } else {
+          const size = capacityRadius(p) * 2;
+          el.style.cssText = `
+            width:${size}px;height:${size}px;border-radius:50%;
+            background:${color};opacity:0.9;
+            border:1.5px ${approx ? "dashed" : "solid"} #ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.4);
+            cursor:pointer;
+          `;
+        }
         const lonLat: [number, number] = [lon, lat];
         el.addEventListener("click", (e) => {
           e.stopPropagation();

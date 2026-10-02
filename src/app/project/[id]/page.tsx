@@ -381,7 +381,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <div className="h-28 sm:h-36 w-full rounded-lg overflow-hidden border border-[var(--border)]">
+      <div className="h-20 sm:h-24 w-full rounded-lg overflow-hidden border border-[var(--border)]">
         <Map projects={[p]} />
       </div>
 

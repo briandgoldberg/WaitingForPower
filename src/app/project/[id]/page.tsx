@@ -21,6 +21,7 @@ import { OutcomeBanner } from "@/components/project/OutcomeBanner";
 import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
 import { withoutDashes } from "@/lib/text";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
+import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +120,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
   const singleStateCode = stateCodes.length === 1 && stateCodes[0] in STATE_NAMES ? stateCodes[0] : null;
+  // Which body currently has to act, stated outright rather than left for a
+  // visitor to infer from stage/reviewStep — a project can genuinely change
+  // hands mid-process (e.g. county review escalating to a state siting
+  // board), so this is read fresh from the regulator directory every time,
+  // not cached onto the project row.
+  const currentRegulators = [...new Set(stateCodes.flatMap((c) => (STATE_REGULATORS[c] ?? []).map((r) => r.name)))];
+  const jurisdictionText =
+    currentRegulators.length === 0
+      ? null
+      : currentRegulators.length <= 2
+        ? currentRegulators.join(" and ")
+        : `${currentRegulators[0]} and ${currentRegulators.length - 1} others`;
   const hearingEventsJsonLd = buildHearingEventsJsonLd({
     projectName: p.name,
     projectUrl: `https://waitingforpower.com/project/${p.slug}`,
@@ -358,6 +371,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 "<project> hearing" finds it without opening a panel. */}
             {outcome === "pending" && (
               <p className="text-sm text-[var(--muted)] mt-0.5">{projectStatusLine(p, nowMs)}</p>
+            )}
+            {outcome === "pending" && jurisdictionText && (
+              <p className="text-sm text-[var(--muted)] mt-0.5">Decision is currently with: {jurisdictionText}</p>
             )}
             {opposedBy && (
               <p className="text-sm text-[var(--muted)] mt-0.5">

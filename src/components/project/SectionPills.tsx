@@ -18,7 +18,11 @@ export interface PillSection {
 // so search engines and agents still read it, and a link like #take-action
 // opens the right panel.
 export function SectionPills({ sections }: { sections: PillSection[] }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  // The first section (Details, on the project page) starts open rather
+  // than every pill starting collapsed — a visitor shouldn't have to click
+  // just to see what's already on the page. A matching #hash still
+  // overrides this on mount, same as before.
+  const [openId, setOpenId] = useState<string | null>(sections[0]?.id ?? null);
   const idKey = sections.map((s) => s.id).join(",");
 
   useEffect(() => {

@@ -222,7 +222,10 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
         [lon, lat] = centroid;
         approx = multiState ? "multi-state" : county ? "county-only" : "state-only";
       }
-      const zoom = approx === "state-only" ? 5 : approx === "multi-state" || approx === "county-only" ? 7 : 10;
+      // Zoomed out a bit further than a tight close-up so the basemap's own
+      // city/town labels have room to show around the pin, not just the
+      // immediate block.
+      const zoom = approx === "state-only" ? 4.5 : approx === "multi-state" || approx === "county-only" ? 6.5 : 8;
       map.jumpTo({ center: [lon, lat], zoom });
     }
 

@@ -1,6 +1,7 @@
-import type { Project, ProjectCause, ProjectSource, Milestone, ProjectHearing, ProjectOpposition } from "@prisma/client";
+import type { Project, ProjectCause, ProjectSource, Milestone, ProjectHearing, ProjectOpposition, ProjectChange } from "@prisma/client";
 import { daysWaiting, yearsWaiting } from "@/lib/calc/dates";
 import { estimateInvestmentWaiting } from "@/lib/calc/investmentWaiting";
+import { buildStatusHistory } from "@/lib/projectTimeline";
 import type { OppositionKind, ProjectDTO } from "@/lib/types";
 import type { CauseSlug } from "@/lib/data/causeCategories";
 import { RESOLVED_STAGES, type FuelType, type ProjectStage, type ProjectType, type VerificationStatus } from "@/lib/data/taxonomies";
@@ -14,6 +15,9 @@ export type ProjectWithRelations = Project & {
   hearings?: ProjectHearing[];
   // Optional too: only the project page and state pages show it.
   opposition?: ProjectOpposition[];
+  // Optional: only fetched where a visitor can see per-project history
+  // (the project page, get_project) — see statusHistory below.
+  changes?: ProjectChange[];
 };
 
 export function serializeProject(p: ProjectWithRelations): ProjectDTO {
@@ -89,6 +93,12 @@ export function serializeProject(p: ProjectWithRelations): ProjectDTO {
         stage: m.stage,
         description: m.description,
       })),
+    // Empty (not merely stale) when the caller's include didn't fetch
+    // `changes` at all — e.g. the Explorer's list query, which has no need
+    // for per-project history. Both the project page and get_project's
+    // include fetch it, so it's populated wherever a visitor can actually
+    // see it.
+    statusHistory: buildStatusHistory(p.milestones, p.changes ?? []),
     hearings: (p.hearings ?? [])
       .slice()
       .sort((a, b) => a.date.getTime() - b.date.getTime())

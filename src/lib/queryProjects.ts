@@ -153,14 +153,20 @@ export async function queryProjects(filters: FilterState, opts: { allStatuses?: 
   return projects.map(serializeProject).filter((p) => matchesFilters(p, filters, { ignoreStatus: opts.allStatuses }));
 }
 
+// A single project's own detail include — adds its status-change history on
+// top of the shared PROJECT_INCLUDE, which the list query above doesn't
+// fetch (no per-project history is needed for list rows, and it could grow
+// large over a project's lifetime).
+const PROJECT_DETAIL_INCLUDE = { ...PROJECT_INCLUDE, changes: { orderBy: { createdAt: "asc" as const } } };
+
 export async function getProjectBySlug(slug: string): Promise<ProjectDTO | null> {
   let project = await prisma.project.findUnique({
     where: { slug },
-    include: PROJECT_INCLUDE,
+    include: PROJECT_DETAIL_INCLUDE,
   });
   // A slug that was merged into another project resolves to that project.
   if (project?.mergedIntoId) {
-    project = await prisma.project.findUnique({ where: { id: project.mergedIntoId }, include: PROJECT_INCLUDE });
+    project = await prisma.project.findUnique({ where: { id: project.mergedIntoId }, include: PROJECT_DETAIL_INCLUDE });
   }
   if (!project) return null;
   return serializeProject(overlayMerged(project, await mergedChildren([project.id])));

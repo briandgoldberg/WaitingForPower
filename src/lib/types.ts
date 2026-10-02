@@ -19,6 +19,16 @@ export interface MilestoneDTO {
   description: string;
 }
 
+// Hand-sourced milestones merged with this site's own detected status
+// changes, chronological (oldest first) — see src/lib/projectTimeline.ts.
+// `sub` is a short stage/change-type label; null when there isn't one.
+export interface StatusHistoryEntryDTO {
+  date: string; // ISO date
+  label: string;
+  sub: string | null;
+  approximate: boolean;
+}
+
 export interface HearingDTO {
   date: string; // ISO date
   endDate: string | null; // ISO date
@@ -104,6 +114,7 @@ export interface ProjectDTO {
   commentDeadline: string | null;
   sources: ProjectSourceDTO[];
   milestones: MilestoneDTO[];
+  statusHistory: StatusHistoryEntryDTO[];
   // Every real upcoming hearing found for this project, oldest first —
   // see schema.prisma's ProjectHearing model. Can be more than one (e.g. a
   // separate local public hearing and evidentiary hearing).

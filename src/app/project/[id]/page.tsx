@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 // component (both invoked separately by Next.js for the same request)
 // don't double the DB round trip.
 const getProject = cache(async (slug: string) => {
-  const include = { causes: true, sources: true, milestones: true, hearings: true, opposition: true } as const;
+  const include = { causes: true, sources: true, milestones: true, hearings: true, opposition: true, changes: { orderBy: { createdAt: "asc" as const } } } as const;
   let project = await prisma.project.findUnique({ where: { slug }, include });
   // A duplicate merged into another project (see src/lib/dedupe.ts) shows that
   // project instead; the page redirects to its slug.
@@ -39,24 +39,6 @@ const getProject = cache(async (slug: string) => {
   return serializeProject(overlayMerged(project, await mergedChildren([project.id])));
 });
 
-// Short label for a ProjectChange row in the Timeline tab — same priority
-// order as ChangesFeed's badgeFor (most newsworthy changeType wins when
-// several fired in the same run), kept as plain text here since a timeline
-// entry already has the full `summary` sentence doing the real work.
-const CHANGE_TYPE_PRIORITY = ["resolved", "new", "no_longer_reported", "reappeared", "advanced", "fact_revised", "new_filing"] as const;
-const CHANGE_TYPE_LABEL: Record<(typeof CHANGE_TYPE_PRIORITY)[number], string> = {
-  resolved: "Resolved",
-  new: "First tracked",
-  no_longer_reported: "No longer reported",
-  reappeared: "Reappeared",
-  advanced: "Stage update",
-  fact_revised: "Details updated",
-  new_filing: "New filing",
-};
-function changeTypeLabel(changeTypes: string[]): string {
-  const primary = CHANGE_TYPE_PRIORITY.find((t) => changeTypes.includes(t));
-  return primary ? CHANGE_TYPE_LABEL[primary] : "Updated";
-}
 
 // Facebook's share dialog scrapes these Open Graph tags for its post text
 // rather than taking a URL param — see src/components/ShareButtons.tsx.
@@ -125,21 +107,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     where: { projectId: p.id },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
-  });
-  // Every detected *status* change to this project's own record — the
-  // site-wide feed (ChangesFeed) already shows these across all projects;
-  // here they merge into this one project's Timeline tab alongside its
-  // hand-sourced milestones, so "what happened and when" doesn't depend on
-  // which source happened to publish a dated milestone. Excludes rows whose
-  // only changeType is "fact_revised": some sources' capacity/field values
-  // flap day to day without the project's actual status changing at all
-  // (confirmed live on a real project — 30+ consecutive daily "fact_revised"
-  // rows, all the same no-op), which would drown the real history in noise.
-  const STATUS_CHANGE_TYPES = ["new", "advanced", "resolved", "no_longer_reported", "reappeared", "new_filing"];
-  const projectChanges = await prisma.projectChange.findMany({
-    where: { projectId: p.id, changeTypes: { hasSome: STATUS_CHANGE_TYPES } },
-    orderBy: { createdAt: "asc" },
-    select: { changeTypes: true, summary: true, createdAt: true },
   });
   // What visitors who logged contacting the regulator said they asked for,
   // one vote per person and stance.
@@ -346,23 +313,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         )}
     </>
   );
-  // Hand-sourced milestones (dated, stage-labeled) and the site's own
-  // detected changeTypes/summary log, merged into one chronological list —
-  // a project with no hand-sourced milestones at all (most state-docket
-  // sources) still gets a real timeline from what this site has itself
-  // observed changing.
-  const timelineEvents = [
-    ...p.milestones.map((m) => ({ date: new Date(m.date), label: m.description, sub: m.stage, approximate: m.dateConfidence === "approximate" })),
-    ...projectChanges.map((c) => ({ date: c.createdAt, label: c.summary, sub: changeTypeLabel(c.changeTypes), approximate: false })),
-  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Hand-sourced milestones merged with the site's own detected status
+  // changes — see src/lib/projectTimeline.ts, shared with the public
+  // API/MCP so both show the same history from one definition.
   const timelineContent =
-    timelineEvents.length > 0 ? (
+    p.statusHistory.length > 0 ? (
       <>
           <ul className="flex flex-col gap-3">
-            {timelineEvents.map((e, i) => (
+            {p.statusHistory.map((e, i) => (
               <li key={i} className="flex gap-3 text-sm">
                 <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
-                  {e.date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                  {new Date(e.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                   {e.approximate && <span className="text-xs">*</span>}
                 </div>
                 <div>
@@ -372,7 +333,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               </li>
             ))}
           </ul>
-          {timelineEvents.some((e) => e.approximate) && (
+          {p.statusHistory.some((e) => e.approximate) && (
             <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
           )}
       </>
@@ -381,7 +342,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     );
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
-    ...(timelineEvents.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
+    ...(p.statusHistory.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",

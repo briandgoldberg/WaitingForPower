@@ -174,7 +174,7 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
           el.style.cssText = `
             width:14px;height:14px;border-radius:50%;
             background:${color};
-            box-shadow:0 0 0 5px white, 0 0 0 8px ${color}, 0 0 0 12px white, 0 1px 4px rgba(0,0,0,0.35);
+            box-shadow:0 0 0 3px white, 0 0 0 6px ${color}, 0 0 0 9px white, 0 0 0 13px ${color}, 0 1px 4px rgba(0,0,0,0.35);
             cursor:pointer;
           `;
         } else {

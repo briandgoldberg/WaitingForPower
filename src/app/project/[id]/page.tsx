@@ -6,7 +6,7 @@ import { mergedChildren, overlayMerged } from "@/lib/dedupe";
 import { prisma } from "@/lib/db";
 import { serializeProject } from "@/lib/serialize";
 import type { ProjectDTO } from "@/lib/types";
-import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES, type ProjectStage } from "@/lib/data/taxonomies";
+import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES, VERIFICATION_STATUS_BY_VALUE, type ProjectStage } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
@@ -272,6 +272,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             />
           )}
           {p.primeMoverCode && <Detail label="Equipment" value={PRIME_MOVER_LABELS[p.primeMoverCode] ?? p.primeMoverCode} />}
+          {p.reviewStep && (
+            <Detail
+              label="Review step"
+              value={p.reviewStep}
+              rows={[p.reviewStepAt ? ["Confirmed", new Date(p.reviewStepAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })] : null]}
+            />
+          )}
+          <Detail label="Data verification" value={VERIFICATION_STATUS_BY_VALUE[p.verificationStatus]} />
           {p.expectedOnlineDate && (
             <Detail
               label="Expected online"
@@ -279,6 +287,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             />
           )}
           {p.currentStatus && <Detail wide label="Current status" value={withoutDashes(p.currentStatus)} />}
+          {p.dataQualityNote && <Detail wide label="Data quality note" value={withoutDashes(p.dataQualityNote)} />}
           {!resolved && p.causeDetail && (
             <Detail
               wide
@@ -310,6 +319,20 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </h3>
             <OppositionSection records={p.opposition} stances={stances} />
           </section>
+        )}
+        {p.sources.length > 1 && (
+          <div className="mt-5 pt-4 border-t border-[var(--border)]">
+            <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">Additional sources</h3>
+            <ul className="flex flex-col gap-1 text-sm">
+              {p.sources.slice(1).map((s) => (
+                <li key={s.url}>
+                  <a href={s.url} target="_blank" rel="noreferrer" className="text-[var(--accent)] underline">
+                    {s.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className="mt-5 pt-4 border-t border-[var(--border)]">
           <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">Location</h3>

@@ -82,7 +82,7 @@ const spec = {
   openapi: "3.1.0",
   info: {
     title: "WaitingForPower API",
-    version: "1.2.0",
+    version: "1.3.0",
     description:
       "Read-only REST access to WaitingForPower's tracked U.S. energy permitting projects. CORS-open, no API key required. " +
       "See https://waitingforpower.com/llms.txt for the full list of machine-readable surfaces (including the MCP server), " +

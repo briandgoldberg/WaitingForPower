@@ -3,7 +3,7 @@
   "name": "com.waitingforpower/energy-permitting-tracker",
   "title": "WaitingForPower",
   "description": "Tracks U.S. energy permitting delays; agents can predict approval dates and explain why.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "websiteUrl": "https://waitingforpower.com",
   "repository": {
     "url": "https://github.com/briandgoldberg/WaitingForPower",

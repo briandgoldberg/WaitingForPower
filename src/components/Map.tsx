@@ -4,8 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import type { ProjectDTO } from "@/lib/types";
 import { formatCapacity, FUEL_TYPE_BY_VALUE } from "@/lib/data/taxonomies";
-import { countyCentroid, multiStateCentroid, splitStateCodes, stateCentroid } from "@/lib/data/usStates";
-import { STATE_BOUNDS } from "@/lib/data/stateBounds";
+import { countyCentroid, multiStateCentroid, stateCentroid } from "@/lib/data/usStates";
 
 // Free, no-API-key vector basemap (CARTO's Positron style — light and
 // minimal, so the colored fuel-type markers read clearly against it instead
@@ -80,11 +79,6 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
 
-  // A single-project page shows a locator map, not the explorer: fixed on
-  // its state, no pan/zoom/scroll — reads as a static image of "where this
-  // is," not an interactive widget to go exploring in.
-  const isLocator = projectsRef.current.length === 1;
-
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -97,11 +91,10 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
       maxZoom: 14,
       maxBounds: US_MAX_BOUNDS,
       attributionControl: false,
-      interactive: !isLocator,
     });
     mapRef.current = map;
 
-    if (!isLocator) map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     // Required CARTO/OpenStreetMap attribution (see MAP_STYLE comment above)
     // — collapsed to a small icon instead of a full text bar across the
     // bottom of the map. Hardcoded rather than left to MapLibre's automatic
@@ -196,41 +189,6 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
       }
     }
 
-    // A single-project page wants a locator view of the whole state the
-    // project is in (so nearby city labels from the basemap show up for
-    // free), not a close-up on the pin — fit to every state the project
-    // touches, unioning bounds for a multi-state project. Falls back to
-    // centering on the pin at a fixed zoom only when no state is on file at
-    // all.
-    function focusSingleProject() {
-      const [p] = projectsRef.current;
-      if (!p) return;
-      const codes = splitStateCodes(p.state).filter((c) => STATE_BOUNDS[c]);
-      if (codes.length > 0) {
-        let [swLon, swLat] = STATE_BOUNDS[codes[0]][0];
-        let [neLon, neLat] = STATE_BOUNDS[codes[0]][1];
-        for (const c of codes.slice(1)) {
-          const [[w, s], [e, n]] = STATE_BOUNDS[c];
-          swLon = Math.min(swLon, w);
-          swLat = Math.min(swLat, s);
-          neLon = Math.max(neLon, e);
-          neLat = Math.max(neLat, n);
-        }
-        map.fitBounds([[swLon, swLat], [neLon, neLat]], { padding: 16, maxZoom: 9, animate: false });
-        return;
-      }
-      let lon = p.lon;
-      let lat = p.lat;
-      if (lon == null || lat == null) {
-        const multiState = multiStateCentroid(p.state);
-        const county = multiState ? null : countyCentroid(p.state, p.county);
-        const centroid = multiState ?? county ?? stateCentroid(p.state);
-        if (!centroid) return;
-        [lon, lat] = centroid;
-      }
-      map.jumpTo({ center: [lon, lat], zoom: 6 });
-    }
-
     if (map.loaded() || map.isStyleLoaded()) {
       renderMarkers();
     } else {
@@ -240,10 +198,6 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
     // render immediately too in case neither flag/event ever fires (same
     // class of issue seen with the GL-layer approach this replaced).
     renderMarkers();
-    if (projectsRef.current.length === 1) {
-      if (map.loaded() || map.isStyleLoaded()) focusSingleProject();
-      else map.once("load", focusSingleProject);
-    }
   }, [projects]);
 
   return <div ref={containerRef} className="h-full w-full rounded-lg" />;

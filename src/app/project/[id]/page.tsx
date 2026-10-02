@@ -335,8 +335,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             {p.projectType === p.fuelType ? (fuel?.label ?? p.fuelType) : `${p.projectType} · ${fuel?.label ?? p.fuelType}`}
           </span>
         </div>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex-1 min-w-0">
+        <div className="flex items-stretch justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
             <h1 className="text-3xl font-bold tracking-tight">{p.name}</h1>
             <p className="text-sm text-[var(--muted)] mt-1">
               {p.county && `${p.county}, `}
@@ -377,9 +377,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2 w-full sm:w-72 shrink-0">
+          <div className="flex flex-col items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-[260px]">
             <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
-            <div className="h-40 sm:h-48 w-full rounded-lg overflow-hidden border border-[var(--border)]">
+            <div className="flex-1 min-h-[120px] w-full rounded-lg overflow-hidden border border-[var(--border)]">
               <Map projects={[p]} />
             </div>
           </div>

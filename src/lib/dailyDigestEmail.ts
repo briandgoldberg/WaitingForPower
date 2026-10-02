@@ -64,10 +64,25 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
   const fmtTime = (d: Date) => d.toLocaleTimeString("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" });
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-  const headline = `${plural(api.callersByClass.real, "real caller")} · ${api.callersByClass.ambiguous} unidentified · ${api.callersByClass.bot} crawlers`;
-  const subline = `${api.newCallers} new today · ${totalApiCalls} calls (${api.callsByClass.real} real · ${api.callsByClass.ambiguous} unidentified · ${api.callsByClass.bot} crawler)`;
+  // Crawlers (search-engine/directory bots just strolling the internet)
+  // are real volume but zero product signal — kept out of the bold
+  // headline and the detail lists below, mentioned once, mutedly, in the
+  // subline only.
+  const headline = `${plural(api.callersByClass.real, "real caller")} · ${api.callersByClass.ambiguous} unidentified`;
+  const subline = `${api.newCallers} new today · ${totalApiCalls} calls (${api.callsByClass.real} real · ${api.callsByClass.ambiguous} unidentified, ${api.callsByClass.bot} crawler not shown below)`;
   const f = api.mcpFunnel;
   const funnel = `${f.connected} connected → ${f.initialized} initialized → ${f.listedTools} listed tools → ${f.calledTools} called a tool`;
+  // The one line meant to answer "is anyone actually building something on
+  // this": a returning caller (seen before today) who got all the way to
+  // calling a tool is a real usage pattern, not a one-off page hit or a
+  // handshake that never went anywhere.
+  const deepReturning = api.callers.filter((c) => c.isNew === false && c.mcpStage === "called tools");
+  const signalLine =
+    deepReturning.length > 0
+      ? `${plural(deepReturning.length, "returning caller")} called tools today, not just new visitors handshaking — the strongest sign someone's actually building on this: ${deepReturning.map((c) => c.label).join(", ")}.`
+      : api.mcpFunnel.calledTools > 0
+        ? `${plural(api.mcpFunnel.calledTools, "caller")} called a tool today, but none of them were returning callers yet — too early to call it product-market fit.`
+        : `Nobody called a tool today — every real/unidentified caller stopped at connect or initialize.`;
   const callerDetail = (c: ApiCaller) =>
     [
       plural(c.calls, "call"),
@@ -84,6 +99,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
       ? "<p>No requests.</p>"
       : `<p style="font-size:22px;font-weight:700;color:#1B6B3C;margin:0;">${escapeHtml(headline)}</p>
          <p style="color:#666;font-size:12px;margin:2px 0 10px;">${escapeHtml(subline)}</p>
+         <p style="font-size:14px;font-weight:600;margin:0 0 10px;padding:8px 10px;background:#f3f7f3;border-left:3px solid #1B6B3C;">${escapeHtml(signalLine)}</p>
          <p style="font-size:13px;margin:0 0 4px;"><strong>MCP funnel</strong> ${muted("(non-crawler callers)")}: ${escapeHtml(funnel)}</p>
          <p style="font-size:13px;margin:0 0 10px;"><strong>Tools called:</strong> ${
            api.toolCalls.length === 0
@@ -118,6 +134,7 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
       : [
           headline,
           subline,
+          `SIGNAL: ${signalLine}`,
           `MCP funnel (non-crawler callers): ${funnel}`,
           `Tools called: ${api.toolCalls.length === 0 ? "none" : api.toolCalls.map((t) => `${t.name} ${t.calls}× by ${plural(t.callers, "caller")}`).join(" · ")}`,
           ...(api.callers.length > 0 ? ["", "Who called (crawlers hidden):", ...api.callers.map((c) => `- ${callerTag(c)}${c.label} — ${callerDetail(c)}`)] : []),

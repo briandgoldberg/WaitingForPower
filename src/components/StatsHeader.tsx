@@ -41,6 +41,7 @@ function ResolvedStatusCard({ stats, status }: { stats: AggregateStats; status: 
 // ink colors so it reads the same in light and dark mode.
 const TONES = {
   neutral: "border-[var(--border)] bg-[var(--panel)]",
+  blue: "border-blue-300/70 dark:border-blue-700/60 bg-gradient-to-br from-blue-50 to-[var(--panel)] dark:from-blue-950/40",
   amber: "border-amber-300/70 dark:border-amber-700/60 bg-gradient-to-br from-amber-50 to-[var(--panel)] dark:from-amber-950/40",
   green: "border-emerald-300/70 dark:border-emerald-700/60 bg-gradient-to-br from-emerald-50 to-[var(--panel)] dark:from-emerald-950/40",
   violet: "border-violet-300/70 dark:border-violet-700/60 bg-gradient-to-br from-violet-50 to-[var(--panel)] dark:from-violet-950/40",
@@ -58,7 +59,7 @@ function HouseIcon() {
 
 function PowerIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 text-slate-500 dark:text-slate-400">
+    <svg viewBox="0 0 24 24" aria-hidden className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 text-blue-500 dark:text-blue-400">
       <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
     </svg>
   );
@@ -127,7 +128,7 @@ export function StatsHeader({
   const items = [
     {
       label: "Projects",
-      tone: "neutral" as const,
+      tone: "blue" as const,
       visual: <PowerIcon />,
       value: stats.totalProjects.toLocaleString("en-US"),
       sub: opposition && opposition.count > 0 && (

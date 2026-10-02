@@ -22,6 +22,7 @@ import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
 import { withoutDashes } from "@/lib/text";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
+import { Map } from "@/components/Map";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,25 @@ const getProject = cache(async (slug: string) => {
   if (!project) return null;
   return serializeProject(overlayMerged(project, await mergedChildren([project.id])));
 });
+
+// Short label for a ProjectChange row in the Timeline tab — same priority
+// order as ChangesFeed's badgeFor (most newsworthy changeType wins when
+// several fired in the same run), kept as plain text here since a timeline
+// entry already has the full `summary` sentence doing the real work.
+const CHANGE_TYPE_PRIORITY = ["resolved", "new", "no_longer_reported", "reappeared", "advanced", "fact_revised", "new_filing"] as const;
+const CHANGE_TYPE_LABEL: Record<(typeof CHANGE_TYPE_PRIORITY)[number], string> = {
+  resolved: "Resolved",
+  new: "First tracked",
+  no_longer_reported: "No longer reported",
+  reappeared: "Reappeared",
+  advanced: "Stage update",
+  fact_revised: "Details updated",
+  new_filing: "New filing",
+};
+function changeTypeLabel(changeTypes: string[]): string {
+  const primary = CHANGE_TYPE_PRIORITY.find((t) => changeTypes.includes(t));
+  return primary ? CHANGE_TYPE_LABEL[primary] : "Updated";
+}
 
 // Facebook's share dialog scrapes these Open Graph tags for its post text
 // rather than taking a URL param — see src/components/ShareButtons.tsx.
@@ -105,6 +125,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     where: { projectId: p.id },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
+  });
+  // Every detected change to this project's own record — the site-wide feed
+  // (ChangesFeed) already shows these across all projects; here they merge
+  // into this one project's Timeline tab alongside its hand-sourced
+  // milestones, so "what happened and when" doesn't depend on which source
+  // happened to publish a dated milestone.
+  const projectChanges = await prisma.projectChange.findMany({
+    where: { projectId: p.id },
+    orderBy: { createdAt: "asc" },
+    select: { changeTypes: true, summary: true, createdAt: true },
   });
   // What visitors who logged contacting the regulator said they asked for,
   // one vote per person and stance.
@@ -184,6 +214,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         ? { label: "Deferred Investment", help: "Estimated construction cost: capacity times typical cost per kW. Not spent yet, because it is waiting on approval.", value: formatUsd(p.investmentWaiting.estimatedUsd!), href: "/methodology" }
         : { label: "Deferred Investment", help: "Estimated construction cost, available only for MW capacity.", value: "—", note: "Estimated only for MW capacity" },
     );
+    // Interconnection study sub-stage (e.g. "Facility Study", "System
+    // Impact Study") — real granularity a grid-queue project has that the
+    // generic currentStage/reviewStep fields don't carry. Once a project's
+    // interconnection agreement is executed or even pending, the LBNL
+    // ingest module stops tracking it as "waiting" at all (see
+    // lbnlQueuedUp.ts), so a still-listed project's value here is always a
+    // pre-agreement study stage, never "signed."
+    if (p.interconnectionQueueStage) {
+      primaryCards.push({ label: "Interconnection", help: "Current stage in the grid operator's interconnection study queue.", value: p.interconnectionQueueStage });
+    }
   }
   const causeLabels = p.causeSlugs.map((slug) => CAUSE_CATEGORY_BY_SLUG[slug]?.label).filter((l): l is string => Boolean(l));
 
@@ -266,26 +306,41 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <OppositionSection records={p.opposition} stances={stances} />
           </section>
         )}
+        <div className="mt-5 pt-4 border-t border-[var(--border)]">
+          <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">Location</h3>
+          <div className="h-56 sm:h-72 w-full rounded-lg overflow-hidden border border-[var(--border)]">
+            <Map projects={[p]} />
+          </div>
+        </div>
     </>
   );
+  // Hand-sourced milestones (dated, stage-labeled) and the site's own
+  // detected changeTypes/summary log, merged into one chronological list —
+  // a project with no hand-sourced milestones at all (most state-docket
+  // sources) still gets a real timeline from what this site has itself
+  // observed changing.
+  const timelineEvents = [
+    ...p.milestones.map((m) => ({ date: new Date(m.date), label: m.description, sub: m.stage, approximate: m.dateConfidence === "approximate" })),
+    ...projectChanges.map((c) => ({ date: c.createdAt, label: c.summary, sub: changeTypeLabel(c.changeTypes), approximate: false })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
   const timelineContent =
-    p.milestones.length > 0 ? (
+    timelineEvents.length > 0 ? (
       <>
           <ul className="flex flex-col gap-3">
-            {p.milestones.map((m, i) => (
+            {timelineEvents.map((e, i) => (
               <li key={i} className="flex gap-3 text-sm">
                 <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
-                  {new Date(m.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                  {m.dateConfidence === "approximate" && <span className="text-xs">*</span>}
+                  {e.date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                  {e.approximate && <span className="text-xs">*</span>}
                 </div>
                 <div>
-                  <span className="font-medium">{m.description}</span>
-                  <span className="text-[var(--muted)]"> · {m.stage}</span>
+                  <span className="font-medium">{e.label}</span>
+                  {e.sub && <span className="text-[var(--muted)]"> · {e.sub}</span>}
                 </div>
               </li>
             ))}
           </ul>
-          {p.milestones.some((m) => m.dateConfidence === "approximate") && (
+          {timelineEvents.some((e) => e.approximate) && (
             <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
           )}
       </>
@@ -294,7 +349,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     );
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
-    ...(p.milestones.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
+    ...(timelineEvents.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",

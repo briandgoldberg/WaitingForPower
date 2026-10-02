@@ -126,13 +126,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
-  // Every detected change to this project's own record — the site-wide feed
-  // (ChangesFeed) already shows these across all projects; here they merge
-  // into this one project's Timeline tab alongside its hand-sourced
-  // milestones, so "what happened and when" doesn't depend on which source
-  // happened to publish a dated milestone.
+  // Every detected *status* change to this project's own record — the
+  // site-wide feed (ChangesFeed) already shows these across all projects;
+  // here they merge into this one project's Timeline tab alongside its
+  // hand-sourced milestones, so "what happened and when" doesn't depend on
+  // which source happened to publish a dated milestone. Excludes rows whose
+  // only changeType is "fact_revised": some sources' capacity/field values
+  // flap day to day without the project's actual status changing at all
+  // (confirmed live on a real project — 30+ consecutive daily "fact_revised"
+  // rows, all the same no-op), which would drown the real history in noise.
+  const STATUS_CHANGE_TYPES = ["new", "advanced", "resolved", "no_longer_reported", "reappeared", "new_filing"];
   const projectChanges = await prisma.projectChange.findMany({
-    where: { projectId: p.id },
+    where: { projectId: p.id, changeTypes: { hasSome: STATUS_CHANGE_TYPES } },
     orderBy: { createdAt: "asc" },
     select: { changeTypes: true, summary: true, createdAt: true },
   });

@@ -379,7 +379,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
           <div className="flex flex-col items-end gap-2 w-full sm:w-72 shrink-0">
             <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
-            <div className="h-20 sm:h-24 w-full rounded-lg overflow-hidden border border-[var(--border)]">
+            <div className="h-40 sm:h-48 w-full rounded-lg overflow-hidden border border-[var(--border)]">
               <Map projects={[p]} />
             </div>
           </div>

@@ -287,7 +287,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             />
           )}
           {p.currentStatus && <Detail wide label="Current status" value={withoutDashes(p.currentStatus)} />}
-          {p.dataQualityNote && <Detail wide label="Data quality note" value={withoutDashes(p.dataQualityNote)} />}
           {!resolved && p.causeDetail && (
             <Detail
               wide
@@ -340,6 +339,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <Map projects={[p]} />
           </div>
         </div>
+        {p.dataQualityNote && (
+          <div className="mt-5 pt-4 border-t border-[var(--border)]">
+            <Detail wide label="Data quality note" value={withoutDashes(p.dataQualityNote)} />
+          </div>
+        )}
     </>
   );
   // Hand-sourced milestones (dated, stage-labeled) and the site's own

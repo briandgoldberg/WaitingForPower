@@ -189,6 +189,28 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
       }
     }
 
+    // A single-project page wants the map centered on that one pin, not the
+    // explorer's default whole-US view — zoom level backs off the less
+    // precise the pin's location is, so an approximate centroid never reads
+    // as a falsely exact address.
+    function focusSingleProject() {
+      const [p] = projectsRef.current;
+      if (!p) return;
+      let lon = p.lon;
+      let lat = p.lat;
+      let approx: ApproxReason = null;
+      if (lon == null || lat == null) {
+        const multiState = multiStateCentroid(p.state);
+        const county = multiState ? null : countyCentroid(p.state, p.county);
+        const centroid = multiState ?? county ?? stateCentroid(p.state);
+        if (!centroid) return;
+        [lon, lat] = centroid;
+        approx = multiState ? "multi-state" : county ? "county-only" : "state-only";
+      }
+      const zoom = approx === "state-only" ? 5 : approx === "multi-state" || approx === "county-only" ? 7 : 10;
+      map.jumpTo({ center: [lon, lat], zoom });
+    }
+
     if (map.loaded() || map.isStyleLoaded()) {
       renderMarkers();
     } else {
@@ -198,6 +220,10 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
     // render immediately too in case neither flag/event ever fires (same
     // class of issue seen with the GL-layer approach this replaced).
     renderMarkers();
+    if (projectsRef.current.length === 1) {
+      if (map.loaded() || map.isStyleLoaded()) focusSingleProject();
+      else map.once("load", focusSingleProject);
+    }
   }, [projects]);
 
   return <div ref={containerRef} className="h-full w-full rounded-lg" />;

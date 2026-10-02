@@ -21,6 +21,7 @@ import { OutcomeBanner } from "@/components/project/OutcomeBanner";
 import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
 import { withoutDashes } from "@/lib/text";
 import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
+import { Map } from "@/components/Map";
 
 export const dynamic = "force-dynamic";
 
@@ -367,9 +368,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 </a>
               </p>
             )}
+            {p.sources[0] && (
+              <p className="text-sm text-[var(--muted)] mt-0.5">
+                Docket:{" "}
+                <a href={p.sources[0].url} target="_blank" rel="noreferrer" className="underline">
+                  {p.sources[0].label}
+                </a>
+              </p>
+            )}
           </div>
           <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
         </div>
+      </div>
+
+      <div className="h-48 sm:h-64 md:h-72 w-full rounded-lg overflow-hidden border border-[var(--border)]">
+        <Map projects={[p]} />
       </div>
 
       {outcome !== "pending" && (

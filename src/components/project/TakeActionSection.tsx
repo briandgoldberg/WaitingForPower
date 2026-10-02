@@ -28,11 +28,11 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
-// The content of the Take action pill: the official docket, who regulates
-// it, and upcoming hearings and comment windows (or, for a project that
-// already has its answer, just the docket and regulators).
+// The content of the Take action pill: who regulates this project, and
+// upcoming hearings and comment windows (or, for a project that already has
+// its answer, just the regulators) — the docket link itself is shown at the
+// top of the project page now, not repeated here.
 export function TakeActionSection({ project: p, nowMs, resolved }: { project: ProjectDTO; nowMs: number; resolved: boolean }) {
-  const primarySource = p.sources[0];
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
     .slice(0, MAX_STATES_SHOWN);
@@ -41,18 +41,6 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
   const rule = ruleForState(p.state);
   const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
 
-  const docketColumn = (
-    <Column title="Official docket">
-      {primarySource ? (
-        <p className="text-sm">
-          <ExternalLink href={primarySource.url}>{primarySource.label}</ExternalLink>
-        </p>
-      ) : (
-        <p className="text-sm text-[var(--text-secondary)]">Not available.</p>
-      )}
-      <p className="text-xs text-[var(--muted)] mt-1">{resolved ? "The official filings for this project." : "Read the filings and file a public comment where the regulator allows it."}</p>
-    </Column>
-  );
   const contactColumn = (
     <Column title="Who to contact">
       {regulatorStates.length > 0 ? (
@@ -79,18 +67,11 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
   // A project that already has its answer has no hearings or comment window
   // to act on, so it gets a plain reference block instead of Take action.
   if (resolved) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {docketColumn}
-        {contactColumn}
-      </div>
-    );
+    return contactColumn;
   }
 
   return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {docketColumn}
-
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {contactColumn}
 
         <Column title="Comments and hearings">

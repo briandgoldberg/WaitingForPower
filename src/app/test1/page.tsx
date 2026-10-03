@@ -13,8 +13,7 @@
 // projects across utilities; a real build would need finer-than-county
 // location data (or GIS service-territory polygons) to fix.
 import territoryData from "@/lib/data/utilityServiceTerritory.json";
-import { prisma } from "@/lib/db";
-import { serializeProject } from "@/lib/serialize";
+import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import { ProjectList } from "@/components/ProjectList";
 import { formatCapacity } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
@@ -28,12 +27,7 @@ export const metadata = { robots: { index: false, follow: false } };
 const TERRITORY: Record<string, string[]> = territoryData;
 
 export default async function Test1Page() {
-  const projects = await prisma.project
-    .findMany({
-      where: { mergedIntoId: null, currentStage: { notIn: ["approved_awaiting_construction", "under_construction", "cancelled", "completed"] } },
-      include: { causes: true, sources: true, milestones: true, hearings: true, opposition: true },
-    })
-    .then((rows) => rows.map((r) => serializeProject(r)));
+  const projects = await queryProjects(toFilterState({}));
 
   const byUtility = new Map<string, typeof projects>();
   for (const p of projects) {

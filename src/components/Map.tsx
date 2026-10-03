@@ -50,44 +50,31 @@ const APPROX_MESSAGE: Record<Exclude<ApproxReason, null>, string> = {
   "state-only": "Approximate location — no site-level location is published for this project; pin is centered on the state.",
 };
 
-function popupHtml(p: ProjectDTO, approx: ApproxReason, link: { href: string; label: string }): string {
+// Native title-attribute tooltip (hover, no click needed) replacing the
+// old click-to-open popup's info — the marker itself is a real link now
+// (see `popupLink`), so there's no click step left to hang a popup off.
+function markerTitle(p: ProjectDTO, approx: ApproxReason): string {
   const capacityLabel = formatCapacity(p.capacityValue, p.capacityUnit);
-  return `
-    <div style="min-width:220px;font-family:inherit;">
-      <div style="padding:12px 14px 10px;border-bottom:1px solid var(--border);">
-        <div style="font-weight:600;font-size:14px;line-height:1.3;">${p.name}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-          ${p.state ?? ""} · ${capacityLabel}${p.isAggregateExample ? " · aggregate" : ""}
-        </div>
-        ${approx ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${APPROX_MESSAGE[approx]}</div>` : ""}
-      </div>
-      <div style="padding:10px 14px;font-size:12px;">
-        <div><strong>Waiting:</strong> ${p.yearsWaiting != null ? p.yearsWaiting.toFixed(1) + " yrs" : "—"}</div>
-        <a href="${link.href}" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:underline;">
-          ${link.label}
-        </a>
-      </div>
-    </div>
-  `;
+  const line2 = `${p.state ?? ""} · ${capacityLabel}${p.isAggregateExample ? " · aggregate" : ""}`;
+  return approx ? `${p.name}\n${line2}\n${APPROX_MESSAGE[approx]}` : `${p.name}\n${line2}`;
 }
 
-const DEFAULT_POPUP_LINK = (p: ProjectDTO) => ({ href: `/project/${p.slug}`, label: "View project →" });
+const DEFAULT_MARKER_LINK = (p: ProjectDTO) => `/project/${p.slug}`;
 
 export function Map({
   projects,
-  popupLink = DEFAULT_POPUP_LINK,
+  markerLink = DEFAULT_MARKER_LINK,
 }: {
   projects: ProjectDTO[];
   // Lets a caller whose `projects` aren't real projects (e.g. the Utility
   // Company dimension's one-synthetic-marker-per-utility set — see
-  // utilityMarkerProjects) point each marker's popup link somewhere other
-  // than /project/{slug}, which wouldn't resolve for a synthetic entry.
-  popupLink?: (p: ProjectDTO) => { href: string; label: string };
+  // utilityMarkerProjects) point each marker somewhere other than
+  // /project/{slug}, which wouldn't resolve for a synthetic entry.
+  markerLink?: (p: ProjectDTO) => string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
-  const popupRef = useRef<maplibregl.Popup | null>(null);
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
 
@@ -176,14 +163,21 @@ export function Map({
         }
 
         const color = FUEL_TYPE_BY_VALUE[p.fuelType]?.color ?? "#6b7280";
-        const el = document.createElement("div");
+        // A real <a>, not a <div> — the marker itself is the link straight
+        // to the project/utility's details page (click to navigate, no
+        // popup step in between; native middle-click/cmd-click "open in new
+        // tab" works for free too).
+        const el = document.createElement("a");
+        el.href = markerLink(p);
+        el.title = markerTitle(p, approx);
+        el.style.display = "block";
         // A single-project page's map has exactly one marker to find, so it
         // gets a bigger bullseye instead of the explorer's small
         // capacity-scaled dot — concentric rings via box-shadow, still one
         // element. The explorer (many markers) keeps the plain small dot;
         // a bullseye per marker there would be visual noise.
         if (projectsRef.current.length === 1) {
-          el.style.cssText = `
+          el.style.cssText += `
             width:14px;height:14px;border-radius:50%;
             background:${color};
             box-shadow:0 0 0 3px white, 0 0 0 6px ${color}, 0 0 0 9px white, 0 0 0 13px ${color}, 0 1px 4px rgba(0,0,0,0.35);
@@ -191,7 +185,7 @@ export function Map({
           `;
         } else {
           const size = capacityRadius(p) * 2;
-          el.style.cssText = `
+          el.style.cssText += `
             width:${size}px;height:${size}px;border-radius:50%;
             background:${color};opacity:0.9;
             border:1.5px ${approx ? "dashed" : "solid"} #ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.4);
@@ -199,14 +193,6 @@ export function Map({
           `;
         }
         const lonLat: [number, number] = [lon, lat];
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          popupRef.current?.remove();
-          popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "260px" })
-            .setLngLat(lonLat)
-            .setHTML(popupHtml(p, approx, popupLink(p)))
-            .addTo(map);
-        });
 
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat(lonLat)

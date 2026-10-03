@@ -148,7 +148,7 @@ export function Explorer({
             ) : (
               <Map
                 projects={utilityMarkerProjects(utilityGroups)}
-                popupLink={(p) => ({ href: `/utility/${p.slug}`, label: "View utility →" })}
+                markerLink={(p) => `/utility/${p.slug}`}
               />
             ))}
           {/* Both lists are rendered (not conditionally mounted) regardless

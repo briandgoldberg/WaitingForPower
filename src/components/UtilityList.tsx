@@ -27,7 +27,7 @@ export function UtilityList({ groups }: { groups: UtilityGroup[] }) {
           <span className="flex items-center gap-3 text-sm text-[var(--muted)]">
             <span>{g.count} projects</span>
             {g.totalInvestment > 0 && <span>{formatUsd(g.totalInvestment)} waiting</span>}
-            <span className="text-[var(--accent)]">View page →</span>
+            <span className="text-[var(--accent)]">View details →</span>
           </span>
         </Link>
       ))}

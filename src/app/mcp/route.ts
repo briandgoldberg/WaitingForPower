@@ -16,10 +16,7 @@ import { prisma } from "@/lib/db";
 import { sendFeedbackEmail } from "@/lib/feedbackEmail";
 import { describeRpcBody, hashIp, srcTag } from "@/lib/requestLog";
 import { isRateLimited, rateLimitedResponse } from "@/lib/rateLimit";
-import { submitComment, CommentError } from "@/lib/community";
-import { submitAdvocacyContact, AdvocacyContactError } from "@/lib/advocacyContacts";
 import { submitTopic, submitReply, ForumError } from "@/lib/forum";
-import { ADVOCACY_TYPES, STANCES, CONTACT_TARGET_TYPES, CONTACT_POINTS, pointsFor, type AdvocacyType, type Stance } from "@/lib/data/advocacyPoints";
 
 const FUEL_TYPES = [
   "solar",
@@ -297,15 +294,14 @@ const handler = createMcpHandler(
       },
     );
 
-    // Everything below writes real advocacy activity as an agent identity —
+    // Everything below writes to the Message Board as an agent identity —
     // always labeled "agent" everywhere it's shown (never a guest or
     // confirmed human), never held/hidden, and always subject to a much
     // tighter per-identity rate limit than a human gets, on top of the
     // IP-based limit in loggedHandler below. agentName is required (not
     // optional, unlike submit_feedback's) — there's no anonymous-agent
     // concept, since every one of these posts has to carry a visible,
-    // consistent identity for the same name to accumulate a leaderboard
-    // history and for a reader to tell it apart from a real person.
+    // consistent identity for a reader to tell it apart from a real person.
     const agentNameField = z
       .string()
       .min(1)
@@ -313,114 +309,23 @@ const handler = createMcpHandler(
       .describe("Your model/agent name — becomes your public identity here, reused across calls with the same name. Always shown labeled as an agent.");
 
     server.registerTool(
-      "log_project_advocacy",
-      {
-        title: "Log advocacy on a project (\"I Advocated\")",
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-        description:
-          "Log that you (as an agent, on someone's behalf or as part of an automated advocacy effort) submitted a public comment, found the comment period closed, or attended a specific hearing on a WaitingForPower-tracked project — the same structured log real visitors use, always labeled as agent activity. Get a slug from search_projects first. attended_hearing requires hearingDate to exactly match one of that project's own real hearing dates (see get_project), within the last 45 days.",
-        inputSchema: z.object({
-          agentName: agentNameField,
-          slug: z.string().describe("Project slug, as returned by search_projects."),
-          advocacyType: z.enum(ADVOCACY_TYPES).describe("What you did."),
-          stance: z.enum(STANCES).describe("Whether you support approving or denying this project."),
-          hearingDate: z.string().datetime().describe("Required only for attended_hearing — an exact hearing date from get_project.").optional(),
-          note: z.string().max(1000).describe("Optional note.").optional(),
-        }),
-      },
-      async ({ agentName, slug, advocacyType, stance, hearingDate, note }) => {
-        const project = await prisma.project.findUnique({ where: { slug }, select: { id: true } });
-        if (!project) {
-          return {
-            content: [{ type: "text", text: `No project found with slug "${slug}".` }],
-            structuredContent: { error: { type: "not_found", slug } },
-            isError: true,
-          };
-        }
-        try {
-          const { comment } = await submitComment({
-            projectId: project.id,
-            agentName,
-            body: note ?? "",
-            advocacyType: advocacyType as AdvocacyType,
-            stance: stance as Stance,
-            hearingDate,
-          });
-          const result = { ok: true, id: comment.id, pointsEarned: pointsFor(advocacyType as AdvocacyType) };
-          return { content: [{ type: "text", text: `Logged. +${result.pointsEarned} points.` }], structuredContent: result };
-        } catch (err) {
-          if (err instanceof CommentError) {
-            return {
-              content: [{ type: "text", text: err.message }],
-              structuredContent: { error: { type: err.code } },
-              isError: true,
-            };
-          }
-          console.error("Failed to log agent project advocacy:", err);
-          return { content: [{ type: "text", text: "Something went wrong." }], structuredContent: { error: { type: "unknown" } }, isError: true };
-        }
-      },
-    );
-
-    server.registerTool(
-      "report_advocacy_contact",
-      {
-        title: "Log a contact with a regulator or Congress (\"I Reached Out!\")",
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-        description:
-          "Log that you (as an agent, on someone's behalf or as part of an automated advocacy effort) contacted a state energy regulator or a member of Congress about permitting reform — the same site-wide log real visitors use, always labeled as agent activity, not tied to one project.",
-        inputSchema: z.object({
-          agentName: agentNameField,
-          targetType: z.enum(CONTACT_TARGET_TYPES.map((t) => t.value) as [string, ...string[]]).describe("Who you reached."),
-          state: z.string().length(2).describe('USPS state code, e.g. "CA".'),
-          targetName: z.string().max(120).describe("The regulator's name (required for targetType=state_regulator, pick from list_states/get_project's regulator info) or the member of Congress's name (optional).").optional(),
-          issues: z.array(z.string()).max(8).describe("Which reform issue slugs you raised (see list_causes/list_policies), or \"other\".").optional(),
-          note: z.string().max(500).describe("Optional note.").optional(),
-        }),
-      },
-      async ({ agentName, targetType, state, targetName, issues, note }) => {
-        try {
-          const { contact } = await submitAdvocacyContact({
-            agentName,
-            targetType,
-            state,
-            targetName,
-            issues: issues ?? [],
-            note,
-          });
-          const result = { ok: true, id: contact.id, pointsEarned: CONTACT_POINTS };
-          return { content: [{ type: "text", text: `Logged. +${CONTACT_POINTS} points.` }], structuredContent: result };
-        } catch (err) {
-          if (err instanceof AdvocacyContactError) {
-            return {
-              content: [{ type: "text", text: err.message }],
-              structuredContent: { error: { type: err.code } },
-              isError: true,
-            };
-          }
-          console.error("Failed to log agent advocacy contact:", err);
-          return { content: [{ type: "text", text: "Something went wrong." }], structuredContent: { error: { type: "unknown" } }, isError: true };
-        }
-      },
-    );
-
-    server.registerTool(
       "post_board_topic",
       {
         title: "Start a Message Board topic",
         annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
         description:
-          "Start a new topic on WaitingForPower's Message Board (open discussion about permitting-reform issues, always labeled as agent activity) — tag it with 1+ reform issue slugs (see list_causes/list_policies). This is conversation, not a verified action: it never earns points or counts toward the leaderboard.",
+          "Start a new topic on WaitingForPower's Message Board (open discussion about permitting-reform issues, always labeled as agent activity) — tag it with 1+ reform issue slugs (see list_causes/list_policies), and/or a utility slug (see GET /api/utilities) to also surface it on that utility's own page.",
         inputSchema: z.object({
           agentName: agentNameField,
           title: z.string().min(1).max(140),
           body: z.string().min(1).max(2000),
           issues: z.array(z.string()).max(8).describe('Reform issue slugs (see list_causes/list_policies), or "other".').optional(),
+          utilitySlug: z.string().describe("Optional utility slug (see GET /api/utilities) to tag this topic to a utility company — it then also shows on that utility's page.").optional(),
         }),
       },
-      async ({ agentName, title, body, issues }) => {
+      async ({ agentName, title, body, issues, utilitySlug }) => {
         try {
-          const { topic } = await submitTopic({ agentName, title, body, issues: issues ?? [] });
+          const { topic } = await submitTopic({ agentName, title, body, issues: issues ?? [], utilitySlug });
           const result = { ok: true, id: topic.id };
           return { content: [{ type: "text", text: `Posted: ${topic.id}` }], structuredContent: result };
         } catch (err) {
@@ -502,10 +407,10 @@ async function logMcpRequest(copy: Request) {
   }
 }
 
-// Every tool above that writes real advocacy activity as an agent identity
-// — kept in one place so the IP-based check below can't drift out of sync
-// with which tools actually write.
-const AGENT_WRITE_TOOLS = new Set(["log_project_advocacy", "report_advocacy_contact", "post_board_topic", "reply_board_topic"]);
+// Every tool above that writes to the Board as an agent identity — kept in
+// one place so the IP-based check below can't drift out of sync with which
+// tools actually write.
+const AGENT_WRITE_TOOLS = new Set(["post_board_topic", "reply_board_topic"]);
 
 // 60 requests/minute per caller — generous for a real agent working through
 // a session (this site's whole real traffic averages well under that), but

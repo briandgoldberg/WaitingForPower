@@ -1,33 +1,12 @@
-// Data for the home page's headline number and storage hearings.
-// Both are small aggregate queries so the landing page stays fast.
+// Data for the home page's storage hearings section — a small aggregate
+// query so the landing page stays fast.
 
 import { prisma } from "@/lib/db";
-import { RESOLVED_STAGES, ZERO_CARBON_FUELS } from "@/lib/data/taxonomies";
-import { homesPowered } from "@/lib/calc/homesPowered";
+import { RESOLVED_STAGES } from "@/lib/data/taxonomies";
 import { isPublicHearing } from "@/lib/advocacyActions";
 import { LOCAL_HEARINGS } from "@/lib/ingest/localHearings";
 
 const WAITING = { mergedIntoId: null, noLongerReported: false, isAggregateExample: false, currentStage: { notIn: RESOLVED_STAGES } };
-
-// Homes the clean generation still waiting on a decision could power, by the
-// same method as the Projects tab (calc/homesPowered.ts). Summed per fuel in
-// the database rather than loading every project; merged duplicates are
-// already excluded by mergedIntoId, so it tracks the Projects tab closely.
-export async function getCleanEnergyWaiting(): Promise<{ homes: number; mw: number }> {
-  const rows = await prisma.project.groupBy({
-    by: ["fuelType"],
-    where: { ...WAITING, capacityUnit: "MW", capacityValue: { not: null }, fuelType: { in: ZERO_CARBON_FUELS } },
-    _sum: { capacityValue: true },
-  });
-  let homes = 0;
-  let mw = 0;
-  for (const r of rows) {
-    const sum = r._sum.capacityValue ?? 0;
-    mw += sum;
-    homes += homesPowered(r.fuelType, sum, "MW") ?? 0;
-  }
-  return { homes, mw };
-}
 
 export interface SpeakUpHearing {
   slug: string;

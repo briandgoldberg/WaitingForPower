@@ -784,12 +784,25 @@ model ForumTopic {
   title       String
   body        String
   issues      String[]
+  // Optional utility-company tag (slugifyUtility() output) — utilities
+  // aren't a DB table (computed on the fly from project + EIA-861
+  // territory data, see src/lib/utilityGrouping.ts), so this is a plain
+  // validated string, not a foreign key, same pattern as `issues` above.
+  utilitySlug String?
+  // Optional project tag (Project.slug) — also a plain validated string
+  // rather than a real foreign key, since a project's slug can change out
+  // from under it (see permanentRedirect in src/app/project/[id]/page.tsx
+  // for merged/renamed projects); validated against the live row at
+  // submission time instead of enforced by the DB.
+  projectSlug String?
   createdAt   DateTime  @default(now())
 
   replies ForumReply[]
 
   @@index([createdAt])
   @@index([predictorId, createdAt])
+  @@index([utilitySlug])
+  @@index([projectSlug])
 }
 
 model ForumReply {

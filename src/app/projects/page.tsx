@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { queryProjects } from "@/lib/queryProjects";
 import { DEFAULT_FILTERS } from "@/lib/filters";
 import { Explorer } from "@/components/Explorer";
-import { getRecentChanges } from "@/lib/changes";
 
 export const dynamic = "force-dynamic";
 
@@ -50,14 +49,7 @@ export default async function ProjectsPage() {
   // queryProjects() (see src/lib/queryProjects.ts) rather than a raw
   // findMany() here, since the full dataset with all relations included
   // exceeds Prisma Accelerate's per-query response size cap.
-  const [projects, { changes, hasMore }] = await Promise.all([
-    queryProjects(DEFAULT_FILTERS, { allStatuses: true }),
-    getRecentChanges(50, 0, null),
-  ]);
-  // Passed down instead of letting ChangesFeed call `new Date()` itself —
-  // see ChangesFeed's `now` prop comment for the hydration mismatch this
-  // avoids.
-  const now = new Date().toISOString();
+  const projects = await queryProjects(DEFAULT_FILTERS, { allStatuses: true });
 
   return (
     <>
@@ -71,7 +63,7 @@ export default async function ProjectsPage() {
           Explore the thousands of power projects waiting for permits.
         </h1>
       </div>
-      <Explorer projects={projects} initialChanges={changes} initialChangesHasMore={hasMore} now={now} />
+      <Explorer projects={projects} />
     </>
   );
 }

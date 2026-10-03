@@ -12,8 +12,6 @@ import { ProjectList } from "@/components/ProjectList";
 import { StateDirectory } from "@/components/StateDirectory";
 import { UtilityList } from "@/components/UtilityList";
 import { UtilityDirectory } from "@/components/UtilityDirectory";
-import { ChangesFeed } from "@/components/ChangesFeed";
-import type { ProjectChangeDTO } from "@/lib/types";
 
 const Map = dynamic(() => import("@/components/Map").then((m) => m.Map), {
   ssr: false,
@@ -24,19 +22,9 @@ const Map = dynamic(() => import("@/components/Map").then((m) => m.Map), {
   ),
 });
 
-export function Explorer({
-  projects,
-  initialChanges,
-  initialChangesHasMore,
-  now,
-}: {
-  projects: ProjectDTO[];
-  initialChanges: ProjectChangeDTO[];
-  initialChangesHasMore: boolean;
-  now: string;
-}) {
+export function Explorer({ projects }: { projects: ProjectDTO[] }) {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const [view, setView] = useState<"map" | "list" | "feed">("map");
+  const [view, setView] = useState<"map" | "list">("map");
   const [dimension, setDimension] = useState<"project" | "service-area">("project");
   const [panelOpen, setPanelOpen] = useState(false);
 
@@ -49,11 +37,6 @@ export function Explorer({
   // so narrowing to e.g. one fuel type also narrows what each utility group
   // contains.
   const utilityGroups = useMemo(() => groupProjectsByUtility(filtered), [filtered]);
-
-  // The Feed view filters client-side to whatever the map/list are already
-  // showing — see ChangesFeed's `filterSlugs` prop comment for why this
-  // doesn't reach further back into the change history than what's loaded.
-  const filteredSlugs = useMemo(() => new Set(filtered.map((p) => p.slug)), [filtered]);
 
   const stats = useMemo(() => computeAggregateStats(filtered), [filtered]);
   const chips = useMemo(() => buildChips(filters), [filters]);
@@ -98,12 +81,6 @@ export function Explorer({
               className={`px-3 py-1 text-sm rounded-md ${view === "list" ? "bg-[var(--accent)] text-white" : ""}`}
             >
               List
-            </button>
-            <button
-              onClick={() => setView("feed")}
-              className={`px-3 py-1 text-sm rounded-md ${view === "feed" ? "bg-[var(--accent)] text-white" : ""}`}
-            >
-              Feed
             </button>
           </div>
         </div>
@@ -168,15 +145,6 @@ export function Explorer({
           </div>
           <div className={view === "list" && dimension === "service-area" ? "h-full overflow-y-auto" : "hidden"}>
             <UtilityList groups={utilityGroups} />
-          </div>
-          <div className={view === "feed" ? "h-full overflow-y-auto" : "hidden"}>
-            <ChangesFeed
-              initialChanges={initialChanges}
-              initialHasMore={initialChangesHasMore}
-              now={now}
-              state={null}
-              filterSlugs={filteredSlugs}
-            />
           </div>
         </div>
       </div>

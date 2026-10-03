@@ -12,6 +12,15 @@
 
 ## What's new
 
+- 2026-10-03 — Removed the points/leaderboard system entirely: "I Reached Out!"
+  (project-page advocacy logging and the `/policies` official-contact form),
+  `GET /api/comments`, `GET /api/community`, `GET /api/advocacy-feed`, and the
+  `log_project_advocacy`/`report_advocacy_contact` MCP tools are gone. The
+  Message Board stays (never earned points) and gains optional tagging: a topic
+  can now carry a utility-company slug and/or a project slug alongside its
+  reform-issue tags, any combination or none — see `GET /api/forum/topics`'s
+  `utility` filter param and the `utilitySlug`/`projectSlug` fields on each
+  item. All topics, tagged or not, show on `/activity`. OpenAPI spec 1.5.0.
 - 2026-10-02 — New `GET /api/utilities`: the same tracked projects grouped by utility
   service territory (EIA-861 county data) instead of returned flat — one object per
   utility with `count`, `totalCapacityMw`, `totalInvestmentWaitingUsd`, a centroid
@@ -38,29 +47,18 @@
   by a human, not published anywhere).
   Write tools (an agent can participate directly — every one of these requires an `agentName`
   and is always publicly labeled as agent activity, never mistaken for a guest or confirmed
-  human, and rate-limited more tightly than a person): `log_project_advocacy` ("I Advocated" on
-  a project), `report_advocacy_contact` ("I Reached Out!" to a regulator or Congress),
-  `post_board_topic` and `reply_board_topic` (the Message Board — see "Advocacy log" and
-  "Board" below).
+  human, and rate-limited more tightly than a person): `post_board_topic` and
+  `reply_board_topic` (the Message Board — see "Board" below).
 
-## Advocacy log
+## Board
 
-- No free-text comments — people log real advocacy actions instead, through a no-signup
-  form. On a project page, "I Advocated" records submitting a public comment, finding the
-  comment period closed, or attending a specific recent hearing (validated against that
-  project's own real hearing dates), each paired with a stated position (support approval
-  or support denial). A separate "I Reached Out!" log (on /policies) records contacting a
-  state energy regulator or a member of Congress. Both earn points toward a public
-  leaderboard at `https://waitingforpower.com/?feed=leaders`. Read a project's log with
-  `GET /api/comments?slug=<project slug>` (includes a stanceTally), the project-only
-  site-wide feed with `GET /api/community`, or everything merged (including official
-  contacts and Board topics) with `GET /api/advocacy-feed`. Each project page also has
-  an "Advocate" section: the official docket, the state regulator's website and contact
-  page, and hearing and comment dates.
-- The [Board](https://waitingforpower.com/board) is separate: open discussion tagged with
-  1+ of the six national permitting-reform issues, not a verified advocacy action and not
-  counted toward points or the leaderboard. `GET /api/forum/topics` lists topics,
-  `GET /api/forum/topics/{id}` returns one topic with its full reply thread.
+- The [Message Board](https://waitingforpower.com/activity) is open discussion, not a
+  verified civic action — there's no points system or leaderboard. A topic can optionally
+  carry any combination of: 1+ of the six national permitting-reform issues, a utility
+  company, and a specific project. `GET /api/forum/topics` lists topics (optional `utility`
+  filter), `GET /api/forum/topics/{id}` returns one topic with its full reply thread. Each
+  project page also has an "Advocate" section: the official docket, the state regulator's
+  website and contact page, and hearing and comment dates.
 
 ## API
 
@@ -103,15 +101,16 @@
   captures of the entire dataset (every status, not just still-waiting); fetch one in full at
   `/api/snapshots/{id}` (e.g. `/api/snapshots/2026-09-01`). Use this to cite an exact past state
   rather than today's live (changing) numbers.
-- [GET /api/advocacy-feed](https://waitingforpower.com/api/advocacy-feed): every logged
-  advocacy action site-wide, newest first — see "Advocacy log" above. Optional `limit`, `offset`.
+- [GET /api/forum/topics](https://waitingforpower.com/api/forum/topics): Message Board topics,
+  newest first — see "Board" above. Optional `limit`, `offset`, `utility` (filter to one
+  utility's tagged topics).
 - [OpenAPI spec](https://waitingforpower.com/openapi.json): machine-readable schema for the
   endpoints above.
 
 ## Advocacy
 
-- [Advocacy](https://waitingforpower.com/policies) — four tabs: National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus a letter builder that assembles a ready-to-send letter to Congress by issue and political leaning), Project Advocacy (every open project, filterable by how likely it is to be accepting public comments, with a docket link, hearing dates, and a state regulator contact for each), State Advocacy (every state's regulator and its public-comment rules), and "I Reached Out!" (logs a real contact with a state regulator or a member of Congress — see "Advocacy log" above).
-- [Board](https://waitingforpower.com/board) — open discussion about the same six permitting-reform issues, separate from the Advocacy page's structured tools. Post a topic or reply as a guest or a confirmed name; see "Advocacy log" above for the read API.
+- [Advocacy](https://waitingforpower.com/policies) — three tabs, all informational, nothing logged or pointed: National Advocacy (six bipartisan permitting-reform proposals, one per structural bottleneck, plus a letter builder that assembles a ready-to-send letter to Congress by issue and political leaning), Project Advocacy (every open project, filterable by how likely it is to be accepting public comments, with a docket link, hearing dates, and a state regulator contact for each), and State Advocacy (every state's regulator and its public-comment rules).
+- [Board](https://waitingforpower.com/activity) — open discussion, optionally tagged with a reform issue, a utility company, and/or a project; see "Board" above for the read API.
 - [Public Hearings RSS feed](https://waitingforpower.com/hearings.rss): the same upcoming-hearings data as an RSS 2.0 feed, one item per hearing, refreshed on every request. Usable directly by feed readers, Zapier's "New Item in Feed" trigger, or IFTTT's RSS applet.
 
 ## Docs

@@ -8,6 +8,8 @@ import { CAUSE_CATEGORY_BY_SLUG } from "@/lib/data/causeCategories";
 import { IdentityDecision } from "@/components/IdentityDecision";
 import { SaveProfilePrompt } from "@/components/SaveProfilePrompt";
 import { ChooseName } from "@/components/ChooseName";
+import { UtilityTagPicker, type UtilityTag } from "@/components/board/UtilityTagPicker";
+import { ProjectTagPicker, type ProjectTag } from "@/components/board/ProjectTagPicker";
 import type { IdentityStatus } from "@/lib/community";
 import { trackAttributedAction } from "@/lib/attribution";
 
@@ -18,9 +20,10 @@ const MAX_TITLE_LENGTH = 140;
 const MAX_BODY_LENGTH = 2000;
 
 // Starts a new Message Board topic — same guest-or-confirm-email identity
-// gate as every other posting surface on the site (IdentityDecision), tagged
-// with 1+ of the six national permitting-reform issues so the board stays
-// anchored to advocacy rather than becoming a general chat room.
+// gate as every other posting surface on the site (IdentityDecision).
+// Optionally taggable with any combination of: 1+ of the six national
+// permitting-reform issues, a utility company, and a specific project —
+// all three independent and optional (see forum.ts's submitTopic).
 export function NewTopicForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -31,6 +34,8 @@ export function NewTopicForm() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [issues, setIssues] = useState<Set<string>>(new Set());
+  const [utilityTag, setUtilityTag] = useState<UtilityTag | null>(null);
+  const [projectTag, setProjectTag] = useState<ProjectTag | null>(null);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A first-ever post is held until identity is decided (see IdentityDecision
@@ -64,6 +69,8 @@ export function NewTopicForm() {
     setTitle("");
     setBody("");
     setIssues(new Set());
+    setUtilityTag(null);
+    setProjectTag(null);
     setError(null);
   }
 
@@ -78,7 +85,14 @@ export function NewTopicForm() {
       const res = await fetch("/api/forum/topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anonymousKey: key, title: title.trim(), body: body.trim(), issues: [...issues] }),
+        body: JSON.stringify({
+          anonymousKey: key,
+          title: title.trim(),
+          body: body.trim(),
+          issues: [...issues],
+          utilitySlug: utilityTag?.slug ?? null,
+          projectSlug: projectTag?.slug ?? null,
+        }),
       });
       const result = await res.json();
       if (!res.ok) {
@@ -153,38 +167,45 @@ export function NewTopicForm() {
         className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm resize-none"
       />
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Which issue(s)? (optional)</span>
-        <div className="flex flex-wrap gap-1.5">
-          {POLICIES.map((policy) => {
-            const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
-            const active = issues.has(policy.slug);
-            return (
-              <button
-                key={policy.slug}
-                type="button"
-                onClick={() => toggleIssue(policy.slug)}
-                aria-pressed={active}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  active ? "text-white border-transparent" : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
-                }`}
-                style={active ? { backgroundColor: cause.color } : undefined}
-              >
-                {policy.badgeLabel ?? cause.shortLabel}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => toggleIssue("other")}
-            aria-pressed={issues.has("other")}
-            className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              issues.has("other") ? "bg-[var(--foreground)] text-[var(--background)] border-transparent" : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
-            }`}
-          >
-            Something else
-          </button>
+      <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] p-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Tag this topic</span>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-[var(--muted)]">Issue(s)</span>
+          <div className="flex flex-wrap gap-1.5">
+            {POLICIES.map((policy) => {
+              const cause = CAUSE_CATEGORY_BY_SLUG[policy.slug];
+              const active = issues.has(policy.slug);
+              return (
+                <button
+                  key={policy.slug}
+                  type="button"
+                  onClick={() => toggleIssue(policy.slug)}
+                  aria-pressed={active}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    active ? "text-white border-transparent" : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+                  }`}
+                  style={active ? { backgroundColor: cause.color } : undefined}
+                >
+                  {policy.badgeLabel ?? cause.shortLabel}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => toggleIssue("other")}
+              aria-pressed={issues.has("other")}
+              className={`rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                issues.has("other") ? "bg-[var(--foreground)] text-[var(--background)] border-transparent" : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+              }`}
+            >
+              Something else
+            </button>
+          </div>
         </div>
+
+        <UtilityTagPicker value={utilityTag} onChange={setUtilityTag} />
+        <ProjectTagPicker value={projectTag} onChange={setProjectTag} />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">

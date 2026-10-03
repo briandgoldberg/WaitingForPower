@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   const title = String(body.title ?? "");
   const text = String(body.body ?? "");
   const issues = Array.isArray(body.issues) ? body.issues.filter((i): i is string => typeof i === "string") : [];
+  const utilitySlug = typeof body.utilitySlug === "string" ? body.utilitySlug : null;
 
   if (!anonymousKey || !title.trim() || !text.trim()) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { topic, predictor } = await submitTopic({ anonymousKey, title, body: text, issues });
+    const { topic, predictor } = await submitTopic({ anonymousKey, title, body: text, issues, utilitySlug });
     return NextResponse.json({
       ok: true,
       id: topic.id,
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const offset = Math.max(0, Number(req.nextUrl.searchParams.get("offset") ?? 0) || 0);
   const limit = Math.min(50, Math.max(1, Number(req.nextUrl.searchParams.get("limit") ?? 20) || 20));
-  const result = await getForumTopics(offset, limit);
+  const utilitySlug = req.nextUrl.searchParams.get("utility") ?? undefined;
+  const result = await getForumTopics(offset, limit, { utilitySlug });
   return NextResponse.json(result);
 }

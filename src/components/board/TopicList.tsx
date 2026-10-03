@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PosterBadge } from "@/components/PosterBadge";
 import { relativeTime } from "@/lib/feedTime";
 import { issueLabel } from "@/lib/data/policies";
+import { useUtilitySearch } from "@/lib/useUtilitySearch";
 import type { ForumTopicItem } from "@/lib/forum";
 
 const PAGE_SIZE = 20;
 
-function TopicCard({ topic, nowMs }: { topic: ForumTopicItem; nowMs: number }) {
+function TopicCard({ topic, nowMs, utilityName }: { topic: ForumTopicItem; nowMs: number; utilityName?: string }) {
+  const router = useRouter();
   return (
     <Link
       href={`/board/${topic.id}`}
@@ -23,6 +26,32 @@ function TopicCard({ topic, nowMs }: { topic: ForumTopicItem; nowMs: number }) {
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="text-xs font-medium truncate">{topic.label}</span>
         <PosterBadge isAgent={topic.isAgent} confirmed={topic.confirmed} guest={topic.guest} />
+        {topic.utilitySlug && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              router.push(`/utility/${topic.utilitySlug}`);
+            }}
+            className="text-[10px] rounded-full bg-[var(--accent)]/10 text-[var(--accent)] px-1.5 py-0.5 font-medium hover:bg-[var(--accent)]/20"
+          >
+            {utilityName ?? topic.utilitySlug}
+          </button>
+        )}
+        {topic.projectSlug && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              router.push(`/project/${topic.projectSlug}`);
+            }}
+            className="text-[10px] rounded-full bg-[var(--accent)]/10 text-[var(--accent)] px-1.5 py-0.5 font-medium hover:bg-[var(--accent)]/20"
+          >
+            {topic.projectName ?? topic.projectSlug}
+          </button>
+        )}
         {topic.issues.map((slug) => (
           <span key={slug} className="text-[10px] rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[var(--muted)]">
             {issueLabel(slug)}
@@ -42,6 +71,8 @@ export function TopicList({ initialItems, initialHasMore, now }: { initialItems:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [nowMs] = useState(() => new Date(now).getTime());
+  const { utilities } = useUtilitySearch();
+  const utilityNameBySlug = new Map(utilities.map((u) => [u.slug, u.utility]));
 
   async function loadMore() {
     setLoading(true);
@@ -70,7 +101,7 @@ export function TopicList({ initialItems, initialHasMore, now }: { initialItems:
   return (
     <div className="flex flex-col gap-2.5">
       {items.map((topic) => (
-        <TopicCard key={topic.id} topic={topic} nowMs={nowMs} />
+        <TopicCard key={topic.id} topic={topic} nowMs={nowMs} utilityName={topic.utilitySlug ? utilityNameBySlug.get(topic.utilitySlug) : undefined} />
       ))}
       {hasMore && (
         <button

@@ -8,24 +8,14 @@ const KIND_LABELS: Record<OppositionKind, string> = {
   organized_group: "Organized group",
 };
 
-// Below this many people, a stance count says more about who happened to
-// visit than about the community, so it isn't shown.
-export const MIN_VISITOR_REPORTS = 5;
-
-export interface VisitorStances {
-  against: number;
-  inFavor: number;
-}
-
 function fmt(iso: string): string {
   // Month and year only: many sources give no day.
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", timeZone: "UTC" });
 }
 
-// The Opposition part of the Details panel: each sourced record (who, what, when,
-// and where it's on record), then what the site's own visitors reported
-// telling the regulator, once enough of them have.
-export function OppositionSection({ records, stances }: { records: OppositionDTO[]; stances: VisitorStances | null }) {
+// The Opposition part of the Details panel: each sourced record (who, what,
+// when, and where it's on record).
+export function OppositionSection({ records }: { records: OppositionDTO[] }) {
   return (
     <div className="flex flex-col gap-4">
       {records.length > 0 && (
@@ -44,12 +34,6 @@ export function OppositionSection({ records, stances }: { records: OppositionDTO
             </li>
           ))}
         </ul>
-      )}
-      {stances && (
-        <p className="text-sm text-[var(--text-secondary)]">
-          <span className="font-semibold text-[var(--foreground)]">Visitors who reported contacting the regulator:</span>{" "}
-          {stances.against} against approval, {stances.inFavor} in favor. Self-reported on this site, not an official count.
-        </p>
       )}
       <p className="text-xs text-[var(--muted)]">
         Public records only: formal intervenors, local government actions, lawsuits and organized groups, each with its

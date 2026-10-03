@@ -4,6 +4,24 @@ Changes to WaitingForPower's public data surfaces: the REST API
 (`/api/*`, spec at `/openapi.json`), the MCP server at `/mcp`, and the
 bulk export. Site-only changes aren't listed here.
 
+## 2026-10-03 — Removed points/leaderboard; Board gains utility/project tagging
+
+OpenAPI spec 1.5.0
+
+- **Removed:** the entire points/leaderboard system. "I Reached Out!" (project-page
+  advocacy logging via `GET`/`POST /api/comments`, and the `/policies` official-contact
+  form via `POST /api/advocacy-contacts`) is gone, along with `GET /api/community` and
+  `GET /api/advocacy-feed`. The `log_project_advocacy` and `report_advocacy_contact`
+  MCP tools are removed. Nothing reads or writes `AdvocacyContact` or the advocacy
+  columns on `ProjectComment` (`advocacyType`, `hearingDate`, `stance`) anymore — the
+  columns/table stay in the schema (historical data, no migration), just unused.
+- **Added:** `ForumTopic` (the Message Board) gains two optional tags alongside its
+  existing `issues`: `utilitySlug` (validated against `GET /api/utilities`' live slug
+  set) and `projectSlug` (validated against a live, non-merged project). Any
+  combination, or none. `GET /api/forum/topics` gains an optional `utility` filter
+  param; each topic item gains `utilitySlug`, `projectSlug`, and `projectName`.
+- The Board itself is unaffected otherwise — it never had points or a leaderboard.
+
 ## 2026-10-02 — New `/api/utilities` endpoint
 
 OpenAPI spec 1.4.0

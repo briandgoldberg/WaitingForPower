@@ -6,10 +6,6 @@ export interface PillSection {
   id: string;
   label: string;
   content: ReactNode;
-  // "amber" matches the bright pill AdvocacyTabs.tsx uses for its own
-  // "I Reached Out!" tab — for a pill that's an action shortcut rather than
-  // a content section, so it reads differently from Details/Timeline/etc.
-  variant?: "default" | "amber";
 }
 
 // A row of pills under the headline numbers. Each one opens its section in a
@@ -47,7 +43,6 @@ export function SectionPills({ sections }: { sections: PillSection[] }) {
       <div className="flex flex-wrap gap-2" role="group" aria-label="Project sections">
         {sections.map((s) => {
           const open = openId === s.id;
-          const amber = s.variant === "amber";
           return (
             <button
               key={s.id}
@@ -55,16 +50,10 @@ export function SectionPills({ sections }: { sections: PillSection[] }) {
               aria-expanded={open}
               aria-controls={s.id}
               onClick={() => setOpenId(open ? null : s.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
-                amber
-                  ? open
-                    ? "bg-amber-500 text-white shadow-sm"
-                    : "bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25"
-                  : `border ${
-                      open
-                        ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                        : "border-[var(--border)] bg-[var(--panel)] text-[var(--accent)] hover:border-[var(--accent)]"
-                    }`
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors border ${
+                open
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                  : "border-[var(--border)] bg-[var(--panel)] text-[var(--accent)] hover:border-[var(--accent)]"
               }`}
             >
               {s.label}

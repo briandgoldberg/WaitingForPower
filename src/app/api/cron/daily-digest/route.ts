@@ -1,11 +1,11 @@
 // Daily summary email to briandgoldberg@gmail.com covering the previous
-// ~24 hours: bot/MCP/API calls (ApiRequestLog), visitor feedback
+// ~24 hours: bot/MCP/API calls (ApiRequestLog) and visitor feedback
 // (VisitorFeedback — this is now the site's only contact channel, since
 // /contact and ContactSubmission were retired in favor of the feedback
-// widget), and advocacy activity. A rolling 24-hour window ending at
-// run time, not a strict UTC calendar day — same convention as
-// notify-feed-subscribers, and simpler than reasoning about calendar-day
-// boundaries for a cron that just needs to run once daily.
+// widget). A rolling 24-hour window ending at run time, not a strict UTC
+// calendar day — same convention as notify-feed-subscribers, and simpler
+// than reasoning about calendar-day boundaries for a cron that just needs
+// to run once daily.
 //
 // Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}` on cron
 // invocations — see src/app/api/cron/ingest-eia/route.ts for the same check.
@@ -14,7 +14,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendDailyDigestEmail } from "@/lib/dailyDigestEmail";
 import { summarizeApiTraffic } from "@/lib/apiTrafficSummary";
-import { describeAdvocacyEntry, describeContactTarget, STANCE_INFO, type AdvocacyType, type ContactTargetType, type Stance } from "@/lib/data/advocacyPoints";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +27,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const windowLabel = `${since.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}–${now.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} UTC`;
 
-  const [apiLogs, feedbackRows, newComments, newContacts, newLikeCount] = await Promise.all([
+  const [apiLogs, feedbackRows] = await Promise.all([
     prisma.apiRequestLog.findMany({
       where: { createdAt: { gte: since } },
       select: { createdAt: true, endpoint: true, userAgent: true, query: true, rpcMethod: true, toolName: true, clientName: true, ipHash: true, src: true },
@@ -38,38 +37,6 @@ export async function GET(req: NextRequest) {
       where: { createdAt: { gte: since } },
       select: { feedbackText: true, contactEmail: true, path: true },
     }),
-    // The site's "I Advocated" log — advocacyType/stance/hearingDate are set
-    // on every current row; null only on a handful of legacy free-text
-    // comments written before this existed.
-    prisma.projectComment.findMany({
-      where: { createdAt: { gte: since } },
-      select: {
-        body: true,
-        createdAt: true,
-        parentId: true,
-        predictionId: true,
-        advocacyType: true,
-        hearingDate: true,
-        stance: true,
-        predictor: { select: { displayName: true, agentName: true, email: true, identityDecidedAt: true } },
-        project: { select: { name: true, slug: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    // Site-wide "I Reached Out!" entries — not tied to a project.
-    prisma.advocacyContact.findMany({
-      where: { createdAt: { gte: since } },
-      select: {
-        createdAt: true,
-        targetType: true,
-        state: true,
-        targetName: true,
-        note: true,
-        predictor: { select: { displayName: true, agentName: true, email: true, identityDecidedAt: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.threadLike.count({ where: { createdAt: { gte: since } } }),
   ]);
 
   const apiCallsByEndpoint = new Map<string, number>();
@@ -90,64 +57,12 @@ export async function GET(req: NextRequest) {
   // see classifyUserAgent.ts for why raw call counts mislead.
   const apiSummary = summarizeApiTraffic(apiLogs, new Set(priorRows.map((r) => r.ipHash!)));
 
-  // Unified list of what real people and guests actually did: project
-  // advocacy entries ("I Advocated") and site-wide official-contact entries
-  // ("I Reached Out!"). Agent-authored rows are still included (flagged via
-  // isAgent) rather than dropped, since an agent logging a real advocacy
-  // action is a meaningfully different signal than an agent bulk-predicting
-  // dates ever was.
-  const projectUrl = (slug: string) => `https://waitingforpower.com/project/${slug}#comments`;
-  const labelOf = (p: { displayName: string | null; agentName: string | null }) => p.displayName ?? p.agentName ?? "anonymous";
-  const posts: { at: Date; post: Parameters<typeof sendDailyDigestEmail>[0]["newPosts"][number] }[] = [];
-  for (const c of newComments) {
-    const isAgent = c.predictor.agentName != null;
-    const actionText = c.advocacyType
-      ? `${describeAdvocacyEntry(c.advocacyType as AdvocacyType, c.hearingDate?.toISOString())}${c.stance ? ` ${STANCE_INFO[c.stance as Stance].phrase}` : ""}`
-      : c.parentId || c.predictionId
-        ? "replied"
-        : "commented";
-    posts.push({
-      at: c.createdAt,
-      post: {
-        kind: "project",
-        label: labelOf(c.predictor),
-        isAgent,
-        guest: !isAgent && c.predictor.email == null,
-        held: !isAgent && c.predictor.identityDecidedAt == null,
-        projectName: c.project.name,
-        url: projectUrl(c.project.slug),
-        actionText,
-        body: c.body || null,
-      },
-    });
-  }
-  for (const contact of newContacts) {
-    const isAgent = contact.predictor.agentName != null;
-    posts.push({
-      at: contact.createdAt,
-      post: {
-        kind: "contact",
-        label: labelOf(contact.predictor),
-        isAgent,
-        guest: !isAgent && contact.predictor.email == null,
-        held: !isAgent && contact.predictor.identityDecidedAt == null,
-        projectName: null,
-        url: "https://waitingforpower.com/policies",
-        actionText: describeContactTarget({ ...contact, targetType: contact.targetType as ContactTargetType }),
-        body: contact.note,
-      },
-    });
-  }
-  posts.sort((a, b) => a.at.getTime() - b.at.getTime());
-
   const result = await sendDailyDigestEmail({
     windowLabel,
     apiCalls: [...apiCallsByEndpoint.entries()].map(([endpoint, count]) => ({ endpoint, count })),
     api: apiSummary,
     feedbackTotal: feedbackRows.length,
     feedbackDetails: feedbackRows.map((r) => ({ feedbackText: r.feedbackText, contactEmail: r.contactEmail, path: r.path })),
-    newPosts: posts.slice(0, 50).map((x) => x.post),
-    newLikeCount,
   });
 
   if (!result.ok) {
@@ -162,8 +77,6 @@ export async function GET(req: NextRequest) {
     apiCallersByClass: apiSummary.callersByClass,
     mcpFunnel: apiSummary.mcpFunnel,
     feedbackCount: feedbackRows.length,
-    newPostCount: posts.length,
-    newLikeCount,
   };
   console.log("daily-digest cron:", summary);
   return NextResponse.json(summary);

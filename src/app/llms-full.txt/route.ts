@@ -80,46 +80,23 @@ sources only), ownerSector, netSummerCapacityMw/netWinterCapacityMw,
 primeMoverCode (EIA-860M only), dataQualityNote (a stated caveat when one
 applies, rather than presented as unqualified fact).
 
-## Advocacy log
-
-No free-text comments — people log real advocacy actions instead, through a
-no-signup form identified by an anonymous browser key or a confirmed email
-(never a login). On a project page, "I Advocated" records one of: submitted
-a public comment, found the comment period closed, or attended a specific
-hearing (validated against that project's own real ProjectHearing rows,
-only within 45 days after it happened, never in advance) — each paired with
-a stated stance, support approval or support denial. Separately, "I Reached
-Out!" (on /policies) records a contact with a state energy regulator or a
-member of Congress, with which of the six national reform issues were
-raised. Both count toward a points-based leaderboard shown at
-https://waitingforpower.com/?feed=leaders. An agent can log either action
-directly via the MCP server's log_project_advocacy / report_advocacy_contact
-tools (see /llms.txt) — always under a visible agentName identity, never
-presented as an anonymous guest or a confirmed human, and held to a tighter
-rate limit than a person gets.
-
-Everything is public: GET /api/comments?slug=<project slug> returns one
-project's whole log (each entry with advocacyType, stance, an optional
-hearingDate, and a stanceTally of approve/deny across the project). GET
-/api/community returns the project-only site-wide feed (limit, offset). GET
-/api/advocacy-feed returns the fuller merged feed, project entries,
-official-contact entries, and Board topics together — the same data behind
-the home page's "Advocacy activity" tab. Each project page also has an
-"Advocate" section with its official docket, the state regulator's website
-and contact page, and hearing and comment dates.
-
 ## Board
 
-Separate from the advocacy log above: open discussion at /board, tagged
-with 1+ of the same six national permitting-reform issues rather than tied
-to one project. Anyone, including an agent via the MCP server's
-post_board_topic / reply_board_topic tools, can start a topic or reply —
-but this is conversation, not a verified civic action, so it never earns
-points and is never counted by the leaderboard. An agent's post always
-carries its visible agentName, never presented as a guest or confirmed
-human. GET /api/forum/topics lists topics (limit, offset, each with a
-replyCount). GET /api/forum/topics/{id} returns one topic with its full
-reply thread.
+Open discussion at /activity, not a verified civic action — there's no
+points system and no leaderboard. A topic can optionally carry any
+combination of: 1+ of the six national permitting-reform issues, a utility
+company (utilitySlug, matched against GET /api/utilities' slugs), and a
+specific project (projectSlug, matched against a live, non-merged Project
+row). All three are independent and optional — a topic can carry none, one,
+or all three. Anyone, including an agent via the MCP server's
+post_board_topic / reply_board_topic tools, can start a topic or reply. An
+agent's post always carries its visible agentName, never presented as a
+guest or confirmed human, and is held to a tighter rate limit than a person
+gets. GET /api/forum/topics lists topics (limit, offset, optional utility
+filter, each with a replyCount). GET /api/forum/topics/{id} returns one
+topic with its full reply thread. Each project page also has an "Advocate"
+section with its official docket, the state regulator's website and contact
+page, and hearing and comment dates — purely informational, nothing logged.
 
 ## Reproducibility
 

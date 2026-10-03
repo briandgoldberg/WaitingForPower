@@ -5,6 +5,9 @@ import { getForumTopic, type ForumReplyItem } from "@/lib/forum";
 import { PosterBadge } from "@/components/PosterBadge";
 import { issueLabel } from "@/lib/data/policies";
 import { ReplyForm } from "@/components/board/ReplyForm";
+import { queryProjects, toFilterState } from "@/lib/queryProjects";
+import { groupProjectsByUtility } from "@/lib/utilityGrouping";
+import { DEFAULT_FILTERS } from "@/lib/filters";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,10 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
   const topic = await getForumTopic(id);
   if (!topic) notFound();
 
+  const utilityName = topic.utilitySlug
+    ? groupProjectsByUtility(await queryProjects(toFilterState(DEFAULT_FILTERS))).find((g) => g.slug === topic.utilitySlug)?.utility
+    : null;
+
   return (
     <div className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
       <Link href="/activity" className="text-xs text-[var(--muted)] hover:underline w-fit">
@@ -40,8 +47,24 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
           <PosterBadge isAgent={topic.isAgent} confirmed={topic.confirmed} guest={topic.guest} />
           <span className="text-[var(--muted)]">· {fmt(topic.createdAt)}</span>
         </div>
-        {topic.issues.length > 0 && (
+        {(topic.utilitySlug || topic.projectSlug || topic.issues.length > 0) && (
           <div className="flex flex-wrap gap-1.5">
+            {topic.utilitySlug && (
+              <Link
+                href={`/utility/${topic.utilitySlug}`}
+                className="text-[10px] rounded-full bg-[var(--accent)]/10 text-[var(--accent)] px-1.5 py-0.5 font-medium hover:bg-[var(--accent)]/20"
+              >
+                {utilityName ?? topic.utilitySlug}
+              </Link>
+            )}
+            {topic.projectSlug && (
+              <Link
+                href={`/project/${topic.projectSlug}`}
+                className="text-[10px] rounded-full bg-[var(--accent)]/10 text-[var(--accent)] px-1.5 py-0.5 font-medium hover:bg-[var(--accent)]/20"
+              >
+                {topic.projectName ?? topic.projectSlug}
+              </Link>
+            )}
             {topic.issues.map((slug) => (
               <span key={slug} className="text-[10px] rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[var(--muted)]">
                 {issueLabel(slug)}

@@ -6,7 +6,6 @@
 // rather than the generic 4-tile stats grid other pages lead with.
 import { cache } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import { groupProjectsByUtility } from "@/lib/utilityGrouping";
@@ -138,12 +137,6 @@ export default async function UtilityPage({ params }: { params: Promise<{ slug: 
           </div>
           <div className="text-sm sm:text-base text-[var(--text-secondary)] mt-1">
             waiting on permitting across {stats.totalProjects.toLocaleString("en-US")} project{stats.totalProjects === 1 ? "" : "s"}.
-          </div>
-          <div className="text-xs text-[var(--muted)] mt-2">
-            {stats.investmentWaitingCoverageCount}/{stats.totalProjects} estimated.{" "}
-            <Link href="/methodology" className="underline">
-              Methodology
-            </Link>
           </div>
         </div>
       </div>

@@ -12,12 +12,11 @@ const LINKS = [
   // still reads as this tab being active even though its URL doesn't
   // start with /activity.
   { href: "/activity", label: "Community", extraActivePrefixes: ["/board"] },
-  { href: "/blog", label: "Blog" },
 ];
 
 // "/" only matches the homepage itself; every other link also matches its
-// own subpages (e.g. /blog/some-post) so the parent tab still reads as
-// active while reading an individual post.
+// own subpages (e.g. /board/some-topic under Community) so the parent tab
+// still reads as active while reading a subpage.
 function isActive(pathname: string, link: (typeof LINKS)[number]): boolean {
   if (link.href === "/") return pathname === "/";
   if (pathname === link.href || pathname.startsWith(`${link.href}/`)) return true;

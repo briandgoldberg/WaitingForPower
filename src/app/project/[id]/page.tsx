@@ -13,10 +13,9 @@ import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { oppositionSummary, projectSeoDescription, projectSeoTitle, projectStatusLine } from "@/lib/seo/projectSnippet";
-import { MIN_VISITOR_REPORTS, OppositionSection, type VisitorStances } from "@/components/project/OppositionSection";
+import { OppositionSection } from "@/components/project/OppositionSection";
 import { TakeActionSection } from "@/components/project/TakeActionSection";
 import { SectionPills, type PillSection } from "@/components/project/SectionPills";
-import { ProjectDiscussion } from "@/components/ProjectDiscussion";
 import { OutcomeBanner } from "@/components/project/OutcomeBanner";
 import { outcomeOf, isResolved, yearsBetween } from "@/lib/projectOutcome";
 import { withoutDashes } from "@/lib/text";
@@ -108,16 +107,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
-  // What visitors who logged contacting the regulator said they asked for,
-  // one vote per person and stance.
-  const stanceRows = await prisma.projectComment.findMany({
-    where: { projectId: p.id, advocacyType: { not: null }, stance: { in: ["approve", "deny"] } },
-    select: { predictorId: true, stance: true },
-    distinct: ["predictorId", "stance"],
-  });
-  const against = stanceRows.filter((r) => r.stance === "deny").length;
-  const inFavor = stanceRows.length - against;
-  const stances: VisitorStances | null = stanceRows.length >= MIN_VISITOR_REPORTS ? { against, inFavor } : null;
   const opposedBy = oppositionSummary(p);
   const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
@@ -278,12 +267,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         {p.expectedOnlineDateConfidence === "approximate" && p.expectedOnlineDate && (
           <p className="mt-2 text-xs text-[var(--muted)]">* Approximate / developer-estimated date, not a firm commitment.</p>
         )}
-        {(p.opposition.length > 0 || stances) && (
+        {p.opposition.length > 0 && (
           <section className="mt-5 pt-4 border-t border-[var(--border)]" aria-labelledby="opposition-heading">
             <h3 id="opposition-heading" className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">
               Opposition
             </h3>
-            <OppositionSection records={p.opposition} stances={stances} />
+            <OppositionSection records={p.opposition} />
           </section>
         )}
         {p.sources.length > 1 && (
@@ -347,12 +336,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
       content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
-    },
-    {
-      id: "comments",
-      label: "I Reached Out!",
-      content: <ProjectDiscussion projectId={p.id} hearings={p.hearings.map((h) => ({ date: h.date, label: h.label }))} />,
-      variant: "amber",
     },
   ];
 

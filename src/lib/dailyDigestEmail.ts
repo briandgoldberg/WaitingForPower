@@ -25,25 +25,6 @@ export interface DailyDigestData {
   api: ApiTrafficSummary;
   feedbackTotal: number;
   feedbackDetails: { feedbackText: string | null; contactEmail: string | null; path: string }[];
-  // Everything real people and guests actually did: project "I Advocated"
-  // entries and site-wide "I Reached Out!" official-contact entries.
-  newPosts: {
-    kind: "project" | "contact";
-    label: string;
-    isAgent: boolean;
-    // An anonymous person (no confirmed email); agents are never guests.
-    guest: boolean;
-    // Not public yet: the poster hasn't chosen how to appear.
-    held: boolean;
-    // null for a "contact" entry — it isn't tied to one project.
-    projectName: string | null;
-    url: string;
-    // Precomputed human-readable description, e.g. "submitted a comment in
-    // support of approval" or "contacted their U.S. Senator for Oregon".
-    actionText: string;
-    body: string | null;
-  }[];
-  newLikeCount: number;
 }
 
 function section(title: string, bodyHtml: string): string {
@@ -157,34 +138,10 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
            )
            .join("")}</ul>`;
 
-  const postWho = (p: DailyDigestData["newPosts"][number]) =>
-    `${p.isAgent ? "🤖" : "🙂"} ${p.label}${p.guest ? " (guest)" : ""}${p.held ? " [held, not public yet]" : ""}`;
-  const postTarget = (p: DailyDigestData["newPosts"][number]) =>
-    p.projectName ? ` on <a href="${escapeHtml(p.url)}"><strong>${escapeHtml(p.projectName)}</strong></a>` : "";
-
-  const postsExtraLines = [data.newLikeCount > 0 ? `${data.newLikeCount} new like${data.newLikeCount === 1 ? "" : "s"}` : null].filter(
-    (x): x is string => x != null,
-  );
-
-  const postsSectionHtml =
-    data.newPosts.length === 0 && postsExtraLines.length === 0
-      ? "<p>None.</p>"
-      : `${
-          data.newPosts.length > 0
-            ? `<ul>${data.newPosts
-                .map(
-                  (p) =>
-                    `<li>${escapeHtml(postWho(p))} ${escapeHtml(p.actionText)}${postTarget(p)}${p.body ? `<br><span style="color:#444;font-size:13px;">${escapeHtml(p.body)}</span>` : ""}</li>`,
-                )
-                .join("")}</ul>`
-            : ""
-        }${postsExtraLines.length > 0 ? `<p style="color:#666;font-size:13px;">${escapeHtml(postsExtraLines.join(" · "))}</p>` : ""}`;
-
   const html = `
     <p style="color:#666;font-size:13px;">WaitingForPower daily digest — ${escapeHtml(data.windowLabel)}</p>
     ${section("API traffic", apiSectionHtml)}
     ${section("Visitor feedback", feedbackSectionHtml)}
-    ${section(`Advocacy activity (${data.newPosts.length})`, postsSectionHtml)}
   `;
 
   const text = [
@@ -198,16 +155,6 @@ export async function sendDailyDigestEmail(data: DailyDigestData): Promise<{ ok:
     ...data.feedbackDetails.map(
       (d) => `- ${d.contactEmail ?? "(no email)"} — ${d.path}${d.feedbackText ? `\n  ${d.feedbackText}` : ""}`,
     ),
-    "",
-    `ADVOCACY ACTIVITY (${data.newPosts.length})`,
-    data.newPosts.length === 0 && postsExtraLines.length === 0
-      ? "None."
-      : [
-          ...data.newPosts.map(
-            (p) => `- ${postWho(p)} ${p.actionText}${p.projectName ? ` on ${p.projectName}` : ""}\n  ${p.url}${p.body ? `\n  ${p.body}` : ""}`,
-          ),
-          ...postsExtraLines.map((l) => `- ${l}`),
-        ].join("\n"),
   ].join("\n");
 
   const { error } = await resend.emails.send({

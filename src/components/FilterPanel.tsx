@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { FUEL_TYPES, PROJECT_TYPES, STATUS_BUCKETS, TRACKED_PROJECT_STAGES } from "@/lib/data/taxonomies";
-import { SOURCE_OPTIONS } from "@/lib/filters";
-import type { FilterState, SourceKey } from "@/lib/filters";
-import type { FuelType, ProjectStage, ProjectType } from "@/lib/data/taxonomies";
+import { FUEL_TYPES, PROJECT_TYPES, STATUS_BUCKETS } from "@/lib/data/taxonomies";
+import type { FilterState } from "@/lib/filters";
+import type { FuelType, ProjectType } from "@/lib/data/taxonomies";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 import type { ProjectDTO } from "@/lib/types";
 function toggle<T>(arr: T[], value: T): T[] {
@@ -71,17 +70,6 @@ export function FilterPanel({
     return Array.from(codes)
       .map((code) => ({ value: code, label: stateName(code) }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [projects]);
-
-  // Free text from the source, not a fixed taxonomy — see queueStages'
-  // comment in src/lib/filters.ts. Built from whatever's actually present,
-  // same as stateOptions above.
-  const queueStageOptions = useMemo(() => {
-    const stages = new Set<string>();
-    for (const p of projects) {
-      if (p.interconnectionQueueStage) stages.add(p.interconnectionQueueStage);
-    }
-    return Array.from(stages).sort((a, b) => a.localeCompare(b));
   }, [projects]);
 
   return (
@@ -179,52 +167,6 @@ export function FilterPanel({
               }
             >
               {n.toLocaleString("en-US")}+ MW
-            </Pill>
-          ))}
-        </div>
-      </Section>
-
-      <Section title="Stage">
-        <div className="flex flex-wrap gap-1">
-          {TRACKED_PROJECT_STAGES.map((s) => (
-            <Pill
-              key={s.value}
-              active={filters.stages.includes(s.value)}
-              onClick={() => onChange({ ...filters, stages: toggle<ProjectStage>(filters.stages, s.value) })}
-            >
-              {s.label}
-            </Pill>
-          ))}
-        </div>
-      </Section>
-
-      {queueStageOptions.length > 0 && (
-        <Section title="Interconnection queue stage">
-          <div className="flex flex-wrap gap-1">
-            {queueStageOptions.map((qs) => (
-              <Pill
-                key={qs}
-                active={filters.queueStages.includes(qs)}
-                onClick={() => onChange({ ...filters, queueStages: toggle<string>(filters.queueStages, qs) })}
-              >
-                {qs}
-              </Pill>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <Section title="Data source">
-        <div className="flex flex-wrap gap-1">
-          {SOURCE_OPTIONS.map((s) => (
-            <Pill
-              key={s.value}
-              active={filters.sourceKeys.includes(s.value)}
-              onClick={() =>
-                onChange({ ...filters, sourceKeys: toggle<SourceKey>(filters.sourceKeys, s.value) })
-              }
-            >
-              {s.label}
             </Pill>
           ))}
         </div>

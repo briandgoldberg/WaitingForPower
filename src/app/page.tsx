@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { getCleanEnergyWaiting, getStorageHearings, type SpeakUpHearing } from "@/lib/homeHighlights";
+import { getStorageHearings, type SpeakUpHearing } from "@/lib/homeHighlights";
 import { SpeakUpHearings } from "@/components/home/SpeakUpHearings";
-import { CleanEnergyHeadline } from "@/components/home/CleanEnergyHeadline";
+import { UtilitySearchSection } from "@/components/home/UtilitySearchSection";
 
 export const dynamic = "force-dynamic";
 
@@ -52,12 +52,11 @@ export default async function HomePage({
   const { alert } = await searchParams;
   const alertMessage = alert ? ALERT_MESSAGES[alert] : undefined;
 
-  // Live figures; the page still renders (without these sections) if the
+  // Live figures; the page still renders (without this section) if the
   // database is unreachable.
-  let clean: { homes: number; mw: number } | null = null;
   let speakUp: SpeakUpHearing[] = [];
   try {
-    [clean, speakUp] = await Promise.all([getCleanEnergyWaiting(), getStorageHearings(2)]);
+    speakUp = await getStorageHearings(2);
   } catch (err) {
     console.error("Home highlights failed:", err);
   }
@@ -112,7 +111,7 @@ export default async function HomePage({
         </div>
       </section>
 
-      {clean && <CleanEnergyHeadline homes={clean.homes} />}
+      <UtilitySearchSection />
 
       <SpeakUpHearings groups={speakUp} />
     </>

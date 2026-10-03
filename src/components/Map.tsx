@@ -80,8 +80,6 @@ const DEFAULT_MARKER_LINK = (p: ProjectDTO) => `/project/${p.slug}`;
 export function Map({
   projects,
   markerLink = DEFAULT_MARKER_LINK,
-  uniformColor,
-  smallDots = false,
 }: {
   projects: ProjectDTO[];
   // Lets a caller whose `projects` aren't real projects (e.g. the Utility
@@ -89,15 +87,6 @@ export function Map({
   // utilityMarkerProjects) point each marker's popup link somewhere other
   // than /project/{slug}, which wouldn't resolve for a synthetic entry.
   markerLink?: (p: ProjectDTO) => string;
-  // A single utility's own map (UtilityProjectsView) doesn't need
-  // fuel-type color-coding — every pin belongs to the same utility, so the
-  // explorer's per-fuel color legend doesn't apply here and just reads as
-  // noise. Overrides the fuel-type color for every marker when set.
-  uniformColor?: string;
-  // Same caller: small fixed-size dots instead of the explorer's
-  // capacity-scaled circles, which look oversized once color is no longer
-  // doing double duty as a fuel-type legend.
-  smallDots?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -190,25 +179,18 @@ export function Map({
           approx = multiState ? "multi-state" : county ? "county-only" : "state-only";
         }
 
-        const color = uniformColor ?? (FUEL_TYPE_BY_VALUE[p.fuelType]?.color ?? "#6b7280");
+        const color = FUEL_TYPE_BY_VALUE[p.fuelType]?.color ?? "#6b7280";
         const el = document.createElement("div");
         // A single-project page's map has exactly one marker to find, so it
         // gets a bigger bullseye instead of the explorer's small
         // capacity-scaled dot — concentric rings via box-shadow, still one
         // element. The explorer (many markers) keeps the plain small dot;
         // a bullseye per marker there would be visual noise.
-        if (projectsRef.current.length === 1 && !smallDots) {
+        if (projectsRef.current.length === 1) {
           el.style.cssText = `
             width:14px;height:14px;border-radius:50%;
             background:${color};
             box-shadow:0 0 0 3px white, 0 0 0 6px ${color}, 0 0 0 9px white, 0 0 0 13px ${color}, 0 1px 4px rgba(0,0,0,0.35);
-            cursor:pointer;
-          `;
-        } else if (smallDots) {
-          el.style.cssText = `
-            width:7px;height:7px;border-radius:50%;
-            background:${color};
-            border:1px solid #ffffff;box-shadow:0 1px 2px rgba(0,0,0,0.35);
             cursor:pointer;
           `;
         } else {
@@ -276,7 +258,7 @@ export function Map({
       if (map.loaded() || map.isStyleLoaded()) focusSingleProject();
       else map.once("load", focusSingleProject);
     }
-  }, [projects, uniformColor, smallDots]);
+  }, [projects]);
 
   return <div ref={containerRef} className="h-full w-full rounded-lg" />;
 }

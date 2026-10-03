@@ -234,7 +234,7 @@ export function AdvocacyContactForm() {
               : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
           }`}
         >
-          About a project
+          To a project
         </button>
         <button
           type="button"
@@ -246,7 +246,7 @@ export function AdvocacyContactForm() {
               : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
           }`}
         >
-          A regulator or Congress
+          To a regulator or Congress
         </button>
       </div>
 

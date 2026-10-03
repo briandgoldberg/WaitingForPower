@@ -98,8 +98,11 @@ export default async function HomePage({
           </span>
           <p className="text-xl sm:text-3xl font-bold tracking-tight leading-tight max-w-3xl">
             While America&rsquo;s demand for power rapidly rises, critical energy projects spend years stuck in
-            convoluted permitting processes and legal challenges. America needs bipartisan energy permitting reform
-            to build affordable, reliable, and clean power our citizens demand.
+            convoluted permitting processes and legal challenges.{" "}
+            <span className="text-[#f2b866]">
+              America needs bipartisan energy permitting reform to build affordable, reliable, and clean power our
+              citizens demand.
+            </span>
           </p>
           <Link
             href="/policies"

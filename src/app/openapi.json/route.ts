@@ -78,11 +78,27 @@ const projectSchema = {
   },
 };
 
+const utilityGroupSchema = {
+  type: "object",
+  description: "Projects grouped by utility service territory (EIA-861 county-to-utility data). A county often lists several utilities, so a project can appear under more than one utility's group — a known approximation, not a precise service-area match.",
+  properties: {
+    utility: { type: "string" },
+    slug: { type: "string" },
+    url: { type: "string", description: "The utility's page on the site." },
+    count: { type: "integer" },
+    totalCapacityMw: { type: "number" },
+    totalInvestmentWaitingUsd: { type: "number" },
+    lat: { type: "number", description: "Centroid of this utility's own tracked projects, not its real service territory." },
+    lon: { type: "number" },
+    projectSlugs: { type: "array", items: { type: "string" }, description: "Cross-reference against /api/projects." },
+  },
+};
+
 const spec = {
   openapi: "3.1.0",
   info: {
     title: "WaitingForPower API",
-    version: "1.3.0",
+    version: "1.4.0",
     description:
       "Read-only REST access to WaitingForPower's tracked U.S. energy permitting projects. CORS-open, no API key required. " +
       "See https://waitingforpower.com/llms.txt for the full list of machine-readable surfaces (including the MCP server), " +
@@ -99,6 +115,18 @@ const spec = {
           "200": {
             description: "Matching projects (filtered, not paginated — see /api/export for the full dataset in one request).",
             content: { "application/json": { schema: { type: "array", items: projectSchema } } },
+          },
+        },
+      },
+    },
+    "/api/utilities": {
+      get: {
+        summary: "Search tracked projects, grouped by utility service territory",
+        parameters: filterParams,
+        responses: {
+          "200": {
+            description: "One object per utility, sorted by project count descending.",
+            content: { "application/json": { schema: { type: "array", items: utilityGroupSchema } } },
           },
         },
       },

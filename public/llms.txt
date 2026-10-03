@@ -12,6 +12,12 @@
 
 ## What's new
 
+- 2026-10-02 — New `GET /api/utilities`: the same tracked projects grouped by utility
+  service territory (EIA-861 county data) instead of returned flat — one object per
+  utility with `count`, `totalCapacityMw`, `totalInvestmentWaitingUsd`, a centroid
+  `lat`/`lon`, and `projectSlugs` to cross-reference against `/api/projects`. Same
+  filter params as `/api/projects`. Mirrors the site's new Utility Company view at
+  `/utilities` and `/utility/{slug}`. OpenAPI spec 1.4.0.
 - 2026-10-02 — Every project from the REST API, `/api/export` and the MCP server's
   `get_project` now carries `statusHistory`: hand-sourced milestones merged with this
   site's own detected stage/status changes (the same log the project page's Timeline
@@ -82,6 +88,11 @@
   projects only — `interconnectionQueueStage` (e.g. "Feasibility Study", "System
   Impact Study") and `networkUpgradeCostUsd` (null for most projects; see
   /methodology for current coverage).
+- [GET /api/utilities](https://waitingforpower.com/api/utilities): the same projects grouped
+  by utility service territory instead of returned flat — one object per utility (`utility`,
+  `slug`, `url`, `count`, `totalCapacityMw`, `totalInvestmentWaitingUsd`, `lat`, `lon`,
+  `projectSlugs`), sorted by project count descending. Same optional filter params as
+  /api/projects above. See `/utilities` and `/utility/{slug}` for the same data as pages.
 - [GET /api/changes](https://waitingforpower.com/api/changes): recent project changes (new
   filings, stage advances, resolutions, capacity revisions) — one row per project per day
   something changed, not a full audit log. Optional `state`, `limit` (max 100), `offset`.

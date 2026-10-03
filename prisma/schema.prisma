@@ -563,7 +563,7 @@ model VisitorFeedback {
 // `console.log`-replacing write for what's captured.
 model ApiRequestLog {
   id         Int      @id @default(autoincrement())
-  // "mcp" | "api_projects" | "api_export" | "api_snapshots"
+  // "mcp" | "api_projects" | "api_utilities" | "api_export" | "api_snapshots"
   endpoint   String
   method     String
   userAgent  String?

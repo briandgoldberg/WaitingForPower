@@ -4,6 +4,22 @@ Changes to WaitingForPower's public data surfaces: the REST API
 (`/api/*`, spec at `/openapi.json`), the MCP server at `/mcp`, and the
 bulk export. Site-only changes aren't listed here.
 
+## 2026-10-02 — New `/api/utilities` endpoint
+
+OpenAPI spec 1.4.0
+
+- **Added:** `GET /api/utilities` — the same tracked projects grouped by utility
+  service territory (EIA-861 county-to-utility data) instead of returned flat. One
+  object per utility: `utility`, `slug`, `url`, `count`, `totalCapacityMw`,
+  `totalInvestmentWaitingUsd`, a centroid `lat`/`lon` (of this utility's own tracked
+  projects, not its real service territory), and `projectSlugs` to cross-reference
+  against `/api/projects`. Same optional filter params as `/api/projects`
+  (`state`, `fuelType`, `projectType`, `stage`, `minYearsWaiting`, `minCapacity`,
+  `status`). Mirrors the site's new Utility Company view at `/utilities` and
+  `/utility/{slug}` — see `src/lib/utilityGrouping.ts` for the known imprecision
+  (a county often lists several utilities, so a project can land under more than
+  one utility's group).
+
 ## 2026-10-02 — Status history in the API and MCP server
 
 MCP server 1.6.0 · OpenAPI spec 1.3.0

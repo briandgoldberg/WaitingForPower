@@ -11,7 +11,13 @@ const TERRITORY: Record<string, string[]> = territoryData;
 
 export interface UtilityGroup {
   utility: string;
-  projects: ProjectDTO[];
+  // Slugs only, not full project objects — a project lands in several
+  // utility groups whenever its county lists several utilities, and
+  // embedding the full object per group duplicated the same heavy records
+  // repeatedly (ballooned this page's hydration payload to 13MB+ before
+  // this was slugs). The caller looks these up against the one shared
+  // `projects` array instead.
+  projectSlugs: string[];
   count: number;
   totalCapacityMw: number;
   totalInvestment: number;
@@ -46,7 +52,7 @@ export function groupProjectsByUtility(projects: ProjectDTO[]): UtilityGroup[] {
       const lon = withCoords.length > 0 ? withCoords.reduce((s, p) => s + p.lon!, 0) / withCoords.length : -98;
       return {
         utility,
-        projects: list,
+        projectSlugs: list.map((p) => p.slug),
         count: list.length,
         totalCapacityMw: list.reduce((s, p) => (p.capacityUnit === "MW" && p.capacityValue != null ? s + p.capacityValue : s), 0),
         totalInvestment: list.reduce((s, p) => s + (p.investmentWaiting.applicable ? (p.investmentWaiting.estimatedUsd ?? 0) : 0), 0),

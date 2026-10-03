@@ -34,6 +34,10 @@ export function Test1Explorer({ projects, utilityGroups }: { projects: ProjectDT
   const stats = useMemo(() => computeAggregateStats(projects), [projects]);
   const exampleProject = useMemo(() => projects.find((p) => p.investmentWaiting.applicable) ?? projects[0] ?? null, [projects]);
   const utilityMarkers = useMemo(() => utilityMarkerProjects(utilityGroups), [utilityGroups]);
+  // One shared lookup instead of duplicating project objects per utility
+  // group — see UtilityGroup.projectSlugs' comment for why.
+  const bySlug = useMemo(() => new Map(projects.map((p) => [p.slug, p])), [projects]);
+  const projectsFor = (slugs: string[]) => slugs.map((s) => bySlug.get(s)).filter((p): p is ProjectDTO => p != null);
 
   return (
     <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-2 flex flex-col gap-3 flex-1">
@@ -89,7 +93,7 @@ export function Test1Explorer({ projects, utilityGroups }: { projects: ProjectDT
                     <span className="text-sm text-[var(--muted)]">{u.count} projects</span>
                   </summary>
                   <div className="mt-4">
-                    <ProjectList projects={u.projects} />
+                    <ProjectList projects={projectsFor(u.projectSlugs)} />
                   </div>
                 </details>
               ))}

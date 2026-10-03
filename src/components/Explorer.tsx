@@ -72,40 +72,39 @@ export function Explorer({
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 rounded-lg border-2 border-[var(--accent)] p-1 bg-[var(--panel)]">
-            <span className="px-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Show by</span>
+          <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">
             <button
               onClick={() => setDimension("project")}
-              className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "project" ? "bg-[var(--accent)] text-white" : ""}`}
+              className={`px-3 py-1 text-sm rounded-md ${dimension === "project" ? "bg-[var(--accent)] text-white" : ""}`}
             >
               Project
             </button>
             <button
               onClick={() => setDimension("service-area")}
-              className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
+              className={`px-3 py-1 text-sm rounded-md ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
             >
               Utility Company
             </button>
           </div>
-        <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">
-          <button
-            onClick={() => setView("map")}
-            className={`px-3 py-1 text-sm rounded-md ${view === "map" ? "bg-[var(--accent)] text-white" : ""}`}
-          >
-            Map
-          </button>
-          <button
-            onClick={() => setView("list")}
-            className={`px-3 py-1 text-sm rounded-md ${view === "list" ? "bg-[var(--accent)] text-white" : ""}`}
-          >
-            List
-          </button>
-          <button
-            onClick={() => setView("feed")}
-            className={`px-3 py-1 text-sm rounded-md ${view === "feed" ? "bg-[var(--accent)] text-white" : ""}`}
-          >
-            Feed
-          </button>
+          <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">
+            <button
+              onClick={() => setView("map")}
+              className={`px-3 py-1 text-sm rounded-md ${view === "map" ? "bg-[var(--accent)] text-white" : ""}`}
+            >
+              Map
+            </button>
+            <button
+              onClick={() => setView("list")}
+              className={`px-3 py-1 text-sm rounded-md ${view === "list" ? "bg-[var(--accent)] text-white" : ""}`}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setView("feed")}
+              className={`px-3 py-1 text-sm rounded-md ${view === "feed" ? "bg-[var(--accent)] text-white" : ""}`}
+            >
+              Feed
+            </button>
           </div>
         </div>
         <button

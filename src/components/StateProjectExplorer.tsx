@@ -18,17 +18,16 @@ export function StateProjectExplorer({ projects }: { projects: ProjectDTO[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-1 rounded-lg border-2 border-[var(--accent)] p-1 bg-[var(--panel)] w-fit">
-        <span className="px-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Show by</span>
+      <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)] w-fit">
         <button
           onClick={() => setDimension("project")}
-          className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "project" ? "bg-[var(--accent)] text-white" : ""}`}
+          className={`px-3 py-1 text-sm rounded-md ${dimension === "project" ? "bg-[var(--accent)] text-white" : ""}`}
         >
           Project
         </button>
         <button
           onClick={() => setDimension("service-area")}
-          className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
+          className={`px-3 py-1 text-sm rounded-md ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
         >
           Utility Company
         </button>

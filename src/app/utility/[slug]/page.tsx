@@ -146,27 +146,18 @@ export default async function UtilityPage({ params }: { params: Promise<{ slug: 
             {formatUsd(stats.totalInvestmentWaitingUsd)}
           </div>
           <div className="text-sm sm:text-base text-[var(--text-secondary)] mt-1">
-            in construction investment waiting on permitting across {stats.totalProjects.toLocaleString("en-US")}{" "}
-            project{stats.totalProjects === 1 ? "" : "s"} in {group.utility}&rsquo;s service territory — money that
-            could start flowing as soon as these clear review.
+            waiting on permitting across {stats.totalProjects.toLocaleString("en-US")} project{stats.totalProjects === 1 ? "" : "s"}.
           </div>
           <div className="text-xs text-[var(--muted)] mt-2">
-            {stats.investmentWaitingCoverageCount}/{stats.totalProjects} projects have an applicable cost estimate.{" "}
+            {stats.investmentWaitingCoverageCount}/{stats.totalProjects} estimated.{" "}
             <Link href="/methodology" className="underline">
-              See methodology
+              Methodology
             </Link>
-            .
           </div>
         </div>
       </div>
 
       <StatsHeader stats={stats} exampleProject={exampleProject} status="in_permitting" />
-
-      <p className="text-xs text-[var(--muted)]">
-        Grouped by utility service territory (EIA-861 county data). A county often lists several utilities, so a
-        project may appear under more than one utility&rsquo;s page — this is a known approximation, not a precise
-        match.
-      </p>
 
       <div className="h-[55vh] min-h-[320px] lg:h-[460px]">
         <Map projects={groupProjects} />

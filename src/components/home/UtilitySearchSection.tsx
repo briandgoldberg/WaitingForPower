@@ -30,13 +30,13 @@ export function UtilitySearchSection() {
   return (
     <section
       className="relative text-white"
-      style={{ background: "linear-gradient(120deg, #0c4a6e 0%, #0369a1 50%, #0891b2 100%)" }}
+      style={{ background: "linear-gradient(120deg, #16324f 0%, #1e3a5f 55%, #2a4a6d 100%)" }}
     >
       {/* Clips only the decorative blur circle, not the whole section — the
           section itself must not use overflow-hidden, or it clips the
           search dropdown below once results push past its bottom edge. */}
       <div aria-hidden className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-amber-200/10 blur-3xl" />
       </div>
       <div className="relative mx-auto max-w-5xl w-full px-4 sm:px-6 py-10 sm:py-14 flex flex-col gap-4">
         <p className="text-2xl sm:text-4xl font-bold tracking-tight leading-tight max-w-2xl">

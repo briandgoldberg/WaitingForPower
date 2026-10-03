@@ -13,8 +13,7 @@ import { groupProjectsByUtility } from "@/lib/utilityGrouping";
 import { computeAggregateStats } from "@/lib/stats";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { StatsHeader } from "@/components/StatsHeader";
-import { ProjectList } from "@/components/ProjectList";
-import { Map } from "@/components/Map";
+import { UtilityProjectsView } from "@/components/UtilityProjectsView";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 
@@ -151,11 +150,7 @@ export default async function UtilityPage({ params }: { params: Promise<{ slug: 
 
       <StatsHeader stats={stats} exampleProject={exampleProject} status="in_permitting" />
 
-      <div className="h-[55vh] min-h-[320px] lg:h-[460px]">
-        <Map projects={groupProjects} />
-      </div>
-
-      <ProjectList projects={groupProjects} />
+      <UtilityProjectsView projects={groupProjects} />
     </div>
   );
 }

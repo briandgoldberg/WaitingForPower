@@ -7,14 +7,11 @@ import { ProjectList } from "@/components/ProjectList";
 import { UtilityList } from "@/components/UtilityList";
 
 // Project/Utility Company toggle for /state/[code] — no map, no filters,
-// just swapping the flat project list for a list of the utilities serving
-// this state, each linking to its own /utility/[slug] page. minCount: 1
-// (not the usual 3) — a single state's slice of a utility's territory is
-// often small, and an empty "Utility Company" view on a state page would
-// read as broken rather than as a real noise floor.
+// just swapping the flat project list for a list of every utility serving
+// this state, each linking to its own /utility/[slug] page.
 export function StateProjectExplorer({ projects }: { projects: ProjectDTO[] }) {
   const [dimension, setDimension] = useState<"project" | "service-area">("project");
-  const utilityGroups = useMemo(() => groupProjectsByUtility(projects, { minCount: 1 }), [projects]);
+  const utilityGroups = useMemo(() => groupProjectsByUtility(projects), [projects]);
 
   return (
     <div className="flex flex-col gap-3">

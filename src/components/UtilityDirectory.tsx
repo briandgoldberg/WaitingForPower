@@ -5,10 +5,10 @@ import Link from "next/link";
 import type { ProjectDTO } from "@/lib/types";
 import { groupProjectsByUtility } from "@/lib/utilityGrouping";
 
-// A directory of every utility service territory with at least a few
-// waiting projects, independent of the Explorer's own active filters —
-// same rule as StateDirectory (this is a browse-by entry point, via
-// /utility/[slug], not another filtered view of the current selection).
+// A directory of every utility with at least one waiting project,
+// independent of the Explorer's own active filters — same rule as
+// StateDirectory (this is a browse-by entry point, via /utility/[slug],
+// not another filtered view of the current selection).
 export function UtilityDirectory({ projects }: { projects: ProjectDTO[] }) {
   const groups = useMemo(() => groupProjectsByUtility(projects), [projects]);
 

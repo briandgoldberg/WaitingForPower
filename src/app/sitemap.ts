@@ -88,11 +88,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  // One page per utility service territory with at least a few waiting
-  // projects (same noise floor as the /utilities hub and the /projects
-  // service-area directory) — a utility below that floor still has a real
-  // page (see /utility/[slug]'s own minCount: 1 lookup), just not submitted
-  // here to avoid pushing thin-content URLs into the reindex.
+  // One page per utility with at least one waiting project — every utility
+  // listed on /utilities and in the Explorer's Utility Company dimension.
   const utilityProjects = await queryProjects(toFilterState(DEFAULT_FILTERS));
   const utilityRoutes: MetadataRoute.Sitemap = groupProjectsByUtility(utilityProjects).map((g) => ({
     url: `${BASE_URL}/utility/${g.slug}`,

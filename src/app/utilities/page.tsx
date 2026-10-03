@@ -15,10 +15,6 @@ export const metadata: Metadata = {
 
 export default async function UtilitiesIndexPage() {
   const projects = await queryProjects(toFilterState(DEFAULT_FILTERS));
-  // Default minCount (3) — same noise floor as the /projects service-area
-  // directory, so this hub only lists utilities worth a dedicated page; a
-  // smaller utility's page still exists (see /utility/[slug]'s minCount: 1
-  // lookup) but isn't promoted here or in the sitemap.
   const groups = groupProjectsByUtility(projects);
 
   return (
@@ -26,7 +22,7 @@ export default async function UtilitiesIndexPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Energy projects by utility company</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">
-          {groups.length} utility companies with at least a few projects currently waiting on a permitting
+          {groups.length} utility companies with at least one project currently waiting on a permitting
           decision, tracked live from public federal and state sources.{" "}
           <Link href="/projects" className="underline text-[var(--accent)]">
             See the full map →

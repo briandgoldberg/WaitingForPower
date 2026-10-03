@@ -39,7 +39,7 @@ export interface UtilityGroup {
 }
 
 export function groupProjectsByUtility(projects: ProjectDTO[], opts: { minCount?: number } = {}): UtilityGroup[] {
-  const minCount = opts.minCount ?? 3;
+  const minCount = opts.minCount ?? 1;
   const byUtility = new Map<string, ProjectDTO[]>();
   for (const p of projects) {
     if (!p.state || !p.county) continue;

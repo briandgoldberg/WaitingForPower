@@ -30,10 +30,7 @@ const getUtility = cache(async (slug: string) => {
   // groups at once (see utilityGrouping.ts), so duplicating them per group
   // would balloon this page's hydration payload.
   const projects = full.map((p) => ({ ...p, sources: [], milestones: [], statusHistory: [], hearings: [], opposition: [] }));
-  // minCount: 1 — a utility linked from a smaller /state/[code] accordion
-  // should never 404 just because it's under the 3-project noise floor
-  // used for the /utilities hub and sitemap listing (see those for why).
-  const group = groupProjectsByUtility(projects, { minCount: 1 }).find((g) => g.slug === slug);
+  const group = groupProjectsByUtility(projects).find((g) => g.slug === slug);
   if (!group) return null;
   const groupProjects = projects.filter((p) => group.projectSlugs.includes(p.slug));
   return { group, groupProjects };
@@ -60,11 +57,6 @@ export async function generateMetadata({
     title,
     description,
     alternates: { canonical: `/utility/${group.slug}` },
-    // Thin content below the /utilities hub's own noise floor (3 projects)
-    // stays reachable (so a state-page link never 404s) but isn't promoted
-    // for indexing — same precedent as /state/[code]/opposition's
-    // empty-state noindex.
-    ...(group.count < 3 ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       title,
       description,

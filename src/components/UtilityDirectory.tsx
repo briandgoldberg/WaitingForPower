@@ -16,7 +16,7 @@ export function UtilityDirectory({ projects }: { projects: ProjectDTO[] }) {
 
   return (
     <div className="mt-2">
-      <h2 className="text-sm font-semibold mb-2">Browse by service area</h2>
+      <h2 className="text-sm font-semibold mb-2">Browse by utility company</h2>
       <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
         {groups.map((g) => (
           <li key={g.slug}>

@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import type { ProjectDTO } from "@/lib/types";
 import { groupProjectsByUtility } from "@/lib/utilityGrouping";
 import { ProjectList } from "@/components/ProjectList";
-import { UtilityAccordion } from "@/components/UtilityAccordion";
+import { UtilityList } from "@/components/UtilityList";
 
-// Project/Service Area toggle for /state/[code] — no map, no filters, just
-// swapping the flat project list for the same by-utility accordion used on
-// /projects. minCount: 1 (not the usual 3) — a single state's slice of a
-// utility's territory is often small, and an empty "Service Area" view on
-// a state page would read as broken rather than as a real noise floor.
+// Project/Utility Company toggle for /state/[code] — no map, no filters,
+// just swapping the flat project list for a list of the utilities serving
+// this state, each linking to its own /utility/[slug] page. minCount: 1
+// (not the usual 3) — a single state's slice of a utility's territory is
+// often small, and an empty "Utility Company" view on a state page would
+// read as broken rather than as a real noise floor.
 export function StateProjectExplorer({ projects }: { projects: ProjectDTO[] }) {
   const [dimension, setDimension] = useState<"project" | "service-area">("project");
   const utilityGroups = useMemo(() => groupProjectsByUtility(projects, { minCount: 1 }), [projects]);
@@ -29,7 +30,7 @@ export function StateProjectExplorer({ projects }: { projects: ProjectDTO[] }) {
           onClick={() => setDimension("service-area")}
           className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
         >
-          Service Area
+          Utility Company
         </button>
       </div>
 
@@ -40,7 +41,7 @@ export function StateProjectExplorer({ projects }: { projects: ProjectDTO[] }) {
         <ProjectList projects={projects} />
       </div>
       <div className={dimension === "service-area" ? "" : "hidden"}>
-        <UtilityAccordion groups={utilityGroups} projects={projects} />
+        <UtilityList groups={utilityGroups} />
       </div>
     </div>
   );

@@ -91,7 +91,7 @@ export default async function UtilityPage({ params }: { params: Promise<{ slug: 
   const breadcrumbJsonLd = buildBreadcrumbJsonLd([
     { name: "Home", url: "https://waitingforpower.com" },
     { name: "Projects", url: "https://waitingforpower.com/projects" },
-    { name: "Service areas", url: "https://waitingforpower.com/utilities" },
+    { name: "Utility companies", url: "https://waitingforpower.com/utilities" },
     { name: group.utility },
   ]);
 
@@ -127,7 +127,7 @@ export default async function UtilityPage({ params }: { params: Promise<{ slug: 
       />
 
       <div>
-        <Breadcrumbs items={[{ label: "All projects", href: "/projects" }, { label: "Service areas", href: "/utilities" }, { label: group.utility }]} />
+        <Breadcrumbs items={[{ label: "All projects", href: "/projects" }, { label: "Utility companies", href: "/utilities" }, { label: group.utility }]} />
         <h1 className="text-3xl font-bold tracking-tight mt-1">{group.utility}</h1>
       </div>
 

@@ -7,9 +7,9 @@ import { groupProjectsByUtility } from "@/lib/utilityGrouping";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Energy Projects by Utility Service Area | WaitingForPower",
+  title: "Energy Projects by Utility Company | WaitingForPower",
   description:
-    "Browse U.S. energy projects waiting on permitting approval by utility service territory — generation, transmission, storage, LNG, and pipeline projects, live and sourced.",
+    "Browse U.S. energy projects waiting on permitting approval by utility company — generation, transmission, storage, LNG, and pipeline projects, live and sourced.",
   alternates: { canonical: "/utilities" },
 };
 
@@ -24,10 +24,10 @@ export default async function UtilitiesIndexPage() {
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 py-6 flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Energy projects by utility service area</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Energy projects by utility company</h1>
         <p className="text-sm text-[var(--muted)] mt-0.5">
-          {groups.length} utility service territories with at least a few projects currently waiting on a
-          permitting decision, tracked live from public federal and state sources.{" "}
+          {groups.length} utility companies with at least a few projects currently waiting on a permitting
+          decision, tracked live from public federal and state sources.{" "}
           <Link href="/projects" className="underline text-[var(--accent)]">
             See the full map →
           </Link>

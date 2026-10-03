@@ -10,7 +10,7 @@ import { StatsHeader } from "@/components/StatsHeader";
 import { FilterPanel } from "@/components/FilterPanel";
 import { ProjectList } from "@/components/ProjectList";
 import { StateDirectory } from "@/components/StateDirectory";
-import { UtilityAccordion } from "@/components/UtilityAccordion";
+import { UtilityList } from "@/components/UtilityList";
 import { UtilityDirectory } from "@/components/UtilityDirectory";
 import { ChangesFeed } from "@/components/ChangesFeed";
 import type { ProjectChangeDTO } from "@/lib/types";
@@ -84,7 +84,7 @@ export function Explorer({
               onClick={() => setDimension("service-area")}
               className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
             >
-              Service Area
+              Utility Company
             </button>
           </div>
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">
@@ -160,7 +160,7 @@ export function Explorer({
             <ProjectList projects={filtered} />
           </div>
           <div className={view === "list" && dimension === "service-area" ? "h-full overflow-y-auto" : "hidden"}>
-            <UtilityAccordion groups={utilityGroups} projects={filtered} />
+            <UtilityList groups={utilityGroups} />
           </div>
           <div className={view === "feed" ? "h-full overflow-y-auto" : "hidden"}>
             <ChangesFeed

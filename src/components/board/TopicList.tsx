@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PosterBadge } from "@/components/PosterBadge";
+import { DeleteButton } from "@/components/board/DeleteButton";
 import { relativeTime } from "@/lib/feedTime";
 import { issueLabel } from "@/lib/data/policies";
 import { useUtilitySearch } from "@/lib/useUtilitySearch";
@@ -11,7 +12,17 @@ import type { ForumTopicItem } from "@/lib/forum";
 
 const PAGE_SIZE = 20;
 
-function TopicCard({ topic, nowMs, utilityName }: { topic: ForumTopicItem; nowMs: number; utilityName?: string }) {
+function TopicCard({
+  topic,
+  nowMs,
+  utilityName,
+  onDeleted,
+}: {
+  topic: ForumTopicItem;
+  nowMs: number;
+  utilityName?: string;
+  onDeleted: () => void;
+}) {
   const router = useRouter();
   return (
     <Link
@@ -60,6 +71,12 @@ function TopicCard({ topic, nowMs, utilityName }: { topic: ForumTopicItem; nowMs
         <span className="ml-auto shrink-0 text-xs text-[var(--muted)]">
           {topic.replyCount} {topic.replyCount === 1 ? "reply" : "replies"}
         </span>
+        <DeleteButton
+          predictorId={topic.predictorId}
+          deleteUrl={`/api/forum/topics/${topic.id}`}
+          onDeleted={onDeleted}
+          confirmText="Delete this topic? This can't be undone."
+        />
       </div>
     </Link>
   );
@@ -101,7 +118,13 @@ export function TopicList({ initialItems, initialHasMore, now }: { initialItems:
   return (
     <div className="flex flex-col gap-2.5">
       {items.map((topic) => (
-        <TopicCard key={topic.id} topic={topic} nowMs={nowMs} utilityName={topic.utilitySlug ? utilityNameBySlug.get(topic.utilitySlug) : undefined} />
+        <TopicCard
+          key={topic.id}
+          topic={topic}
+          nowMs={nowMs}
+          utilityName={topic.utilitySlug ? utilityNameBySlug.get(topic.utilitySlug) : undefined}
+          onDeleted={() => setItems((prev) => prev.filter((t) => t.id !== topic.id))}
+        />
       ))}
       {hasMore && (
         <button

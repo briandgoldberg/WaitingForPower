@@ -14,6 +14,7 @@ import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { StatsHeader } from "@/components/StatsHeader";
 import { UtilityProjectsView } from "@/components/UtilityProjectsView";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { ShareButtons } from "@/components/ShareButtons";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 
 export const dynamic = "force-dynamic";
@@ -117,28 +118,14 @@ export default async function UtilityPage({ params }: { params: Promise<{ slug: 
       />
 
       <div>
-        <Breadcrumbs items={[{ label: "All projects", href: "/projects" }, { label: "Utility companies", href: "/utilities" }, { label: group.utility }]} />
-        <h1 className="text-3xl font-bold tracking-tight mt-1">{group.utility}</h1>
-      </div>
-
-      {/* Money-first hero: the one number a utility/investor audience for
-          this page cares about most, well above the generic stats grid. */}
-      <div className="rounded-2xl border-2 border-violet-400/60 dark:border-violet-700/60 bg-gradient-to-br from-violet-50 to-[var(--panel)] dark:from-violet-950/40 p-5 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-        <svg viewBox="0 0 24 24" aria-hidden className="h-14 w-14 sm:h-16 sm:w-16 shrink-0">
-          <circle cx="12" cy="12" r="10" className="fill-violet-500 dark:fill-violet-400" />
-          <circle cx="12" cy="12" r="7.6" fill="none" strokeWidth="1" className="stroke-violet-200 dark:stroke-violet-800" />
-          <text x="12" y="16.4" textAnchor="middle" fontSize="12.5" fontWeight="700" className="fill-white dark:fill-violet-950">
-            $
-          </text>
-        </svg>
-        <div className="min-w-0">
-          <div className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums">
-            {formatUsd(stats.totalInvestmentWaitingUsd)}
-          </div>
-          <div className="text-sm sm:text-base text-[var(--text-secondary)] mt-1">
-            waiting on permitting across {stats.totalProjects.toLocaleString("en-US")} project{stats.totalProjects === 1 ? "" : "s"}.
-          </div>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <Breadcrumbs items={[{ label: "All projects", href: "/projects" }, { label: "Utility companies", href: "/utilities" }, { label: group.utility }]} />
+          <ShareButtons
+            url={`https://waitingforpower.com/utility/${group.slug}`}
+            text={`${formatUsd(stats.totalInvestmentWaitingUsd)} in construction investment waiting on permitting in ${group.utility}'s service territory. Tracked on WaitingForPower.`}
+          />
         </div>
+        <h1 className="text-3xl font-bold tracking-tight mt-1">{group.utility}</h1>
       </div>
 
       <StatsHeader stats={stats} exampleProject={exampleProject} status="in_permitting" />

@@ -8,6 +8,7 @@
 import { prisma } from "@/lib/db";
 
 export interface IdentityStatus {
+  id: string;
   label: string;
   emailConfirmed: boolean;
   nameChosen: boolean;
@@ -22,10 +23,11 @@ export interface IdentityStatus {
 export async function getIdentityStatus(anonymousKey: string): Promise<IdentityStatus | null> {
   const me = await prisma.predictor.findUnique({
     where: { anonymousKey },
-    select: { displayName: true, email: true, nameChosenAt: true, identityDecidedAt: true },
+    select: { id: true, displayName: true, email: true, nameChosenAt: true, identityDecidedAt: true },
   });
   if (!me) return null;
   return {
+    id: me.id,
     label: me.displayName ?? "Anonymous",
     emailConfirmed: me.email != null,
     nameChosen: me.nameChosenAt != null,

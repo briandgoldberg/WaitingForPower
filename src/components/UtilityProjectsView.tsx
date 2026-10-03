@@ -10,22 +10,22 @@ import { Map } from "@/components/Map";
 // at a narrower scope rather than a one-off layout (the full-page version
 // just stacked the map above the list with no toggle).
 export function UtilityProjectsView({ projects }: { projects: ProjectDTO[] }) {
-  const [view, setView] = useState<"map" | "list">("map");
+  const [view, setView] = useState<"map" | "list">("list");
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)] w-fit">
         <button
-          onClick={() => setView("map")}
-          className={`px-3 py-1 text-sm rounded-md ${view === "map" ? "bg-[var(--accent)] text-white" : ""}`}
-        >
-          Map
-        </button>
-        <button
           onClick={() => setView("list")}
           className={`px-3 py-1 text-sm rounded-md ${view === "list" ? "bg-[var(--accent)] text-white" : ""}`}
         >
           List
+        </button>
+        <button
+          onClick={() => setView("map")}
+          className={`px-3 py-1 text-sm rounded-md ${view === "map" ? "bg-[var(--accent)] text-white" : ""}`}
+        >
+          Map
         </button>
       </div>
 

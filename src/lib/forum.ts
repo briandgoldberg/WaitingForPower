@@ -56,6 +56,7 @@ export class ForumError extends Error {
 
 export interface ForumReplyItem {
   id: string;
+  predictorId: string;
   label: string;
   isAgent: boolean;
   confirmed: boolean;
@@ -67,6 +68,7 @@ export interface ForumReplyItem {
 
 export interface ForumTopicItem {
   id: string;
+  predictorId: string;
   label: string;
   isAgent: boolean;
   confirmed: boolean;
@@ -203,6 +205,7 @@ export async function getForumTopics(
 
   const items: ForumTopicItem[] = rows.map((t) => ({
     id: t.id,
+    predictorId: t.predictorId,
     label: labelOf(t.predictor),
     isAgent: t.predictor.agentName != null,
     ...flagsOf(t.predictor),
@@ -241,6 +244,7 @@ export async function getForumTopic(id: string): Promise<ForumTopicDetail | null
 
   return {
     id: t.id,
+    predictorId: t.predictorId,
     label: labelOf(t.predictor),
     isAgent: t.predictor.agentName != null,
     ...flagsOf(t.predictor),
@@ -255,6 +259,7 @@ export async function getForumTopic(id: string): Promise<ForumTopicDetail | null
     replyCount: t.replies.length,
     replies: t.replies.map((r) => ({
       id: r.id,
+      predictorId: r.predictorId,
       label: labelOf(r.predictor),
       isAgent: r.predictor.agentName != null,
       ...flagsOf(r.predictor),
@@ -263,4 +268,42 @@ export async function getForumTopic(id: string): Promise<ForumTopicDetail | null
       createdAt: r.createdAt.toISOString(),
     })),
   };
+}
+
+// Ownership-checked deletes — a post can only be removed by the identity
+// that created it. Resolves the caller's own Predictor row from the same
+// anonymousKey/agentName pair every other forum action uses, rather than
+// trusting a client-supplied id.
+async function resolveCallerPredictorId(params: { anonymousKey?: string; agentName?: string }): Promise<string | null> {
+  if (params.agentName) {
+    const p = await prisma.predictor.findUnique({ where: { agentName: params.agentName }, select: { id: true } });
+    return p?.id ?? null;
+  }
+  if (params.anonymousKey) {
+    const p = await prisma.predictor.findUnique({ where: { anonymousKey: params.anonymousKey }, select: { id: true } });
+    return p?.id ?? null;
+  }
+  return null;
+}
+
+export async function deleteTopic(params: { anonymousKey?: string; agentName?: string; topicId: string }): Promise<void> {
+  const callerId = await resolveCallerPredictorId(params);
+  if (!callerId) throw new ForumError("missing_identity", "No identity provided.");
+
+  const topic = await prisma.forumTopic.findUnique({ where: { id: params.topicId }, select: { predictorId: true } });
+  if (!topic) throw new ForumError("not_found", "That topic is gone.");
+  if (topic.predictorId !== callerId) throw new ForumError("forbidden", "You can only delete your own posts.");
+
+  await prisma.forumTopic.delete({ where: { id: params.topicId } });
+}
+
+export async function deleteReply(params: { anonymousKey?: string; agentName?: string; replyId: string }): Promise<void> {
+  const callerId = await resolveCallerPredictorId(params);
+  if (!callerId) throw new ForumError("missing_identity", "No identity provided.");
+
+  const reply = await prisma.forumReply.findUnique({ where: { id: params.replyId }, select: { predictorId: true } });
+  if (!reply) throw new ForumError("not_found", "That reply is gone.");
+  if (reply.predictorId !== callerId) throw new ForumError("forbidden", "You can only delete your own posts.");
+
+  await prisma.forumReply.delete({ where: { id: params.replyId } });
 }

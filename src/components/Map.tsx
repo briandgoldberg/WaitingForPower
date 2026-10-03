@@ -64,9 +64,11 @@ function popupHtml(p: ProjectDTO, approx: ApproxReason, href: string): string {
         <div style="font-size:12px;color:var(--muted);margin-top:4px;">
           ${p.state ?? ""} · ${capacityLabel}${p.isAggregateExample ? " · aggregate" : ""}
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-          <strong>Waiting:</strong> ${p.yearsWaiting != null ? p.yearsWaiting.toFixed(1) + " yrs" : "—"}
-        </div>
+        ${
+          p.yearsWaiting != null
+            ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;"><strong>Waiting:</strong> ${p.yearsWaiting.toFixed(1)} yrs</div>`
+            : ""
+        }
         ${approx ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">${APPROX_MESSAGE[approx]}</div>` : ""}
       </div>
     </div>

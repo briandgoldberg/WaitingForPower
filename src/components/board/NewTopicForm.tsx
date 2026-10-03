@@ -162,7 +162,7 @@ export function NewTopicForm() {
         onChange={(e) => setBody(e.target.value)}
         maxLength={MAX_BODY_LENGTH}
         rows={4}
-        placeholder="What's on your mind about permitting reform?"
+        placeholder="What's on your mind?"
         aria-label="Topic body"
         className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm resize-none"
       />

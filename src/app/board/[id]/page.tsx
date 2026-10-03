@@ -5,6 +5,7 @@ import { getForumTopic, type ForumReplyItem } from "@/lib/forum";
 import { PosterBadge } from "@/components/PosterBadge";
 import { issueLabel } from "@/lib/data/policies";
 import { ReplyForm } from "@/components/board/ReplyForm";
+import { DeleteButton } from "@/components/board/DeleteButton";
 import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import { groupProjectsByUtility } from "@/lib/utilityGrouping";
 import { DEFAULT_FILTERS } from "@/lib/filters";
@@ -46,6 +47,12 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
           <span className="font-semibold">{topic.label}</span>
           <PosterBadge isAgent={topic.isAgent} confirmed={topic.confirmed} guest={topic.guest} />
           <span className="text-[var(--muted)]">· {fmt(topic.createdAt)}</span>
+          <DeleteButton
+            predictorId={topic.predictorId}
+            deleteUrl={`/api/forum/topics/${topic.id}`}
+            redirectTo="/activity"
+            confirmText="Delete this topic? This can't be undone."
+          />
         </div>
         {(topic.utilitySlug || topic.projectSlug || topic.issues.length > 0) && (
           <div className="flex flex-wrap gap-1.5">
@@ -78,7 +85,7 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
       {topic.replies.length > 0 && (
         <ul className="flex flex-col gap-3">
           {topic.replies.map((reply) => (
-            <ReplyRow key={reply.id} reply={reply} />
+            <ReplyRow key={reply.id} reply={reply} topicId={topic.id} />
           ))}
         </ul>
       )}
@@ -91,13 +98,18 @@ export default async function TopicPage({ params }: { params: Promise<{ id: stri
   );
 }
 
-function ReplyRow({ reply }: { reply: ForumReplyItem }) {
+function ReplyRow({ reply, topicId }: { reply: ForumReplyItem; topicId: string }) {
   return (
     <li className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 text-sm">
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="font-semibold">{reply.label}</span>
         <PosterBadge isAgent={reply.isAgent} confirmed={reply.confirmed} guest={reply.guest} />
         <span className="text-[var(--muted)]">· {fmt(reply.createdAt)}</span>
+        <DeleteButton
+          predictorId={reply.predictorId}
+          deleteUrl={`/api/forum/topics/${topicId}/replies/${reply.id}`}
+          confirmText="Delete this reply? This can't be undone."
+        />
       </div>
       <p className="mt-1 text-[var(--text-secondary)] whitespace-pre-wrap break-words">{reply.body}</p>
     </li>

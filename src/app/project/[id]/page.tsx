@@ -9,6 +9,7 @@ import type { ProjectDTO } from "@/lib/types";
 import { FUEL_TYPE_BY_VALUE, formatCapacity, PRIME_MOVER_LABELS, PROJECT_STAGE_BY_VALUE, RESOLVED_STAGES, VERIFICATION_STATUS_BY_VALUE, type ProjectStage } from "@/lib/data/taxonomies";
 import { formatUsd } from "@/lib/calc/investmentWaiting";
 import { ShareButtons } from "@/components/ShareButtons";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { buildHearingEventsJsonLd } from "@/lib/seo/hearingEvents";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
@@ -295,6 +296,28 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <Map projects={[p]} />
           </div>
         </div>
+        {p.statusHistory.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-[var(--border)]">
+            <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">Timeline</h3>
+            <ul className="flex flex-col gap-3">
+              {p.statusHistory.map((e, i) => (
+                <li key={i} className="flex gap-3 text-sm">
+                  <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
+                    {new Date(e.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                    {e.approximate && <span className="text-xs">*</span>}
+                  </div>
+                  <div>
+                    <span className="font-medium">{e.label}</span>
+                    {e.sub && <span className="text-[var(--muted)]"> · {e.sub}</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {p.statusHistory.some((e) => e.approximate) && (
+              <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
+            )}
+          </div>
+        )}
         {p.dataQualityNote && (
           <div className="mt-5 pt-4 border-t border-[var(--border)]">
             <Detail wide label="Data quality note" value={withoutDashes(p.dataQualityNote)} />
@@ -302,36 +325,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         )}
     </>
   );
-  // Hand-sourced milestones merged with the site's own detected status
-  // changes — see src/lib/projectTimeline.ts, shared with the public
-  // API/MCP so both show the same history from one definition.
-  const timelineContent =
-    p.statusHistory.length > 0 ? (
-      <>
-          <ul className="flex flex-col gap-3">
-            {p.statusHistory.map((e, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <div className="w-24 shrink-0 tabular-nums text-[var(--muted)]">
-                  {new Date(e.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                  {e.approximate && <span className="text-xs">*</span>}
-                </div>
-                <div>
-                  <span className="font-medium">{e.label}</span>
-                  {e.sub && <span className="text-[var(--muted)]"> · {e.sub}</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-          {p.statusHistory.some((e) => e.approximate) && (
-            <p className="text-xs text-[var(--muted)] mt-3">* Approximate date.</p>
-          )}
-      </>
-    ) : (
-      <p className="text-sm text-[var(--text-secondary)]">No milestones recorded yet.</p>
-    );
   const sections: PillSection[] = [
     { id: "details", label: "Details", content: detailsContent },
-    ...(p.statusHistory.length > 0 || outcome === "pending" ? [{ id: "timeline", label: "Timeline", content: timelineContent }] : []),
     {
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
@@ -367,6 +362,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       )}
 
       <div>
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
+          <Breadcrumbs
+            items={[
+              { label: "All projects", href: "/projects" },
+              ...(singleStateCode ? [{ label: stateName(singleStateCode), href: `/state/${singleStateCode}` }] : []),
+              { label: p.name },
+            ]}
+          />
+          <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
+        </div>
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <span
             className="inline-block h-2.5 w-2.5 rounded-full"
@@ -423,7 +428,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               </p>
             )}
           </div>
-          <ShareButtons url={`https://waitingforpower.com/project/${p.slug}`} text={shareText(p)} />
         </div>
       </div>
 
@@ -438,8 +442,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
       {!resolved && (
         <div
-          className={`grid gap-2 sm:gap-3 ${primaryCards.length === 1 ? "sm:max-w-xs" : ""}`}
-          style={{ gridTemplateColumns: `repeat(${primaryCards.length}, minmax(0, 1fr))` }}
+          className={`grid gap-2 sm:gap-3 ${
+            primaryCards.length === 1
+              ? "grid-cols-1 sm:max-w-xs"
+              : primaryCards.length === 2
+                ? "grid-cols-2"
+                : primaryCards.length === 3
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : "grid-cols-2 sm:grid-cols-4"
+          }`}
         >
           {primaryCards.map((c) => (
             <PrimaryStat key={c.label} {...c} />

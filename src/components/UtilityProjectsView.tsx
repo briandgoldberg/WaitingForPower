@@ -30,7 +30,7 @@ export function UtilityProjectsView({ projects }: { projects: ProjectDTO[] }) {
       </div>
 
       <div className="h-[55vh] min-h-[320px] lg:h-[460px]">
-        {view === "map" && <Map projects={projects} />}
+        {view === "map" && <Map projects={projects} uniformColor="var(--accent)" smallDots />}
         {/* Rendered (not conditionally mounted) regardless of the active
             view, just hidden via CSS — same crawlability reasoning as
             Explorer.tsx: this is the only place real <a href="/project/..">

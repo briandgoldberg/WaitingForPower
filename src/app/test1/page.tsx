@@ -11,7 +11,14 @@ export const dynamic = "force-dynamic";
 export const metadata = { robots: { index: false, follow: false } };
 
 export default async function Test1Page() {
-  const projects = await queryProjects(toFilterState({}));
+  const full = await queryProjects(toFilterState({}));
+  // Strip the heavy per-project relation arrays before this goes to the
+  // client — neither ProjectList nor Map reads them, and utility grouping
+  // duplicates whatever's left across every utility a project's county
+  // lists (some projects land in 3-5+ groups), so the full objects (with
+  // sources/milestones/statusHistory/hearings/opposition) were blowing the
+  // page's hydration payload up to 13MB+ and stalling the map.
+  const projects = full.map((p) => ({ ...p, sources: [], milestones: [], statusHistory: [], hearings: [], opposition: [] }));
   const utilityGroups = groupProjectsByUtility(projects);
 
   return (

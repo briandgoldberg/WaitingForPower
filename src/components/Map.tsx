@@ -50,7 +50,7 @@ const APPROX_MESSAGE: Record<Exclude<ApproxReason, null>, string> = {
   "state-only": "Approximate location — no site-level location is published for this project; pin is centered on the state.",
 };
 
-function popupHtml(p: ProjectDTO, approx: ApproxReason): string {
+function popupHtml(p: ProjectDTO, approx: ApproxReason, link: { href: string; label: string }): string {
   const capacityLabel = formatCapacity(p.capacityValue, p.capacityUnit);
   return `
     <div style="min-width:220px;font-family:inherit;">
@@ -63,15 +63,27 @@ function popupHtml(p: ProjectDTO, approx: ApproxReason): string {
       </div>
       <div style="padding:10px 14px;font-size:12px;">
         <div><strong>Waiting:</strong> ${p.yearsWaiting != null ? p.yearsWaiting.toFixed(1) + " yrs" : "—"}</div>
-        <a href="/project/${p.slug}" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:underline;">
-          View project →
+        <a href="${link.href}" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:underline;">
+          ${link.label}
         </a>
       </div>
     </div>
   `;
 }
 
-export function Map({ projects }: { projects: ProjectDTO[] }) {
+const DEFAULT_POPUP_LINK = (p: ProjectDTO) => ({ href: `/project/${p.slug}`, label: "View project →" });
+
+export function Map({
+  projects,
+  popupLink = DEFAULT_POPUP_LINK,
+}: {
+  projects: ProjectDTO[];
+  // Lets a caller whose `projects` aren't real projects (e.g. the Utility
+  // Company dimension's one-synthetic-marker-per-utility set — see
+  // utilityMarkerProjects) point each marker's popup link somewhere other
+  // than /project/{slug}, which wouldn't resolve for a synthetic entry.
+  popupLink?: (p: ProjectDTO) => { href: string; label: string };
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -192,7 +204,7 @@ export function Map({ projects }: { projects: ProjectDTO[] }) {
           popupRef.current?.remove();
           popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "260px" })
             .setLngLat(lonLat)
-            .setHTML(popupHtml(p, approx))
+            .setHTML(popupHtml(p, approx, popupLink(p)))
             .addTo(map);
         });
 

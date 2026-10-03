@@ -79,14 +79,14 @@ export function groupProjectsByUtility(projects: ProjectDTO[], opts: { minCount?
 
 // One synthetic marker per utility, reusing the real Map component as-is —
 // filled with every ProjectDTO field it doesn't need (null/empty) so the
-// type checks without a cast. The marker's own popup still links to
-// /project/{slug} (Map's one hardcoded link target), which doesn't resolve
-// for this synthetic slug — the real "view this utility" link lives outside
-// the map, in the service-area list/accordion's "Full page" links instead.
+// type checks without a cast. `slug` is the real utility slug (not an
+// index) so Map's `popupLink` prop can point the marker's popup at
+// /utility/{slug} instead of its default /project/{slug} — see Explorer.tsx
+// and StateProjectExplorer.tsx for where that's wired up.
 export function utilityMarkerProjects(groups: UtilityGroup[]): ProjectDTO[] {
-  return groups.map((g, i) => ({
-    id: `utility-${i}`,
-    slug: `utility-${i}`,
+  return groups.map((g) => ({
+    id: `utility-${g.slug}`,
+    slug: g.slug,
     name: g.utility,
     projectType: "generation",
     fuelType: "other",

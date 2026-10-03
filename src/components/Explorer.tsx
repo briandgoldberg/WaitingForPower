@@ -143,7 +143,15 @@ export function Explorer({
           <FilterPanel filters={filters} onChange={setFilters} projects={projects} />
         </div>
         <div className="h-[65vh] min-h-[380px] lg:h-[560px]">
-          {view === "map" && <Map projects={dimension === "project" ? filtered : utilityMarkerProjects(utilityGroups)} />}
+          {view === "map" &&
+            (dimension === "project" ? (
+              <Map projects={filtered} />
+            ) : (
+              <Map
+                projects={utilityMarkerProjects(utilityGroups)}
+                popupLink={(p) => ({ href: `/utility/${p.slug}`, label: "View utility →" })}
+              />
+            ))}
           {/* Both lists are rendered (not conditionally mounted) regardless
               of the active view/dimension, just hidden via CSS otherwise —
               this is the only place real <a href="/project/slug"> and

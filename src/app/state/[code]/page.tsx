@@ -5,7 +5,7 @@ import { queryProjects, toFilterState } from "@/lib/queryProjects";
 import { computeAggregateStats } from "@/lib/stats";
 import { STATE_NAMES, splitStateCodes, stateName } from "@/lib/data/usStates";
 import { StatsHeader } from "@/components/StatsHeader";
-import { ProjectList } from "@/components/ProjectList";
+import { StateProjectExplorer } from "@/components/StateProjectExplorer";
 import { buildBreadcrumbJsonLd } from "@/lib/seo/breadcrumbs";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { prisma } from "@/lib/db";
@@ -128,7 +128,7 @@ export default async function StatePage({ params }: { params: Promise<{ code: st
       />
 
       {projects.length > 0 ? (
-        <ProjectList projects={projects} />
+        <StateProjectExplorer projects={projects} />
       ) : (
         <p className="text-sm text-[var(--muted)]">
           No projects are currently tracked as waiting in {name}.{" "}

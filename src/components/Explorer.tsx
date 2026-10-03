@@ -5,10 +5,13 @@ import dynamic from "next/dynamic";
 import type { ProjectDTO } from "@/lib/types";
 import { DEFAULT_FILTERS, buildChips, hasActiveFilters, matchesFilters, type FilterState } from "@/lib/filters";
 import { computeAggregateStats } from "@/lib/stats";
+import { groupProjectsByUtility, utilityMarkerProjects } from "@/lib/utilityGrouping";
 import { StatsHeader } from "@/components/StatsHeader";
 import { FilterPanel } from "@/components/FilterPanel";
 import { ProjectList } from "@/components/ProjectList";
 import { StateDirectory } from "@/components/StateDirectory";
+import { UtilityAccordion } from "@/components/UtilityAccordion";
+import { UtilityDirectory } from "@/components/UtilityDirectory";
 import { ChangesFeed } from "@/components/ChangesFeed";
 import type { ProjectChangeDTO } from "@/lib/types";
 
@@ -34,12 +37,18 @@ export function Explorer({
 }) {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [view, setView] = useState<"map" | "list" | "feed">("map");
+  const [dimension, setDimension] = useState<"project" | "service-area">("project");
   const [panelOpen, setPanelOpen] = useState(false);
 
   const filtered = useMemo(
     () => projects.filter((p) => matchesFilters(p, filters)),
     [projects, filters],
   );
+
+  // Respects the active filters, same set the Map/List views already show —
+  // so narrowing to e.g. one fuel type also narrows what each utility group
+  // contains.
+  const utilityGroups = useMemo(() => groupProjectsByUtility(filtered), [filtered]);
 
   // The Feed view filters client-side to whatever the map/list are already
   // showing — see ChangesFeed's `filterSlugs` prop comment for why this
@@ -62,6 +71,22 @@ export function Explorer({
       <StatsHeader stats={stats} exampleProject={exampleProject} status={filters.status} />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 rounded-lg border-2 border-[var(--accent)] p-1 bg-[var(--panel)]">
+            <span className="px-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Show by</span>
+            <button
+              onClick={() => setDimension("project")}
+              className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "project" ? "bg-[var(--accent)] text-white" : ""}`}
+            >
+              Project
+            </button>
+            <button
+              onClick={() => setDimension("service-area")}
+              className={`px-3 py-1 text-sm rounded-md font-medium ${dimension === "service-area" ? "bg-[var(--accent)] text-white" : ""}`}
+            >
+              Service Area
+            </button>
+          </div>
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)]">
           <button
             onClick={() => setView("map")}
@@ -81,6 +106,7 @@ export function Explorer({
           >
             Feed
           </button>
+          </div>
         </div>
         <button
           onClick={() => setPanelOpen(!panelOpen)}
@@ -117,21 +143,24 @@ export function Explorer({
           <FilterPanel filters={filters} onChange={setFilters} projects={projects} />
         </div>
         <div className="h-[65vh] min-h-[380px] lg:h-[560px]">
-          {view === "map" && <Map projects={filtered} />}
-          {/* Rendered (not conditionally mounted) regardless of the active
-              view, just hidden via CSS when the map is showing — this is
-              the only place a real <a href="/project/slug"> exists anywhere
-              on the site, and "map" is the default view, so a JS-executing
-              crawler that never clicks the "List" toggle would otherwise
-              never see a single real link to any of the ~3,600 project
-              pages, leaving sitemap.xml as their only discovery path.
-              Confirmed live 2026-09-06: Search Console reported ~1,955
-              project pages "Discovered - currently not indexed", and the
-              server-rendered /projects HTML had 0 links matching
-              href="/project/" despite embedding full data for every
-              project — this is why. */}
-          <div className={view === "list" ? "h-full overflow-y-auto" : "hidden"}>
+          {view === "map" && <Map projects={dimension === "project" ? filtered : utilityMarkerProjects(utilityGroups)} />}
+          {/* Both lists are rendered (not conditionally mounted) regardless
+              of the active view/dimension, just hidden via CSS otherwise —
+              this is the only place real <a href="/project/slug"> and
+              <a href="/utility/slug"> links exist anywhere on the site, and
+              "map"/"project" are the defaults, so a JS-executing crawler
+              that never clicks either toggle would otherwise never see a
+              single real link to any project or utility page, leaving
+              sitemap.xml as their only discovery path. Confirmed live
+              2026-09-06: Search Console reported ~1,955 project pages
+              "Discovered - currently not indexed", and the server-rendered
+              /projects HTML had 0 links matching href="/project/" despite
+              embedding full data for every project — this is why. */}
+          <div className={view === "list" && dimension === "project" ? "h-full overflow-y-auto" : "hidden"}>
             <ProjectList projects={filtered} />
+          </div>
+          <div className={view === "list" && dimension === "service-area" ? "h-full overflow-y-auto" : "hidden"}>
+            <UtilityAccordion groups={utilityGroups} projects={filtered} />
           </div>
           <div className={view === "feed" ? "h-full overflow-y-auto" : "hidden"}>
             <ChangesFeed
@@ -145,7 +174,7 @@ export function Explorer({
         </div>
       </div>
 
-      <StateDirectory projects={projects} />
+      {dimension === "project" ? <StateDirectory projects={projects} /> : <UtilityDirectory projects={projects} />}
     </div>
   );
 }

@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db";
 import { splitStateCodes } from "@/lib/data/usStates";
 import { statusBucketForProject, type ProjectStage } from "@/lib/data/taxonomies";
 import { BLOG_POSTS } from "@/lib/data/blogPosts";
+import { queryProjects, toFilterState } from "@/lib/queryProjects";
+import { DEFAULT_FILTERS } from "@/lib/filters";
+import { groupProjectsByUtility } from "@/lib/utilityGrouping";
 
 const BASE_URL = "https://waitingforpower.com";
 
@@ -25,6 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: BASE_URL, changeFrequency: "weekly", priority: 1 },
     { url: `${BASE_URL}/projects`, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE_URL}/states`, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${BASE_URL}/utilities`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE_URL}/blog`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${BASE_URL}/policies`, changeFrequency: "monthly", priority: 0.6 },
     // Individual topic threads (/board/{id}) are deliberately not enumerated
@@ -84,5 +88,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...projectRoutes, ...stateRoutes, ...oppositionRoutes, ...blogRoutes];
+  // One page per utility service territory with at least a few waiting
+  // projects (same noise floor as the /utilities hub and the /projects
+  // service-area directory) — a utility below that floor still has a real
+  // page (see /utility/[slug]'s own minCount: 1 lookup), just not submitted
+  // here to avoid pushing thin-content URLs into the reindex.
+  const utilityProjects = await queryProjects(toFilterState(DEFAULT_FILTERS));
+  const utilityRoutes: MetadataRoute.Sitemap = groupProjectsByUtility(utilityProjects).map((g) => ({
+    url: `${BASE_URL}/utility/${g.slug}`,
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }));
+
+  return [...staticRoutes, ...projectRoutes, ...stateRoutes, ...oppositionRoutes, ...blogRoutes, ...utilityRoutes];
 }

@@ -163,6 +163,26 @@ function statusToStage(code: string): ProjectStage {
   }
 }
 
+// EIA's own short codes for the organized ISOs/RTOs — LBNL's Queued Up
+// dataset (src/lib/ingest/lbnlQueuedUp.ts) reports the same entities under
+// their common public names instead (ERCOT, not ERCO), which left this
+// field holding two spellings of the same grid region depending on which
+// source last wrote a project. Normalized to the common name so "Grid
+// region" reads the same regardless of source, and so anything keyed off
+// this field (e.g. a future per-region calculation) doesn't have to handle
+// both spellings. Every other balancing authority code here is a genuinely
+// distinct utility, left as EIA reports it.
+const BALANCING_AUTHORITY_ALIASES: Record<string, string> = {
+  ERCO: "ERCOT",
+  CISO: "CAISO",
+  SWPP: "SPP",
+  ISNE: "ISO-NE",
+  NYIS: "NYISO",
+};
+function normalizeBalancingAuthority(code: string): string {
+  return BALANCING_AUTHORITY_ALIASES[code] ?? code;
+}
+
 interface PlannedRow {
   [column: string]: string | number | null;
 }
@@ -263,7 +283,7 @@ export function normalizeEiaPlannedRow(row: PlannedRow, fieldMap: FieldMap): Nor
     dataQualityNote: `No application-filed date is published by EIA-860M, so days/years waiting cannot be computed until one is added via manual override — only a planned operation date (${plannedOperation}) is available.`,
     // The owning utility/developer — see Project.applicant's schema comment.
     applicant: get("entityName") ? String(get("entityName")) : null,
-    balancingAuthority: get("balancingAuthorityCode") ? String(get("balancingAuthorityCode")) : null,
+    balancingAuthority: get("balancingAuthorityCode") ? normalizeBalancingAuthority(String(get("balancingAuthorityCode"))) : null,
     ownerSector: get("sector") ? String(get("sector")) : null,
     netSummerCapacityMw: Number(get("netSummerCapacityMw") ?? NaN) || null,
     netWinterCapacityMw: Number(get("netWinterCapacityMw") ?? NaN) || null,

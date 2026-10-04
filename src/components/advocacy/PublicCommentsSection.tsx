@@ -7,6 +7,7 @@ import { FUEL_TYPES, FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxon
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { ruleForState, commentScore, isPublicHearing } from "@/lib/advocacyActions";
 import { formatHearingDate } from "@/lib/hearingTime";
+import { OPEN_FEEDBACK_EVENT } from "@/components/FeedbackWidget";
 
 const PAGE_SIZE = 20;
 
@@ -40,10 +41,13 @@ export function PublicCommentsSection({
     return FUEL_TYPES.filter((f) => present.has(f.value));
   }, [projects]);
 
-  // Only ever score-3, confirmed-open projects make it onto this tab — see
-  // commentScore in lib/advocacyActions.ts. This page's whole point is "can
-  // I actually comment on this right now," so a maybe/unlikely/unknown
-  // project would just waste someone's time.
+  // Score 2 ("maybe accepting" — genuinely unknown, not confirmed either
+  // way) and score 3 (confirmed open) both make it onto this tab — see
+  // commentScore in lib/advocacyActions.ts. Score 0/1 (confirmed closed, or
+  // leaning closed because a decision is pending with no confirmed state
+  // rule) are still excluded; those are more likely wasted trips than not.
+  // Since score 2 isn't confirmed, the page carries a disclaimer below
+  // rather than presenting every card as a sure thing.
   const rows = useMemo(
     () =>
       projects
@@ -61,7 +65,7 @@ export function PublicCommentsSection({
           );
           return { p, rule, score, publicHearing };
         })
-        .filter((r) => r.score === 3),
+        .filter((r) => r.score >= 2),
     [projects],
   );
 
@@ -88,6 +92,13 @@ export function PublicCommentsSection({
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Submit a public comment, right now.</h2>
+      <p className="text-xs text-[var(--muted)] -mt-1.5">
+        We do our best to confirm each comment period is actually open. If one of these isn&rsquo;t, please{" "}
+        <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_FEEDBACK_EVENT))} className="underline">
+          let us know
+        </button>
+        .
+      </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <input

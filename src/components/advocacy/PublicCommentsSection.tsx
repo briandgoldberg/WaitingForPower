@@ -71,7 +71,6 @@ export function PublicCommentsSection({
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Submit a public comment, right now.</h2>
-      <p className="text-sm text-[var(--text-secondary)] max-w-2xl">Pick a project below and follow the steps on its card.</p>
 
       <div className="flex flex-wrap items-center gap-2">
         <input

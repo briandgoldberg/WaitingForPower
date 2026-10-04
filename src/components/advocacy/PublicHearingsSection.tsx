@@ -144,7 +144,7 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
               <article key={i} className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 flex flex-col gap-4 min-w-0 shadow-sm">
                 <div className="flex items-start gap-4">
                   <div className="shrink-0 w-16 rounded-xl overflow-hidden border border-[var(--border)] text-center">
-                    <div className="bg-[var(--accent-2)] text-white text-xs font-bold uppercase py-1">{when.month}</div>
+                    <div className="bg-emerald-600 text-white text-xs font-bold uppercase py-1">{when.month}</div>
                     <div className="text-3xl font-bold leading-tight pt-0.5">{when.day}</div>
                     <div className="text-[11px] text-[var(--muted)] pb-1">{when.weekday}</div>
                   </div>

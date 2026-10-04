@@ -103,14 +103,14 @@ export function AttendHearingBox({
     }
   };
 
-  const linkClass = "rounded-full border border-amber-400/70 dark:border-amber-600/70 px-2.5 py-1 font-medium text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/40";
+  const linkClass = "rounded-full border border-emerald-400/70 dark:border-emerald-600/70 px-2.5 py-1 font-medium text-emerald-900 dark:text-emerald-300 hover:bg-emerald-200/60 dark:hover:bg-emerald-900/40";
 
   const trigger = compact ? (
     <button
       type="button"
       onClick={onBoxClick}
       aria-expanded={open}
-      className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-2)] px-4 py-2 text-sm font-semibold text-white dark:text-gray-900 hover:opacity-90 transition-opacity"
+      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
     >
       <span aria-hidden>📅</span> Add to calendar
     </button>
@@ -120,13 +120,13 @@ export function AttendHearingBox({
       onClick={onBoxClick}
       aria-expanded={open}
       title="Add to your calendar"
-      className="w-full text-left rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/35 px-3 py-2.5 flex gap-2.5 cursor-pointer transition-colors"
+      className="w-full text-left rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/35 px-3 py-2.5 flex gap-2.5 cursor-pointer transition-colors"
     >
       <span aria-hidden className="w-4 shrink-0 text-center">
         📅
       </span>
       <div className="min-w-0 flex-1">
-        <div className="font-semibold text-amber-800 dark:text-amber-400">
+        <div className="font-semibold text-emerald-800 dark:text-emerald-400">
           Attend and speak
           <span className="ml-2 font-medium underline">Add to calendar</span>
         </div>
@@ -143,7 +143,7 @@ export function AttendHearingBox({
   const indent = compact ? "px-0 pt-2" : "px-3 pl-9";
 
   return (
-    <div className={compact ? "text-xs" : "rounded-lg border-l-4 border-amber-400 dark:border-amber-600 bg-amber-100/70 dark:bg-amber-900/20 text-xs"}>
+    <div className={compact ? "text-xs" : "rounded-lg border-l-4 border-emerald-400 dark:border-emerald-600 bg-emerald-100/70 dark:bg-emerald-900/20 text-xs"}>
       {trigger}
 
       {justAdded && !open && saved && (

@@ -14,6 +14,15 @@ function toggle<T>(arr: T[], value: T): T[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
 }
 
+// Speaking at a hearing belongs on the Public Hearings tab, not here —
+// every real howToComment string that mentions it does so as a trailing
+// ", or speak at ... hearing/session/meeting." clause (confirmed against
+// every state in stateCommentRules.ts), so it can be safely dropped by
+// pattern rather than needing a rewrite of the underlying data.
+function stripSpeakAtHearing(text: string): string {
+  return text.replace(/,?\s*or speak at\b[^.]*\.?\s*$/i, ".").trim();
+}
+
 export function PublicCommentsSection({
   projects,
   initialFuelFilter = [],
@@ -179,7 +188,7 @@ export function PublicCommentsSection({
                     </p>
                   )
                 )}
-                {rule?.howToComment && <p className="text-sm text-[var(--text-secondary)]">{rule.howToComment}</p>}
+                {rule?.howToComment && <p className="text-sm text-[var(--text-secondary)]">{stripSpeakAtHearing(rule.howToComment)}</p>}
                 {rule?.commentUrl && (
                   <a
                     href={rule.commentUrl}

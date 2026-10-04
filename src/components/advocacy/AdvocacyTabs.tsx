@@ -2,18 +2,20 @@
 
 import { useState, type ReactNode } from "react";
 
-export type AdvocacyTab = "national" | "hearings" | "comments";
+export type AdvocacyTab = "national" | "hearings" | "comments" | "read-comments";
 
 export function AdvocacyTabs({
   defaultTab,
   nationalAdvocacy,
   publicHearings,
   publicComments,
+  readPublicComments,
 }: {
   defaultTab: AdvocacyTab;
   nationalAdvocacy: ReactNode;
   publicHearings: ReactNode;
   publicComments: ReactNode;
+  readPublicComments: ReactNode;
 }) {
   const [tab, setTab] = useState<AdvocacyTab>(defaultTab);
 
@@ -27,13 +29,17 @@ export function AdvocacyTabs({
           Public Hearings
         </TabButton>
         <TabButton active={tab === "comments"} onClick={() => setTab("comments")}>
-          Public Comments
+          Submit Public Comments
+        </TabButton>
+        <TabButton active={tab === "read-comments"} onClick={() => setTab("read-comments")}>
+          Read Public Comments
         </TabButton>
       </div>
 
       <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
       <div hidden={tab !== "hearings"}>{publicHearings}</div>
       <div hidden={tab !== "comments"}>{publicComments}</div>
+      <div hidden={tab !== "read-comments"}>{readPublicComments}</div>
     </div>
   );
 }

@@ -2,8 +2,17 @@ import type { ProjectDTO } from "@/lib/types";
 import { splitStateCodes, stateName } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 import { isPublicHearing, ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
+import { AttendHearingBox } from "@/components/advocacy/AttendHearingBox";
 
 const MAX_STATES_SHOWN = 4;
+
+export interface TakeActionComment {
+  id: string;
+  filedDate: string; // ISO
+  filerName: string | null;
+  title: string;
+  sourceUrl: string;
+}
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
@@ -32,12 +41,25 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 // upcoming hearings and comment windows (or, for a project that already has
 // its answer, just the regulators) — the docket link itself is shown at the
 // top of the project page now, not repeated here.
-export function TakeActionSection({ project: p, nowMs, resolved }: { project: ProjectDTO; nowMs: number; resolved: boolean }) {
+export function TakeActionSection({
+  project: p,
+  nowMs,
+  resolved,
+  publicComments = [],
+}: {
+  project: ProjectDTO;
+  nowMs: number;
+  resolved: boolean;
+  // Real, individually-filed public comments on this project's docket —
+  // see src/lib/ingest/caCecComments.ts. Like milestones: shown only when
+  // there are any, silent otherwise.
+  publicComments?: TakeActionComment[];
+}) {
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
     .slice(0, MAX_STATES_SHOWN);
-  // Same scoring the Advocate > Projects tab uses, so a project reads the
-  // same way in both places — see src/lib/advocacyActions.ts.
+  // Same scoring the Advocate > Submit Public Comments tab uses, so a
+  // project reads the same way in both places — see src/lib/advocacyActions.ts.
   const rule = ruleForState(p.state);
   const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
 
@@ -64,13 +86,44 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
     </Column>
   );
 
+  // Like milestones: nothing rendered at all when there's nothing to show,
+  // not an empty-state message.
+  const commentsBlock = publicComments.length > 0 && (
+    <div>
+      <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">Public comments</h3>
+      <ul className="flex flex-col gap-2.5 text-sm">
+        {publicComments.map((c) => (
+          <li key={c.id} className="text-[var(--text-secondary)]">
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-medium text-[var(--foreground)]">{c.filerName ?? "Anonymous filer"}</span>
+              <span className="shrink-0 text-xs text-[var(--muted)]">{fmt(c.filedDate)}</span>
+            </div>
+            <div>{c.title}</div>
+            <a href={c.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--accent)] underline">
+              View filing →
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
   // A project that already has its answer has no hearings or comment window
-  // to act on, so it gets a plain reference block instead of Take action.
+  // to act on, so it gets a plain reference block instead of Take action —
+  // comments stay, though, since they're historical record regardless.
   if (resolved) {
-    return contactColumn;
+    return (
+      <div className="flex flex-col gap-4">
+        {contactColumn}
+        {commentsBlock}
+      </div>
+    );
   }
 
+  const upcomingPublicHearings = p.hearings.filter((h) => isPublicHearing(h) && new Date(h.endDate ?? h.date).getTime() >= nowMs);
+
   return (
+    <div className="flex flex-col gap-5">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {contactColumn}
 
@@ -84,6 +137,23 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
 
           <div className="mt-3 pt-3 border-t border-[var(--border)]">
             <h4 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-1">Hearings</h4>
+
+            {upcomingPublicHearings.length > 0 && (
+              <div className="mb-2.5">
+                <AttendHearingBox
+                  compact
+                  hearings={upcomingPublicHearings.map((h) => ({ date: h.date, label: h.label, location: h.location }))}
+                  ctx={{
+                    projectName: p.name,
+                    projectUrl: `https://waitingforpower.com/project/${p.slug}`,
+                    detailsUrl: p.hearingDetailsLink && /^https?:\/\//.test(p.hearingDetailsLink) ? p.hearingDetailsLink : null,
+                  }}
+                  slug={p.slug}
+                  state={p.state}
+                />
+              </div>
+            )}
+
             {p.hearings.length > 0 ? (
               <ul className="flex flex-col gap-2.5 text-sm text-[var(--text-secondary)]">
                 {p.hearings.map((h, i) => {
@@ -128,5 +198,7 @@ export function TakeActionSection({ project: p, nowMs, resolved }: { project: Pr
           </div>
         </Column>
       </div>
+      {commentsBlock && <div className="pt-4 border-t border-[var(--border)]">{commentsBlock}</div>}
+    </div>
   );
 }

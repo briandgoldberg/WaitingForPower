@@ -25,14 +25,15 @@ export function ReadPublicCommentsSection({ comments, total }: { comments: Reada
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">See what people are telling regulators.</h2>
-      <p className="text-sm text-[var(--text-secondary)] max-w-2xl">
-        {total.toLocaleString("en-US")} real public comments pulled from project docket filings, newest first. Not
-        every state&rsquo;s docket system is covered yet.
-      </p>
 
       {comments.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">No comments ingested yet — check back soon.</p>
+        <p className="text-sm text-[var(--muted)]">Coming soon!</p>
       ) : (
+        <>
+        <p className="text-sm text-[var(--text-secondary)] max-w-2xl">
+          {total.toLocaleString("en-US")} real public comments pulled from project docket filings, newest first. Not
+          every state&rsquo;s docket system is covered yet.
+        </p>
         <ul className="flex flex-col gap-2.5">
           {comments.map((c) => {
             const stateLabel = splitStateCodes(c.projectState).map((code) => STATE_NAMES[code] ?? code).join(", ");
@@ -56,6 +57,7 @@ export function ReadPublicCommentsSection({ comments, total }: { comments: Reada
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );

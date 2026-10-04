@@ -179,8 +179,8 @@ export function PublicCommentsSection({
                     href={rule.commentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 self-start min-h-[44px] rounded-full text-white font-bold px-5 text-sm mt-1 hover:opacity-90"
-                    style={{ background: "#1e3a5f" }}
+                    className="inline-flex items-center justify-center gap-1.5 self-start min-h-[44px] rounded-full font-bold px-5 text-sm mt-1 hover:opacity-90"
+                    style={{ background: "#1e3a5f", color: "#ffffff" }}
                   >
                     Submit a public comment →
                   </a>

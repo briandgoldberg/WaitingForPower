@@ -56,6 +56,11 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
 
   const totalHomesPowered = stillWaitingProjects.reduce((sum, p) => sum + (homesPowered(p.fuelType, p.capacityValue, p.capacityUnit) ?? 0), 0);
 
+  const cleanHomesPowered = stillWaitingProjects.reduce((sum, p) => {
+    if (!ZERO_CARBON_FUELS.includes(p.fuelType)) return sum;
+    return sum + (homesPowered(p.fuelType, p.capacityValue, p.capacityUnit) ?? 0);
+  }, 0);
+
   return {
     totalProjects: realProjects.length,
     totalCapacityMw,
@@ -65,5 +70,6 @@ export function computeAggregateStats(projects: ProjectDTO[]): AggregateStats {
     cleanCapacityProjectCount,
     generationCapacityMw,
     homesPowered: totalHomesPowered,
+    cleanHomesPowered,
   };
 }

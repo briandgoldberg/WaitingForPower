@@ -2,8 +2,6 @@ import Link from "next/link";
 import { getStorageHearings, type SpeakUpHearing } from "@/lib/homeHighlights";
 import { SpeakUpHearings } from "@/components/home/SpeakUpHearings";
 import { UtilitySearchSection } from "@/components/home/UtilitySearchSection";
-import { queryProjects, toFilterState } from "@/lib/queryProjects";
-import { homesPowered, formatHomes } from "@/lib/calc/homesPowered";
 
 export const dynamic = "force-dynamic";
 
@@ -63,21 +61,6 @@ export default async function HomePage({
     console.error("Home highlights failed:", err);
   }
 
-  // Same homesPowered methodology as StatsHeader, scoped to pending solar
-  // only, for the hero's headline stat — computed live rather than
-  // hardcoded so it stays accurate as the dataset changes.
-  let solarHomesText = "millions of homes";
-  try {
-    const solarProjects = await queryProjects(toFilterState({ fuelType: ["solar"] }));
-    const solarHomes = solarProjects.reduce((sum, p) => {
-      if (p.isAggregateExample) return sum;
-      return sum + (homesPowered(p.fuelType, p.capacityValue, p.capacityUnit) ?? 0);
-    }, 0);
-    if (solarHomes > 0) solarHomesText = formatHomes(solarHomes).replace("≈ ", "about ");
-  } catch (err) {
-    console.error("Home hero solar stat failed:", err);
-  }
-
   return (
     <>
       <script
@@ -114,7 +97,7 @@ export default async function HomePage({
             Energy Permitting Reform
           </span>
           <p className="text-xl sm:text-3xl font-bold tracking-tight leading-tight max-w-3xl">
-            <span className="text-[#f2b866]">Solar projects stuck in permitting could power {solarHomesText}.</span>
+            <span className="text-[#f2b866]">Solar projects stuck in permitting could power 100,000,000+ homes.</span>
           </p>
           <Link
             href="/policies?tab=project&fuel=solar,storage"

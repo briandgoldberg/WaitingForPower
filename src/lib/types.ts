@@ -177,4 +177,10 @@ export interface AggregateStats {
   cleanCapacityProjectCount: number; // how many of totalProjects are zero-carbon generation with MW capacity
   generationCapacityMw: number; // MW of projects that generate power (excludes storage, transmission, LNG, pipelines)
   homesPowered: number; // approximate homes the waiting generation capacity could power (see calc/homesPowered.ts)
+  // Of homesPowered, the portion attributable to zero-carbon generation —
+  // NOT the same ratio as totalCleanCapacityMw/generationCapacityMw: clean
+  // capacity is mostly solar/wind, whose capacity factors (23%/33%) run well
+  // below gas's (45%), so clean's share of raw MW overstates its share of
+  // actual power delivered. This is the generation-weighted figure.
+  cleanHomesPowered: number;
 }

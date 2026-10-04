@@ -5,7 +5,6 @@ import Link from "next/link";
 import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { FUEL_TYPES, FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
-import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 import { ruleForState, commentScore } from "@/lib/advocacyActions";
 import { formatHearingDate } from "@/lib/hearingTime";
 
@@ -134,7 +133,6 @@ export function PublicCommentsSection({
         {filtered.slice(0, visible).map(({ p, rule }) => {
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
-          const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
           return (
             <div
               key={p.slug}
@@ -184,22 +182,6 @@ export function PublicCommentsSection({
                     Submit a public comment →
                   </a>
                 )}
-              </div>
-
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                {p.docketUrl && (
-                  <a href={p.docketUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
-                    Docket
-                  </a>
-                )}
-                {regulator && (
-                  <a href={regulator.contactUrl ?? regulator.website} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
-                    Contact regulator
-                  </a>
-                )}
-                <Link href={`/project/${p.slug}`} className="font-semibold text-[var(--accent)] underline">
-                  Project details
-                </Link>
               </div>
             </div>
           );

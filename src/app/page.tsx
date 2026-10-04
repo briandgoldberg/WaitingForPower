@@ -96,11 +96,14 @@ export default async function HomePage({
           <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[#f2b866]">
             Energy Permitting Reform
           </span>
-          <p className="text-xl sm:text-3xl font-bold tracking-tight leading-tight max-w-3xl">
-            <span className="text-[#f2b866]">Solar projects stuck in permitting could power 100,000,000+ homes.</span>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-tight lg:whitespace-nowrap">
+            <span className="text-[#f2b866]">
+              Solar projects stuck in permitting could power{" "}
+              <span className="text-white underline decoration-2 underline-offset-4">100,000,000+ homes</span>.
+            </span>
           </p>
           <Link
-            href="/policies?tab=project&fuel=solar,storage"
+            href="/policies?tab=comments&fuel=solar,storage"
             className="inline-flex items-center justify-center gap-1.5 self-stretch sm:self-start min-h-[52px] rounded-full px-8 text-base font-bold shadow-lg transition-transform hover:scale-[1.03]"
             style={{ background: "#f2b866", color: "#0b1b2e" }}
           >

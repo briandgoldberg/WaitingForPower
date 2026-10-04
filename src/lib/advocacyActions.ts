@@ -1,5 +1,5 @@
 // Shared "can I act on this project" logic for the two places that show it:
-// the Advocate > Projects tab (src/components/advocacy/ProjectAdvocacySection.tsx)
+// the Advocate > Public Comments tab (src/components/advocacy/PublicCommentsSection.tsx)
 // and a single project's own Take action pill
 // (src/components/project/TakeActionSection.tsx). Kept in one place so the
 // two never drift apart on what counts as a public hearing or an open
@@ -35,11 +35,17 @@ export interface CommentScoreInput {
 
 // 0 confirmed closed, 1 decision pending with no confirmed state rule (leans
 // closed, but we don't claim to know why), 2 genuinely unknown, 3 confirmed
-// open. See matchesBucket in ProjectAdvocacySection for how this partitions
-// the Advocate > Projects filter.
+// open. Used both for TakeActionSection's status line and to build the
+// Advocate > Public Comments list, which only ever shows score-3 projects.
 export function commentScore(p: CommentScoreInput, rule: StateCommentRule | undefined): number {
   const closedRule = rule?.recordRule === "closes_at_hearing";
   const openRule = rule?.recordRule === "open_until_decision";
+  // "varies" still means the state DOES take public comments — it's only
+  // the deadline that's case-by-case, unlike "unknown" where we never
+  // confirmed a comment process exists at all. Treated the same as
+  // closedRule below: a real, confirmed comment mechanism plus a scheduled
+  // hearing is good evidence the window is open right now.
+  const variesRule = rule?.recordRule === "varies";
   const decisionNext = p.reviewStep === "Awaiting commission order";
 
   if (p.commentDeadline) return 3;
@@ -47,7 +53,7 @@ export function commentScore(p: CommentScoreInput, rule: StateCommentRule | unde
   if (decisionNext && openRule) return 3;
   if (decisionNext) return 1;
   if (openRule) return 3;
-  if (closedRule && p.hearingCount > 0) return 3;
+  if ((closedRule || variesRule) && p.hearingCount > 0) return 3;
   return 2;
 }
 

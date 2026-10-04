@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { AdvocacyTabs, type AdvocacyTab } from "@/components/advocacy/AdvocacyTabs";
 import { NationalAdvocacySection } from "@/components/advocacy/NationalAdvocacySection";
-import { ProjectAdvocacySection } from "@/components/advocacy/ProjectAdvocacySection";
+import { PublicHearingsSection } from "@/components/advocacy/PublicHearingsSection";
+import { PublicCommentsSection } from "@/components/advocacy/PublicCommentsSection";
 import { getAdvocacyProjects } from "@/lib/advocacyProjects";
 
 export const dynamic = "force-dynamic";
@@ -9,33 +10,25 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Advocacy — WaitingForPower",
   description:
-    "Push for faster energy permitting: national policies, the projects that have waited longest, and real public hearings you can attend.",
+    "Push for faster energy permitting: email Congress, attend a public hearing, or submit a public comment on a project waiting right now.",
   alternates: {
     canonical: "/policies",
     types: { "application/rss+xml": "/hearings.rss" },
   },
 };
 
-const TABS: AdvocacyTab[] = ["project", "national"];
-
-// Lets a link elsewhere on the site (e.g. the home page) land directly on one
-// of the Projects tab's comment-likelihood buckets — see SHORT_LIKELIHOOD_LABELS
-// and BUCKET_SCORE in ProjectAdvocacySection for what each bucket shows.
-const COMMENT_BUCKETS: Record<string, number> = { all: 0, unlikely: 1, maybe: 2, confirmed: 3 };
+const TABS: AdvocacyTab[] = ["national", "hearings", "comments"];
 
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; comments?: string; upcoming?: string; fuel?: string }>;
+  searchParams: Promise<{ tab?: string; fuel?: string }>;
 }) {
-  const { tab, comments, upcoming, fuel } = await searchParams;
-  // The old Public Hearings tab was folded into Projects.
+  const { tab, fuel } = await searchParams;
   const defaultTab = TABS.find((t) => t === tab) ?? "national";
-  const initialBucket = comments ? (COMMENT_BUCKETS[comments] ?? 0) : 0;
-  const initialUpcomingOnly = upcoming === "1";
   // Lets a link elsewhere on the site (e.g. the home page's "Advocate for
-  // Solar Projects") land on this tab pre-filtered to one or more fuel
-  // types — see ProjectAdvocacySection's own Fuel/technology filter.
+  // Solar Projects") land on the Public Comments tab pre-filtered to one or
+  // more fuel types — see PublicCommentsSection's own Fuel/technology filter.
   const initialFuelFilter = fuel ? fuel.split(",").map((f) => f.trim()).filter(Boolean) : [];
   const advocacyProjects = await getAdvocacyProjects();
 
@@ -44,14 +37,8 @@ export default async function PoliciesPage({
       <AdvocacyTabs
         defaultTab={defaultTab}
         nationalAdvocacy={<NationalAdvocacySection />}
-        projectAdvocacy={
-          <ProjectAdvocacySection
-            projects={advocacyProjects}
-            initialBucket={initialBucket}
-            initialUpcomingOnly={initialUpcomingOnly}
-            initialFuelFilter={initialFuelFilter}
-          />
-        }
+        publicHearings={<PublicHearingsSection projects={advocacyProjects} />}
+        publicComments={<PublicCommentsSection projects={advocacyProjects} initialFuelFilter={initialFuelFilter} />}
       />
     </div>
   );

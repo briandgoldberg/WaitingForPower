@@ -38,7 +38,7 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
         </p>
         <p className="text-sm sm:text-base text-[var(--text-secondary)]">
           Advocate for battery storage at one of the meetings below or{" "}
-          <Link href="/policies?tab=project&upcoming=1" className="font-semibold text-[var(--accent)] underline">
+          <Link href="/policies?tab=hearings" className="font-semibold text-[var(--accent)] underline">
             browse all upcoming public hearing →
           </Link>
         </p>

@@ -52,6 +52,7 @@ type LocationFilter = "all" | "virtual" | "in-person";
 
 export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[] }) {
   const [locationFilter, setLocationFilter] = useState<LocationFilter>("all");
+  const [state, setState] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   const allEntries: Entry[] = useMemo(() => {
@@ -75,10 +76,21 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
     return out.sort((a, b) => a.date.localeCompare(b.date));
   }, [projects]);
 
-  const entries = useMemo(() => {
-    const list = locationFilter === "all" ? allEntries : allEntries.filter((e) => (locationFilter === "virtual" ? e.virtual : !e.virtual));
-    return list;
-  }, [allEntries, locationFilter]);
+  const locationFiltered = useMemo(
+    () => (locationFilter === "all" ? allEntries : allEntries.filter((e) => (locationFilter === "virtual" ? e.virtual : !e.virtual))),
+    [allEntries, locationFilter],
+  );
+
+  const stateOptions = useMemo(() => {
+    const codes = new Set<string>();
+    for (const e of locationFiltered) for (const c of splitStateCodes(e.state)) if (STATE_NAMES[c]) codes.add(c);
+    return [...codes].sort((a, b) => STATE_NAMES[a].localeCompare(STATE_NAMES[b]));
+  }, [locationFiltered]);
+
+  const entries = useMemo(
+    () => (state ? locationFiltered.filter((e) => splitStateCodes(e.state).includes(state)) : locationFiltered),
+    [locationFiltered, state],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,6 +107,7 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
               type="button"
               onClick={() => {
                 setLocationFilter(f);
+                setState("");
                 setVisible(PAGE_SIZE);
               }}
               className={`px-3 py-1 text-sm rounded-md capitalize ${locationFilter === f ? "bg-[var(--accent)] text-white" : ""}`}
@@ -103,6 +116,22 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
             </button>
           ))}
         </div>
+        <select
+          value={state}
+          onChange={(e) => {
+            setState(e.target.value);
+            setVisible(PAGE_SIZE);
+          }}
+          aria-label="Filter by state"
+          className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+        >
+          <option value="">All states</option>
+          {stateOptions.map((c) => (
+            <option key={c} value={c}>
+              {STATE_NAMES[c]}
+            </option>
+          ))}
+        </select>
         <span className="text-xs text-[var(--muted)]">{entries.length} hearings</span>
       </div>
 

@@ -40,7 +40,10 @@ export function PublicCommentsSection({
       projects
         .map((p) => {
           const rule = ruleForState(p.state);
-          const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
+          const score = commentScore(
+            { commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length, hasRecentPublicComment: p.recentPublicCommentDate != null },
+            rule,
+          );
           return { p, rule, score };
         })
         .filter((r) => r.score === 3),
@@ -165,10 +168,16 @@ export function PublicCommentsSection({
                   site. No "accepting comments" badge here — every card on
                   this tab already is, by definition, so it's just noise. */}
               <div className="flex flex-col gap-1.5">
-                {p.commentDeadline && (
+                {p.commentDeadline ? (
                   <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                     Comment window closes {formatHearingDate(p.commentDeadline, p.state)}
                   </p>
+                ) : (
+                  p.recentPublicCommentDate && (
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                      A public comment was filed {formatHearingDate(p.recentPublicCommentDate, p.state)}
+                    </p>
+                  )
                 )}
                 {rule?.howToComment && <p className="text-sm text-[var(--text-secondary)]">{rule.howToComment}</p>}
                 {rule?.commentUrl && (

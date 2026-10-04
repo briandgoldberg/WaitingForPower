@@ -46,8 +46,19 @@ export function PublicCommentsSection({
   // commentScore in lib/advocacyActions.ts. Score 0/1 (confirmed closed, or
   // leaning closed because a decision is pending with no confirmed state
   // rule) are still excluded; those are more likely wasted trips than not.
-  // Since score 2 isn't confirmed, the page carries a disclaimer below
-  // rather than presenting every card as a sure thing.
+  //
+  // Score 2 itself ("genuinely unknown") is too broad to show as-is — most
+  // of this site's projects land there simply because their state's own
+  // comment-timing rule was never confirmed (see stateCommentRules.ts),
+  // not because there's any real evidence the window is open. Narrowed
+  // further to the cases where "probably still open" is actually
+  // defensible: no non-public hearing already on the docket (one of those
+  // is real evidence the record may be closing to written comment even
+  // though the state rule is unknown — see isPublicHearing), and filed
+  // recently enough (<1.5 yrs) that a silent comment deadline is unlikely
+  // to have already come and gone unnoticed. This trades list size for
+  // confidence in what's shown — see the disclaimer below either way.
+  const RECENT_FILING_YEARS = 1.5;
   const rows = useMemo(
     () =>
       projects
@@ -65,7 +76,12 @@ export function PublicCommentsSection({
           );
           return { p, rule, score, publicHearing };
         })
-        .filter((r) => r.score >= 2),
+        .filter((r) => {
+          if (r.score === 3) return true;
+          if (r.score !== 2) return false;
+          if (r.p.hearings.length > 0) return false;
+          return r.p.yearsWaiting != null && r.p.yearsWaiting < RECENT_FILING_YEARS;
+        }),
     [projects],
   );
 

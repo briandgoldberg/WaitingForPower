@@ -6,7 +6,8 @@ import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { FUEL_TYPES, FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
-import { ruleForState, commentScore, commentStatusText } from "@/lib/advocacyActions";
+import { ruleForState, commentScore } from "@/lib/advocacyActions";
+import { formatHearingDate } from "@/lib/hearingTime";
 
 const PAGE_SIZE = 20;
 
@@ -70,10 +71,7 @@ export function PublicCommentsSection({
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Submit a public comment, right now.</h2>
-      <p className="text-sm text-[var(--text-secondary)] max-w-2xl">
-        Every project here has a confirmed, currently-open comment window — no guessing. Pick one, follow the steps
-        on its card, and your comment becomes part of the official record the regulator considers.
-      </p>
+      <p className="text-sm text-[var(--text-secondary)] max-w-2xl">Pick a project below and follow the steps on its card.</p>
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -134,7 +132,7 @@ export function PublicCommentsSection({
       )}
 
       <div className="flex flex-col gap-3">
-        {filtered.slice(0, visible).map(({ p, rule, score }) => {
+        {filtered.slice(0, visible).map(({ p, rule }) => {
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
           const regulator = codes.length === 1 ? STATE_REGULATORS[codes[0]]?.[0] : undefined;
@@ -167,18 +165,21 @@ export function PublicCommentsSection({
               {/* The clear, easy part: exactly what to do, in plain words,
                   right on the card — not buried behind a link someone has
                   to click and then re-orient on an unfamiliar government
-                  site. */}
-              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 p-3 flex flex-col gap-2">
-                <span className="inline-flex self-start items-center rounded-full bg-emerald-600 text-white px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
-                  {commentStatusText(score, p.commentDeadline, p.state)}
-                </span>
-                {rule?.howToComment && <p className="text-sm text-[var(--foreground)]">{rule.howToComment}</p>}
+                  site. No "accepting comments" badge here — every card on
+                  this tab already is, by definition, so it's just noise. */}
+              <div className="flex flex-col gap-1.5">
+                {p.commentDeadline && (
+                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    Comment window closes {formatHearingDate(p.commentDeadline, p.state)}
+                  </p>
+                )}
+                {rule?.howToComment && <p className="text-sm text-[var(--text-secondary)]">{rule.howToComment}</p>}
                 {rule?.commentUrl && (
                   <a
                     href={rule.commentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 self-start min-h-[40px] rounded-full bg-[var(--accent)] text-white px-5 text-sm font-semibold hover:opacity-90 mt-1"
+                    className="inline-flex items-center justify-center gap-1.5 self-start min-h-[44px] rounded-full bg-blue-700 hover:bg-blue-800 text-white font-bold px-5 text-sm mt-1"
                   >
                     Submit a public comment →
                   </a>

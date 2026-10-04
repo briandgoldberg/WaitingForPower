@@ -153,6 +153,69 @@ export const LOCAL_HEARINGS: LocalHearingEntry[] = [
     // Written comments on the draft Mitigated Negative Declaration.
     commentDeadline: "2026-10-21T23:59:00-07:00",
   },
+  {
+    id: "ny-new-scotland-vista-bess",
+    name: "Vista Technology Park battery energy storage system (AIP BESS, SUP #648)",
+    state: "NY",
+    county: "Albany",
+    city: "Albany, NY area (New Scotland)",
+    authority: "New Scotland Planning Board",
+    projectType: "storage",
+    fuelType: "storage",
+    capacityMw: 4.5,
+    applicant: "Adaptive Infrastructure Partners (AIP)",
+    hearings: [
+      {
+        date: "2026-10-06T18:00:00-04:00",
+        label: "Planning Board public hearing",
+        location: "St. Matthews Church, 25 Mountainview St., Voorheesville, NY 12186",
+      },
+    ],
+    // Official: the town's own Planning Board page names this exact hearing
+    // ("AIP BESS SUP #648 at Vista Blvd.") with date/time/location. Daily
+    // Gazette confirms capacity (4.5 MW, three 1.5 MW enclosures) and
+    // applicant.
+    sources: [
+      { label: "Town of New Scotland Planning Board", url: "https://www.townofnewscotland.gov/192/Planning-Board" },
+      {
+        label: "Daily Gazette: New Scotland moves battery storage forward",
+        url: "https://www.dailygazette.com/spotlightnews/news/government/new-scotland-moves-battery-storage-forward-2-more-coming/article_fba99e9b-e2fe-4d50-a7f7-c6e5239f5959.html",
+      },
+    ],
+    verifiedOn: "2026-10-04",
+  },
+  {
+    id: "mi-marshall-solar-slu26-0004",
+    name: "Marshall Solar (SLU 26-0004)",
+    state: "MI",
+    county: "Calhoun",
+    city: "Battle Creek area (Marshall)",
+    authority: "City of Marshall Planning Commission",
+    projectType: "generation",
+    fuelType: "solar",
+    capacityMw: 10.5,
+    applicant: null,
+    hearings: [
+      {
+        date: "2026-10-14T19:00:00-04:00",
+        label: "Planning Commission public hearing",
+        location: "Marshall City Hall, 323 W. Michigan Avenue, Marshall, MI 49068",
+      },
+    ],
+    // Official: the Commission's own page confirms it meets the 2nd
+    // Wednesday of every month, 7 p.m., at City Hall (Oct 14, 2026 is that
+    // month's 2nd Wednesday); CitizenPortal (a local-news aggregator)
+    // reported the Commission voted to schedule this specific hearing for
+    // the 10.5 MW special land use permit on that date.
+    sources: [
+      { label: "City of Marshall Planning Commission (meets 2nd Wednesday, 7 p.m., City Hall)", url: "https://cityofmarshall.com/271/Planning-Commission" },
+      {
+        label: "CitizenPortal: Planning commission schedules public hearing for 10.5 MW Marshall solar project",
+        url: "https://citizenportal.ai/articles/10012411/Michigan/Calhoun-County/Marshall/Planning-commission-schedules-public-hearing-for-105-MW-Marshall-solar-project",
+      },
+    ],
+    verifiedOn: "2026-10-04",
+  },
 ];
 
 export function localHearingProjects(entries: LocalHearingEntry[] = LOCAL_HEARINGS): NormalizedProject[] {

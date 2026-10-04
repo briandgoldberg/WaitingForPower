@@ -99,7 +99,7 @@ export default async function HomePage({
           <p className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-tight lg:whitespace-nowrap">
             <span className="text-[#f2b866]">
               Solar projects stuck in permitting could power{" "}
-              <span className="text-white underline decoration-2 underline-offset-4">100,000,000+ homes</span>.
+              <span className="bg-white text-[#0b1b2e] rounded-md px-2">100,000,000+ homes</span>.
             </span>
           </p>
           <Link

@@ -31,11 +31,6 @@ export interface CommentScoreInput {
   commentDeadline: string | null;
   reviewStep: string | null;
   hearingCount: number;
-  // A real, individually-filed public comment seen on this docket within
-  // the last ~45 days (see RECENT_COMMENT_WINDOW_DAYS in
-  // lib/advocacyProjects.ts) — see commentScore below for why this is the
-  // strongest signal of all.
-  hasRecentPublicComment?: boolean;
 }
 
 // 0 confirmed closed, 1 decision pending with no confirmed state rule (leans
@@ -43,12 +38,6 @@ export interface CommentScoreInput {
 // open. Used both for TakeActionSection's status line and to build the
 // Advocate > Public Comments list, which only ever shows score-3 projects.
 export function commentScore(p: CommentScoreInput, rule: StateCommentRule | undefined): number {
-  // Someone actually filing a real comment recently is direct, first-party
-  // evidence the window is open right now — stronger than any state-rule
-  // heuristic below, so it short-circuits straight to confirmed-open
-  // regardless of what else is or isn't known about this docket.
-  if (p.hasRecentPublicComment) return 3;
-
   const closedRule = rule?.recordRule === "closes_at_hearing";
   const openRule = rule?.recordRule === "open_until_decision";
   // "varies" still means the state DOES take public comments — it's only
@@ -70,10 +59,9 @@ export function commentScore(p: CommentScoreInput, rule: StateCommentRule | unde
 
 // The three-tier status line: nothing else, no icon. The deadline shows in
 // the project's own time zone (see hearingTime.ts).
-export function commentStatusText(score: number, deadline: string | null, state: string | null = null, recentCommentDate: string | null = null): string {
+export function commentStatusText(score: number, deadline: string | null, state: string | null = null): string {
   if (score === 3) {
     if (deadline) return `Accepting comments · due ${formatHearingDate(deadline, state)}`;
-    if (recentCommentDate) return `Accepting comments · a comment was filed ${formatHearingDate(recentCommentDate, state)}`;
     return "Accepting comments";
   }
   if (score === 2) return "Maybe accepting comments";

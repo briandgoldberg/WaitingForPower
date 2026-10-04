@@ -6,14 +6,6 @@ import { AttendHearingBox } from "@/components/advocacy/AttendHearingBox";
 
 const MAX_STATES_SHOWN = 4;
 
-export interface TakeActionComment {
-  id: string;
-  filedDate: string; // ISO
-  filerName: string | null;
-  title: string;
-  sourceUrl: string;
-}
-
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
@@ -45,15 +37,10 @@ export function TakeActionSection({
   project: p,
   nowMs,
   resolved,
-  publicComments = [],
 }: {
   project: ProjectDTO;
   nowMs: number;
   resolved: boolean;
-  // Real, individually-filed public comments on this project's docket —
-  // see src/lib/ingest/caCecComments.ts. Like milestones: shown only when
-  // there are any, silent otherwise.
-  publicComments?: TakeActionComment[];
 }) {
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
@@ -86,36 +73,12 @@ export function TakeActionSection({
     </Column>
   );
 
-  // Like milestones: nothing rendered at all when there's nothing to show,
-  // not an empty-state message.
-  const commentsBlock = publicComments.length > 0 && (
-    <div>
-      <h3 className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)] mb-2">Public comments</h3>
-      <ul className="flex flex-col gap-2.5 text-sm">
-        {publicComments.map((c) => (
-          <li key={c.id} className="text-[var(--text-secondary)]">
-            <div className="flex items-start justify-between gap-3">
-              <span className="font-medium text-[var(--foreground)]">{c.filerName ?? "Anonymous filer"}</span>
-              <span className="shrink-0 text-xs text-[var(--muted)]">{fmt(c.filedDate)}</span>
-            </div>
-            <div>{c.title}</div>
-            <a href={c.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--accent)] underline">
-              View filing →
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
   // A project that already has its answer has no hearings or comment window
-  // to act on, so it gets a plain reference block instead of Take action —
-  // comments stay, though, since they're historical record regardless.
+  // to act on, so it gets a plain reference block instead of Take action.
   if (resolved) {
     return (
       <div className="flex flex-col gap-4">
         {contactColumn}
-        {commentsBlock}
       </div>
     );
   }
@@ -198,7 +161,6 @@ export function TakeActionSection({
           </div>
         </Column>
       </div>
-      {commentsBlock && <div className="pt-4 border-t border-[var(--border)]">{commentsBlock}</div>}
     </div>
   );
 }

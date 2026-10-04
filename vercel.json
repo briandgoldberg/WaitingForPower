@@ -50,10 +50,6 @@
       "schedule": "30 18 1-31/2 * *"
     },
     {
-      "path": "/api/cron/ingest-tx-puct-comments",
-      "schedule": "45 18 1-31/2 * *"
-    },
-    {
       "path": "/api/cron/ingest-co-puc",
       "schedule": "0 19 2-30/2 * *"
     },
@@ -148,10 +144,6 @@
     {
       "path": "/api/cron/ingest-ca-cec",
       "schedule": "30 6 1-31/2 * *"
-    },
-    {
-      "path": "/api/cron/ingest-ca-cec-comments",
-      "schedule": "45 6 1-31/2 * *"
     },
     {
       "path": "/api/cron/ingest-nh-sec",

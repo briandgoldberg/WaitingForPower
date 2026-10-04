@@ -108,16 +108,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
-  // Real, individually-filed public comments on this project's docket —
-  // see src/lib/ingest/caCecComments.ts. Like milestones: TakeActionSection
-  // shows this only when there's something to show.
-  const publicComments = (
-    await prisma.publicComment.findMany({
-      where: { projectId: p.id },
-      orderBy: { filedDate: "desc" },
-      select: { id: true, filedDate: true, filerName: true, title: true, sourceUrl: true },
-    })
-  ).map((c) => ({ ...c, filedDate: c.filedDate.toISOString() }));
   const opposedBy = oppositionSummary(p);
   const waitedYears = resolved ? yearsBetween(p.applicationFiledDate, p.resolutionDate) : p.yearsWaiting;
   const stateCodes = splitStateCodes(p.state);
@@ -340,7 +330,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     {
       id: "take-action",
       label: resolved ? "Official record" : "Advocate",
-      content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} publicComments={publicComments} />,
+      content: <TakeActionSection project={p} nowMs={nowMs} resolved={resolved} />,
     },
   ];
 

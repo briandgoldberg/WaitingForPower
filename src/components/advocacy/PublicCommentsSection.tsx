@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { FUEL_TYPES, FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
-import { ruleForState, commentScore } from "@/lib/advocacyActions";
+import { ruleForState, commentScore, isPublicHearing } from "@/lib/advocacyActions";
 import { formatHearingDate } from "@/lib/hearingTime";
 
 const PAGE_SIZE = 20;
@@ -49,11 +49,17 @@ export function PublicCommentsSection({
       projects
         .map((p) => {
           const rule = ruleForState(p.state);
+          const publicHearing = p.hearings.find(isPublicHearing) ?? null;
           const score = commentScore(
-            { commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length },
+            {
+              commentDeadline: p.commentDeadline,
+              reviewStep: p.reviewStep,
+              hearingCount: p.hearings.length,
+              hasConfirmedPublicHearing: publicHearing != null,
+            },
             rule,
           );
-          return { p, rule, score };
+          return { p, rule, score, publicHearing };
         })
         .filter((r) => r.score === 3),
     [projects],
@@ -142,7 +148,7 @@ export function PublicCommentsSection({
       )}
 
       <div className="flex flex-col gap-3">
-        {filtered.slice(0, visible).map(({ p, rule }) => {
+        {filtered.slice(0, visible).map(({ p, rule, publicHearing }) => {
           const fuel = FUEL_TYPE_BY_VALUE[p.fuelType as keyof typeof FUEL_TYPE_BY_VALUE];
           const codes = splitStateCodes(p.state);
           return (
@@ -177,10 +183,16 @@ export function PublicCommentsSection({
                   site. No "accepting comments" badge here — every card on
                   this tab already is, by definition, so it's just noise. */}
               <div className="flex flex-col gap-1.5">
-                {p.commentDeadline && (
+                {p.commentDeadline ? (
                   <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                     Comment window closes {formatHearingDate(p.commentDeadline, p.state)}
                   </p>
+                ) : (
+                  publicHearing && (
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                      Public comment hearing {formatHearingDate(publicHearing.date, p.state)}
+                    </p>
+                  )
                 )}
                 {rule?.howToComment && <p className="text-sm text-[var(--text-secondary)]">{stripSpeakAtHearing(rule.howToComment)}</p>}
                 {rule?.commentUrl && (

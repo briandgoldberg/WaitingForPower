@@ -45,10 +45,19 @@ export function TakeActionSection({
   const regulatorStates = splitStateCodes(p.state)
     .filter((code) => STATE_REGULATORS[code])
     .slice(0, MAX_STATES_SHOWN);
+  const upcomingPublicHearings = p.hearings.filter((h) => isPublicHearing(h) && new Date(h.endDate ?? h.date).getTime() >= nowMs);
   // Same scoring the Advocate > Submit Public Comments tab uses, so a
   // project reads the same way in both places — see src/lib/advocacyActions.ts.
   const rule = ruleForState(p.state);
-  const score = commentScore({ commentDeadline: p.commentDeadline, reviewStep: p.reviewStep, hearingCount: p.hearings.length }, rule);
+  const score = commentScore(
+    {
+      commentDeadline: p.commentDeadline,
+      reviewStep: p.reviewStep,
+      hearingCount: p.hearings.length,
+      hasConfirmedPublicHearing: upcomingPublicHearings.length > 0,
+    },
+    rule,
+  );
 
   const contactColumn = (
     <Column title="Who to contact">
@@ -82,8 +91,6 @@ export function TakeActionSection({
       </div>
     );
   }
-
-  const upcomingPublicHearings = p.hearings.filter((h) => isPublicHearing(h) && new Date(h.endDate ?? h.date).getTime() >= nowMs);
 
   return (
     <div className="flex flex-col gap-5">

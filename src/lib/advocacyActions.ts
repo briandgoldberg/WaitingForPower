@@ -31,6 +31,13 @@ export interface CommentScoreInput {
   commentDeadline: string | null;
   reviewStep: string | null;
   hearingCount: number;
+  // An upcoming hearing whose own label confirms it's a type the public can
+  // speak/comment at (see isPublicHearing above) — e.g. Maryland's docket
+  // mail log and Arizona's eDocket both label these distinctly from
+  // "Evidentiary Hearing"/"Party session". That's direct, first-party
+  // evidence a comment opportunity is open right now, stronger than any
+  // state-rule guess in stateCommentRules.ts (many of which are "unknown").
+  hasConfirmedPublicHearing?: boolean;
 }
 
 // 0 confirmed closed, 1 decision pending with no confirmed state rule (leans
@@ -38,6 +45,8 @@ export interface CommentScoreInput {
 // open. Used both for TakeActionSection's status line and to build the
 // Advocate > Public Comments list, which only ever shows score-3 projects.
 export function commentScore(p: CommentScoreInput, rule: StateCommentRule | undefined): number {
+  if (p.hasConfirmedPublicHearing) return 3;
+
   const closedRule = rule?.recordRule === "closes_at_hearing";
   const openRule = rule?.recordRule === "open_until_decision";
   // "varies" still means the state DOES take public comments — it's only

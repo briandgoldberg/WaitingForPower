@@ -93,9 +93,6 @@ export default async function HomePage({
         </svg>
 
         <div className="relative mx-auto max-w-5xl w-full px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-4">
-          <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[#f2b866]">
-            Energy Permitting Reform
-          </span>
           <p className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-tight lg:whitespace-nowrap">
             <span className="text-[#f2b866]">
               Solar projects stuck in permitting could power{" "}

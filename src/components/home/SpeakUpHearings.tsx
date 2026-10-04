@@ -33,11 +33,14 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
         <span className="text-xs font-semibold tracking-[0.2em] uppercase text-[var(--accent-2)]">Clean energy needs storage</span>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">A few supporters can make the difference</h2>
         <p className="text-sm sm:text-base text-[var(--text-secondary)] max-w-2xl">
-          Solar and wind need batteries to provide power 24 hours a day. Local boards mostly hear from opponents so
-          a handful of neighbors speaking up can change permitting outcomes.
+          Solar and wind need batteries to{" "}
+          <span className="font-semibold text-[var(--accent-2)]">provide power 24 hours a day</span>. Local boards
+          mostly hear from opponents, so{" "}
+          <span className="font-semibold text-[var(--accent-2)]">a handful of neighbors speaking up can change
+          permitting outcomes</span>.
         </p>
         <p className="text-sm sm:text-base text-[var(--text-secondary)]">
-          Advocate for battery storage at one of the meetings below or{" "}
+          <span className="font-semibold">Advocate for battery storage</span> at one of the meetings below or{" "}
           <Link href="/policies?tab=hearings" className="font-semibold text-[var(--accent)] underline">
             browse all upcoming public hearing →
           </Link>

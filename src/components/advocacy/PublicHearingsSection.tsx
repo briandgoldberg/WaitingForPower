@@ -95,9 +95,6 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-3xl font-bold tracking-tight max-w-2xl">Attend a public hearing and speak.</h2>
-      <p className="text-sm text-[var(--text-secondary)] max-w-2xl">
-        Every upcoming hearing where the public can attend and speak, soonest first.
-      </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)] w-fit">

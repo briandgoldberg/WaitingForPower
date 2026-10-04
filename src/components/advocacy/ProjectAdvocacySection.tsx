@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { AdvocacyProject } from "@/lib/advocacyProjects";
-import { FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
+import { FUEL_TYPES, FUEL_TYPE_BY_VALUE, formatCapacity } from "@/lib/data/taxonomies";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { STATE_REGULATORS } from "@/lib/data/stateRegulators";
 import type { StateCommentRule } from "@/lib/data/stateCommentRules";
@@ -12,6 +12,10 @@ import type { CalendarHearing } from "@/lib/calendarInvite";
 import { AttendHearingBox } from "@/components/advocacy/AttendHearingBox";
 
 const PAGE_SIZE = 20;
+
+function toggle<T>(arr: T[], value: T): T[] {
+  return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+}
 
 // Four exclusive views: the first is every project on this page (all of them
 // are, literally, awaiting a decision); the other three partition the rest by
@@ -74,16 +78,24 @@ export function ProjectAdvocacySection({
   projects,
   initialBucket = 0,
   initialUpcomingOnly = false,
+  initialFuelFilter = [],
 }: {
   projects: AdvocacyProject[];
   initialBucket?: number;
   initialUpcomingOnly?: boolean;
+  initialFuelFilter?: string[];
 }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [bucket, setBucket] = useState(initialBucket);
   const [upcomingOnly, setUpcomingOnly] = useState(initialUpcomingOnly);
+  const [fuelFilter, setFuelFilter] = useState<string[]>(initialFuelFilter);
   const [visible, setVisible] = useState(PAGE_SIZE);
+
+  const fuelOptions = useMemo(() => {
+    const present = new Set(projects.map((p) => p.fuelType));
+    return FUEL_TYPES.filter((f) => present.has(f.value));
+  }, [projects]);
 
   const rows = useMemo(
     () =>
@@ -105,10 +117,11 @@ export function ProjectAdvocacySection({
     const q = query.trim().toLowerCase();
     return rows.filter(({ p }) => {
       if (state && !splitStateCodes(p.state).includes(state)) return false;
+      if (fuelFilter.length > 0 && !fuelFilter.includes(p.fuelType)) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, query, state]);
+  }, [rows, query, state, fuelFilter]);
 
   const filtered = useMemo(() => {
     const list = inScope
@@ -156,6 +169,33 @@ export function ProjectAdvocacySection({
         </select>
         <span className="text-xs text-[var(--muted)] self-center">{filtered.length} projects</span>
       </div>
+
+      {fuelOptions.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {fuelOptions.map((f) => {
+            const active = fuelFilter.includes(f.value);
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => {
+                  setFuelFilter((prev) => toggle(prev, f.value));
+                  reset();
+                }}
+                aria-pressed={active}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+                  active
+                    ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                    : "border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/10"
+                }`}
+              >
+                <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: f.color }} />
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex flex-col gap-1.5 w-full max-w-sm">
@@ -213,16 +253,20 @@ export function ProjectAdvocacySection({
           return (
             <div
               key={p.slug}
-              className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5"
+              className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 flex flex-col gap-2.5 border-l-4"
+              style={fuel ? { borderLeftColor: fuel.color } : undefined}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <Link href={`/project/${p.slug}`} className="font-semibold text-sm text-[var(--accent)] underline">
                     {p.name}
                   </Link>
-                  <p className="text-xs text-[var(--muted)] mt-0.5">
-                    {codes.map((c) => STATE_NAMES[c] ?? c).join(", ") || "Location not specified"} · {fuel?.label ?? p.fuelType}
-                    {p.yearsWaiting != null && <> · Waiting {p.yearsWaiting.toFixed(1)} yrs</>}
+                  <p className="text-xs text-[var(--muted)] mt-0.5 flex items-center gap-1.5">
+                    {fuel && <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: fuel.color }} />}
+                    <span>
+                      {codes.map((c) => STATE_NAMES[c] ?? c).join(", ") || "Location not specified"} · {fuel?.label ?? p.fuelType}
+                      {p.yearsWaiting != null && <> · Waiting {p.yearsWaiting.toFixed(1)} yrs</>}
+                    </span>
                   </p>
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-1 text-right">

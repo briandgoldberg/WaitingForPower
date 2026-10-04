@@ -2,17 +2,15 @@
 
 import { useState, type ReactNode } from "react";
 
-export type AdvocacyTab = "project" | "state" | "national";
+export type AdvocacyTab = "project" | "national";
 
 export function AdvocacyTabs({
   defaultTab,
   nationalAdvocacy,
-  stateAdvocacy,
   projectAdvocacy,
 }: {
   defaultTab: AdvocacyTab;
   nationalAdvocacy: ReactNode;
-  stateAdvocacy: ReactNode;
   projectAdvocacy: ReactNode;
 }) {
   const [tab, setTab] = useState<AdvocacyTab>(defaultTab);
@@ -28,15 +26,10 @@ export function AdvocacyTabs({
           <span className="sm:hidden">Projects</span>
           <span className="hidden sm:inline">Project Advocacy</span>
         </TabButton>
-        <TabButton active={tab === "state"} onClick={() => setTab("state")}>
-          <span className="sm:hidden">States</span>
-          <span className="hidden sm:inline">State Advocacy</span>
-        </TabButton>
       </div>
 
       <div hidden={tab !== "national"}>{nationalAdvocacy}</div>
       <div hidden={tab !== "project"}>{projectAdvocacy}</div>
-      <div hidden={tab !== "state"}>{stateAdvocacy}</div>
     </div>
   );
 }

@@ -31,7 +31,7 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
     <section className="mx-auto max-w-5xl w-full px-4 sm:px-6 pt-10 pb-12 flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">A few supporters can make the difference.</h2>
-        <p className="text-sm sm:text-base font-semibold text-[var(--accent-2)] max-w-2xl">
+        <p className="text-sm sm:text-base font-semibold text-emerald-700 dark:text-emerald-400 max-w-2xl">
           Solar and wind need batteries to provide power 24 hours a day. Local boards mostly hear from opponents, so
           a handful of neighbors speaking up can change permitting outcomes.
         </p>

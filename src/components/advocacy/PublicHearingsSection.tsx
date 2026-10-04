@@ -5,12 +5,14 @@ import Link from "next/link";
 import type { AdvocacyProject } from "@/lib/advocacyProjects";
 import { isPublicHearing } from "@/lib/advocacyActions";
 import { displayZone } from "@/lib/hearingTime";
+import { splitStateCodes, STATE_NAMES } from "@/lib/data/usStates";
 import { googleCalendarUrl } from "@/lib/calendarInvite";
 
 interface Entry {
   date: string; // ISO
   label: string | null;
   location: string | null;
+  virtual: boolean;
   projectName: string;
   projectSlug: string;
   state: string | null;
@@ -18,6 +20,20 @@ interface Entry {
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// A location is "virtual" if the source's own text says so — covers the
+// real phrasings seen in practice ("Virtual", "via videoconference",
+// "Enforcement Action Public Hearing via Zoom Conferencing", "Microsoft
+// Teams; ...", "Hybrid: In-Person and Remote"). No per-hearing join URL is
+// published anywhere in this dataset, so there's nothing to deep-link to —
+// the best honest next step is the hearing's own details page (relabeled
+// "Join virtual hearing" below) or, failing that, the location text itself,
+// which often doubles as the join instructions.
+const VIRTUAL_RE = /virtual|zoom|teams|webex|videoconf|telephon(ic)?|\bremote\b|\bonline\b|internet broadcast|call-in|dial-in/i;
+
+function isVirtualLocation(location: string | null): boolean {
+  return !!location && VIRTUAL_RE.test(location);
+}
 
 // Calendar-day key in the hearing's own displayed time zone, so a late-night
 // Pacific hearing lands on the same day a visitor there would expect —
@@ -36,17 +52,35 @@ function fmtTime(iso: string, state: string | null): string | null {
   return hasTime ? d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: displayZone(iso, state) }).replace(":00", "") : null;
 }
 
+type LocationFilter = "all" | "virtual" | "in-person";
+
 export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[] }) {
-  const entries: Entry[] = useMemo(() => {
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>("all");
+
+  const allEntries: Entry[] = useMemo(() => {
     const out: Entry[] = [];
     for (const p of projects) {
       for (const h of p.hearings) {
         if (!isPublicHearing(h)) continue;
-        out.push({ date: h.date, label: h.label, location: h.location, projectName: p.name, projectSlug: p.slug, state: p.state, hearingLink: p.hearingLink });
+        out.push({
+          date: h.date,
+          label: h.label,
+          location: h.location,
+          virtual: isVirtualLocation(h.location),
+          projectName: p.name,
+          projectSlug: p.slug,
+          state: p.state,
+          hearingLink: p.hearingLink,
+        });
       }
     }
     return out.sort((a, b) => a.date.localeCompare(b.date));
   }, [projects]);
+
+  const entries = useMemo(() => {
+    if (locationFilter === "all") return allEntries;
+    return allEntries.filter((e) => (locationFilter === "virtual" ? e.virtual : !e.virtual));
+  }, [allEntries, locationFilter]);
 
   const byDay = useMemo(() => {
     const map = new Map<string, Entry[]>();
@@ -106,6 +140,19 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
         or parties-only session.
       </p>
 
+      <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 bg-[var(--panel)] w-fit">
+        {(["all", "in-person", "virtual"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setLocationFilter(f)}
+            className={`px-3 py-1 text-sm rounded-md capitalize ${locationFilter === f ? "bg-[var(--accent)] text-white" : ""}`}
+          >
+            {f === "all" ? "All" : f === "in-person" ? "In person" : "Virtual"}
+          </button>
+        ))}
+      </div>
+
       <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-3 sm:p-4">
         <div className="flex items-center justify-between mb-3">
           <button
@@ -137,21 +184,30 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
             const hearingsThatDay = byDay.get(c.key) ?? [];
             const isSelected = c.key === selectedDay;
             const isToday = c.key === todayKey;
+            const preview = hearingsThatDay[0];
+            const previewState = preview ? splitStateCodes(preview.state)[0] : null;
             return (
               <button
                 key={c.key}
                 type="button"
                 onClick={() => setSelectedDay(c.key)}
-                className={`relative aspect-square rounded-md text-xs sm:text-sm flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                className={`relative min-h-[56px] sm:min-h-[72px] rounded-md p-1 flex flex-col items-start text-left overflow-hidden transition-colors ${
                   !c.inMonth ? "text-[var(--muted)]/50" : "text-[var(--foreground)]"
                 } ${isSelected ? "bg-[var(--accent)] text-white" : hearingsThatDay.length > 0 ? "bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20" : "hover:bg-black/5 dark:hover:bg-white/10"}`}
               >
-                <span className={isToday && !isSelected ? "font-bold underline" : undefined}>{c.dayNum}</span>
-                {hearingsThatDay.length > 0 && (
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${isSelected ? "bg-white" : "bg-[var(--accent)]"}`}
-                    aria-label={`${hearingsThatDay.length} hearing${hearingsThatDay.length === 1 ? "" : "s"}`}
-                  />
+                <span className={`text-xs sm:text-sm ${isToday && !isSelected ? "font-bold underline" : "font-medium"}`}>{c.dayNum}</span>
+                {preview && (
+                  <span className="w-full text-left">
+                    <span className="block w-full truncate text-[9px] sm:text-[10px] leading-tight">
+                      {preview.virtual ? "📹" : "📍"} {preview.projectName}
+                      {previewState && ` · ${previewState}`}
+                    </span>
+                    {hearingsThatDay.length > 1 && (
+                      <span className={`block text-[9px] leading-tight ${isSelected ? "text-white/80" : "text-[var(--muted)]"}`}>
+                        +{hearingsThatDay.length - 1} more
+                      </span>
+                    )}
+                  </span>
                 )}
               </button>
             );
@@ -168,29 +224,38 @@ export function PublicHearingsSection({ projects }: { projects: AdvocacyProject[
         ) : (
           selected.map((e, i) => {
             const time = fmtTime(e.date, e.state);
+            const hasHearingLink = e.hearingLink && /^https?:\/\//.test(e.hearingLink);
             const gcalUrl = googleCalendarUrl(
               { date: e.date, label: e.label, location: e.location },
-              { projectName: e.projectName, projectUrl: `https://waitingforpower.com/project/${e.projectSlug}`, detailsUrl: e.hearingLink && /^https?:\/\//.test(e.hearingLink) ? e.hearingLink : null },
+              { projectName: e.projectName, projectUrl: `https://waitingforpower.com/project/${e.projectSlug}`, detailsUrl: hasHearingLink ? e.hearingLink : null },
             );
+            const stateLabel = splitStateCodes(e.state).map((c) => STATE_NAMES[c] ?? c).join(", ");
             return (
               <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3.5 flex flex-col gap-1.5">
                 <div className="flex items-start justify-between gap-3">
-                  <Link href={`/project/${e.projectSlug}`} className="font-semibold text-sm text-[var(--accent)] underline">
-                    {e.projectName}
-                  </Link>
+                  <div className="min-w-0">
+                    <Link href={`/project/${e.projectSlug}`} className="font-semibold text-sm text-[var(--accent)] underline">
+                      {e.projectName}
+                    </Link>
+                    {stateLabel && <p className="text-xs text-[var(--muted)]">{stateLabel}</p>}
+                  </div>
                   {time && <span className="shrink-0 text-xs text-[var(--muted)]">{time}</span>}
                 </div>
                 {e.label && <p className="text-xs text-[var(--muted)]">{e.label}</p>}
-                {e.location && <p className="text-xs text-[var(--text-secondary)]">📍 {e.location}</p>}
+                {e.location && (
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    {e.virtual ? "📹" : "📍"} {e.location}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mt-1">
                   {gcalUrl && (
                     <a href={gcalUrl} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
                       Add to calendar
                     </a>
                   )}
-                  {e.hearingLink && /^https?:\/\//.test(e.hearingLink) && (
-                    <a href={e.hearingLink} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
-                      Hearing details
+                  {hasHearingLink && (
+                    <a href={e.hearingLink!} target="_blank" rel="noreferrer" className="font-semibold text-[var(--accent)] underline">
+                      {e.virtual ? "Join virtual hearing →" : "Hearing details"}
                     </a>
                   )}
                 </div>

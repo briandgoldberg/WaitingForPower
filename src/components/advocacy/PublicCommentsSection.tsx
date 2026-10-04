@@ -168,11 +168,11 @@ export function PublicCommentsSection({
                   right on the card — not buried behind a link someone has
                   to click and then re-orient on an unfamiliar government
                   site. */}
-              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 p-3 flex flex-col gap-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-400">
+              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 p-3 flex flex-col gap-2">
+                <span className="inline-flex self-start items-center rounded-full bg-emerald-600 text-white px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
                   {commentStatusText(score, p.commentDeadline, p.state)}
-                </p>
-                {rule?.howToComment && <p className="text-sm">{rule.howToComment}</p>}
+                </span>
+                {rule?.howToComment && <p className="text-sm text-[var(--foreground)]">{rule.howToComment}</p>}
                 {rule?.commentUrl && (
                   <a
                     href={rule.commentUrl}

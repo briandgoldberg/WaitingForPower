@@ -18,7 +18,10 @@
 // CLOUDFLARE TLS-FINGERPRINT BLOCK below fetchWithRetry, confirmed
 // 2026-09-13: Cloudflare now blocks Node's own fetch() specifically,
 // regardless of headers, and both requests below (the landing page and the
-// workbook itself) go through fetchLbnlUrl to route around that.
+// workbook itself) go through fetchLbnlUrl to try to route around that —
+// though see the 2026-10-04 correction below tryCurlFetch: that routing
+// doesn't actually work on Vercel's own runtime, so this source's cron is
+// currently failing for real, not just in theory.
 //
 // WORKBOOK STRUCTURE (confirmed 2026-08-15 against the 2026-edition file,
 // not guessed from memory): the ~40-tab workbook's actual project-level data
@@ -485,10 +488,27 @@ export async function ingestLbnlQueuedUp(filePath: string, minCapacityMw = MIN_C
 // what Node's fetch already requests — this WAF rule specifically
 // distinguishes HTTP client implementations (a real, if unusual, Cloudflare
 // bot-management behavior), and curl simply isn't the one it targets.
-// Falls back to plain fetch (via fetchWithRetry below, which occasionally
-// succeeds anyway per that function's own "WAF sampling" note) if curl
-// isn't on PATH in some future runtime, so this degrades rather than
-// hard-fails if Vercel's Node image ever stops bundling it.
+//
+// CORRECTION 2026-10-04: the "confirmed live" claim above was only ever
+// verified against a local/sandboxed shell, not Vercel's actual Node.js
+// serverless runtime — and on Vercel specifically, `curl` is not reliably
+// on PATH (a known Vercel Functions limitation: the Node runtime image
+// doesn't bundle common CLI tools, so execFileSync("curl", ...) throws
+// ENOENT there). Confirmed via a real cron failure
+// ("failed to fetch https://emp.lbl.gov/queues: 403") exactly matching
+// fetchWithRetry's own thrown error shape — i.e. tryCurlFetch is silently
+// returning null in production and every run falls through to the
+// always-blocked plain fetch. Separately reconfirmed 2026-10-04 that
+// Node's own https module shares fetch/undici's TLS stack and is blocked
+// the same way (403), so there's no in-Node-only fix here — a real fix
+// needs either a bundled non-Node TLS client or a different discovery
+// path for the current workbook URL (see WORKBOOK STRUCTURE above: only
+// this blocked landing-page scrape needs to dodge the WAF at all — the
+// static file-CDN download itself isn't blocked). Left unresolved rather
+// than shipped half-verified; lastCurlError below at least makes the next
+// failure's cause immediately legible instead of this looking identical
+// to a plain network error.
+let lastCurlError: string | null = null;
 function tryCurlFetch(url: string): Buffer | null {
   const tmpFile = join(tmpdir(), `lbnl-${randomUUID()}`);
   try {
@@ -497,7 +517,8 @@ function tryCurlFetch(url: string): Buffer | null {
       stdio: ["ignore", "ignore", "ignore"],
     });
     return readFileSync(tmpFile);
-  } catch {
+  } catch (err) {
+    lastCurlError = err instanceof Error ? err.message : String(err);
     return null;
   } finally {
     try {
@@ -512,8 +533,17 @@ function tryCurlFetch(url: string): Buffer | null {
 async function fetchLbnlUrl(url: string): Promise<Buffer> {
   const viaCurl = tryCurlFetch(url);
   if (viaCurl) return viaCurl;
-  const res = await fetchWithRetry(url, { headers: BROWSER_HEADERS });
-  return Buffer.from(await res.arrayBuffer());
+  try {
+    const res = await fetchWithRetry(url, { headers: BROWSER_HEADERS });
+    return Buffer.from(await res.arrayBuffer());
+  } catch (err) {
+    // See CORRECTION above tryCurlFetch: curl silently not-working and the
+    // WAF block are two different failures that otherwise look identical
+    // from here on out — spelling out the curl side so a future run's
+    // error message doesn't need re-diagnosing from scratch.
+    const curlNote = lastCurlError ? ` (curl fallback also failed: ${lastCurlError})` : " (curl unavailable in this runtime)";
+    throw new Error(`${err instanceof Error ? err.message : String(err)}${curlNote}`);
+  }
 }
 
 async function fetchWithRetry(url: string, init: RequestInit, attempts = 6): Promise<Response> {

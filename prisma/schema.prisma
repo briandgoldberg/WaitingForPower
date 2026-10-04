@@ -247,14 +247,15 @@ model Project {
   // source's value.
   hearingDetailsLink String?
 
-  causes      ProjectCause[]
-  sources     ProjectSource[]
-  milestones  Milestone[]
-  hearings    ProjectHearing[]
-  changes     ProjectChange[]
-  predictions Prediction[]
-  comments    ProjectComment[]
-  opposition  ProjectOpposition[]
+  causes         ProjectCause[]
+  sources        ProjectSource[]
+  milestones     Milestone[]
+  hearings       ProjectHearing[]
+  changes        ProjectChange[]
+  predictions    Prediction[]
+  comments       ProjectComment[]
+  opposition     ProjectOpposition[]
+  publicComments PublicComment[]
 
   @@index([projectType])
   @@index([fuelType])
@@ -417,6 +418,40 @@ model ProjectOpposition {
 
   @@index([projectId])
   @@index([kind])
+}
+
+// A real, individually-filed public comment pulled from a project's own
+// docket filing index — not a site-hosted comment (see ForumTopic/
+// ForumReply for that). First source: California Energy Commission docket
+// logs (efiling.energy.ca.gov), which list every filing including each
+// person's/org's own comment letter by name — see
+// src/lib/ingest/caCecComments.ts for the real filing-title shape this was
+// built against (confirmed live, e.g. "Aaron Burns Comments - Support for
+// the Fountain Wind Project", 700+ real rows on that one docket alone).
+// `origin` keys the source ("ca_cec" today) so this can grow to other
+// states' docket systems without a schema change.
+model PublicComment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  filedDate DateTime
+  // The docket's own "From" column — not always a real person's name (can
+  // be an organization), null on the rare row where that column is blank.
+  filerName String?
+  // The filing's own document title, e.g. "Aaron Burns Comments - Support
+  // for the Fountain Wind Project" — shown as-is, never rewritten.
+  title     String
+  sourceUrl String
+  // The docket this comment was filed on, e.g. "23-OPT-01".
+  docketLabel String
+  origin      String
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, sourceUrl])
+  @@index([projectId, filedDate])
+  @@index([filedDate])
 }
 
 model ProjectCause {

@@ -8,7 +8,10 @@ import type { MetadataRoute } from "next";
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      { userAgent: "*", allow: "/" },
+      // /test1 is an unannounced internal feed, not a page meant to be
+      // crawled or cited — disallowed here too, on top of its own noindex,
+      // since it's not linked from anywhere a crawler would find it.
+      { userAgent: "*", allow: "/", disallow: "/test1" },
       {
         userAgent: [
           "GPTBot",
@@ -22,6 +25,7 @@ export default function robots(): MetadataRoute.Robots {
           "Amazonbot",
         ],
         allow: "/",
+        disallow: "/test1",
       },
     ],
     sitemap: "https://waitingforpower.com/sitemap.xml",

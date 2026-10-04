@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { SpeakUpHearing } from "@/lib/homeHighlights";
 import { AttendHearingBox } from "@/components/advocacy/AttendHearingBox";
-import { talkingPointsFor } from "@/lib/data/talkingPoints";
+import { talkingPointsFor, talkingPointsAgainst } from "@/lib/data/talkingPoints";
 import { STATE_NAMES, splitStateCodes } from "@/lib/data/usStates";
 import { displayZone, isBareDate } from "@/lib/hearingTime";
 
@@ -96,11 +96,24 @@ export function SpeakUpHearings({ groups }: { groups: SpeakUpHearing[] }) {
                     </span>
                     What to say
                   </summary>
-                  <ul className="mt-2 ml-4 list-disc flex flex-col gap-1.5 text-[var(--text-secondary)]">
-                    {talkingPointsFor(g.fuelType).map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
+                  <div className="mt-2 flex flex-col gap-3">
+                    <div>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">If you support it</span>
+                      <ul className="mt-1 ml-4 list-disc flex flex-col gap-1.5 text-[var(--text-secondary)]">
+                        {talkingPointsFor(g.fuelType).map((t) => (
+                          <li key={t}>{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-400">Common concerns raised against it</span>
+                      <ul className="mt-1 ml-4 list-disc flex flex-col gap-1.5 text-[var(--text-secondary)]">
+                        {talkingPointsAgainst(g.fuelType).map((t) => (
+                          <li key={t}>{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                   <p className="mt-2 text-xs text-[var(--muted)]">Two minutes is plenty. Say you live nearby if you do.</p>
                 </details>
               </div>

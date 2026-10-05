@@ -206,6 +206,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               rows={[p.interconnectionQueueStage && p.queueCluster ? ["Queue cluster", p.queueCluster] : null]}
             />
           )}
+          {/* The interconnection agreement date is only ever on file as a
+              milestone (see lbnlQueuedUp.ts), not its own column — pulled
+              out here since "has it actually signed its IA" is a real,
+              distinct fact from the study-phase text above, not just
+              another Timeline entry to scroll to. */}
+          {(() => {
+            const iaMilestone = p.milestones.find((m) => m.stage === "Interconnection agreement");
+            return iaMilestone ? (
+              <Detail
+                label="Interconnection agreement"
+                value={new Date(iaMilestone.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
+                rows={[["Status", "Executed"]]}
+              />
+            ) : null;
+          })()}
           {resolved && waitedYears != null && p.applicationFiledDate && (
             <Detail
               label="Filed"

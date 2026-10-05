@@ -37,7 +37,7 @@ import type { HearingsPage } from "@/lib/ingest/ncNcucDockets";
 // docket listed in either of the first two tables, and absent from the final
 // orders archives, is taken as pending.
 
-export const NC_VERIFIED_ON = "2026-09-24";
+export const NC_VERIFIED_ON = "2026-10-05";
 export const NC_HEARINGS_URL = "https://www.ncuc.gov/Hearings/hearings.html";
 
 interface NcHandResearchedDocket {
@@ -268,7 +268,7 @@ export function ncHandResearchedProjects(hearingsPage: HearingsPage | null = nul
 // ndPscDockets.ts, case PU-22-391).
 
 export const IA_SUMMIT_SOURCE_URL = "https://iuc.iowa.gov/hazardous-liquid-pipeline-requests";
-export const IA_SUMMIT_VERIFIED_ON = "2026-09-24"; // the page itself read "Updated September 15, 2026"
+export const IA_SUMMIT_VERIFIED_ON = "2026-10-05"; // the page itself read "Updated September 15, 2026"
 
 export const IA_SUMMIT_NOTE =
   "This same physical CO2 pipeline also has an Iowa Hazardous Liquid Pipeline permit, Iowa Utilities Commission Docket HLP-2021-0001. " +

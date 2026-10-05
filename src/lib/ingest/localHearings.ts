@@ -216,6 +216,44 @@ export const LOCAL_HEARINGS: LocalHearingEntry[] = [
     ],
     verifiedOn: "2026-10-04",
   },
+  {
+    id: "ny-orangetown-orangeburg-bess",
+    name: "Orangeburg BESS, 524 Route 303 (15 MW)",
+    state: "NY",
+    county: "Rockland",
+    city: "New York City area (Orangetown, Rockland County)",
+    authority: "Orangetown Town Board",
+    projectType: "storage",
+    fuelType: "storage",
+    capacityMw: 15,
+    applicant: "Orangeburg BESS",
+    hearings: [
+      {
+        date: "2026-10-06T19:10:00-04:00",
+        label: "Town Board public hearing on a moratorium hardship waiver",
+        location: "Orangetown Town Hall, 26 Orangeburg Road, Orangeburg, NY",
+      },
+    ],
+    // Official: the Town Clerk's notice (dated Sept 24, 2026, per a Sept 22
+    // Town Board resolution) sets this hearing on Orangeburg BESS's request
+    // for a hardship waiver from the town's battery-storage moratorium (Local
+    // Law 5 of 2026) for 524 Route 303. orangetown.com sits behind a
+    // Cloudflare challenge, so the notice was read through search-engine
+    // copies, not fetched directly. CitizenPortal confirms 15 MW and the
+    // Planning Board's earlier review.
+    sources: [
+      { label: "Town of Orangetown: public hearing notice, moratorium hardship waiver for Orangeburg BESS", url: "https://www.orangetown.com/town-of-orangetown-public-hearing-moratorium-hardship-waiver-for-orangetown-bess/" },
+      {
+        label: "CitizenPortal: Orangetown schedules Oct. 6 public hearing on moratorium hardship waiver for 524 Route 303",
+        url: "https://citizenportal.ai/articles/10172675/new-york/rockland-county/orangetown/orangetown-schedules-public-hearing-oct-6-on-moratorium-hardship-waiver-for-524-route-303",
+      },
+      {
+        label: "CitizenPortal: Proposed 15 MW battery storage project prompts fire-safety and siting concerns",
+        url: "https://citizenportal.ai/articles/8354151/new-york/rockland-county/orangetown/proposed-15-mw-battery-storage-project-prompts-firesafety-and-siting-concerns-board-asks-for-outside-review",
+      },
+    ],
+    verifiedOn: "2026-10-05",
+  },
 ];
 
 export function localHearingProjects(entries: LocalHearingEntry[] = LOCAL_HEARINGS): NormalizedProject[] {

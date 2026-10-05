@@ -787,6 +787,25 @@ export const OPPOSITION: OppositionEntry[] = [
       { kind: "organized_group", party: "Local residents", action: "Opposed the project at a Wasco County public hearing over farmland, wildfire and water concerns.", date: "2026-03", source: SABIN("https://oppositionreport.org/projects/deschutes-solar-and-bess-facility-wasco-county/"), origin: "sabin_center" },
     ],
   },
+  // Orangeburg BESS, 524 Route 303 (Orangetown, NY): the hand-researched
+  // local hearing in localHearings.ts.
+  {
+    project: "local:ny-orangetown-orangeburg-bess",
+    verifiedOn: "2026-10-05",
+    records: [
+      {
+        kind: "moratorium",
+        party: "Orangetown Town Board",
+        action: "Adopted Local Law 5 of 2026, a temporary town-wide moratorium on battery energy storage systems and data centers; the project has applied for a hardship waiver from it.",
+        date: "2026-08-25",
+        source: {
+          label: "Town of Orangetown: Local Law 5, 2026, temporary town-wide moratorium (adopted 8-25-2026)",
+          url: "https://www.orangetown.com/local-law-5-2026-temporary-town-wide-moratorium-battery-energy-storage-systems-and-data-storage-facilities-data-centers-adopted-8-25-2026/",
+        },
+        origin: "hand_research",
+      },
+    ],
+  },
 ];
 
 export const OPPOSITION_CAUSE = "local_state_opposition";

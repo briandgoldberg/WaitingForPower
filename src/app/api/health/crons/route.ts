@@ -12,14 +12,13 @@ export const dynamic = "force-dynamic";
 // including the "plan doesn't allow this cron" failure mode, which
 // produces no error anywhere else to look at.
 //
-// Four sources' own data only republishes monthly/quarterly/annually and
-// stay on a weekly cron (see vercel.json / src/lib/ingest/README.md) — a
-// longer staleness threshold for exactly those four, everything else
-// (daily) uses a ~36h threshold (a bit of slack past 24h for a slow run or
-// a source temporarily down).
-const WEEKLY_SOURCE_PREFIXES = new Set(["eia", "lbnl", "ornlHydro", "eiaPipelines"]);
-const DAILY_STALE_AFTER_HOURS = 36;
-const WEEKLY_STALE_AFTER_HOURS = 24 * 9; // a week + 2 days' slack
+// A few sources run on the 1st and 15th of the month (see vercel.json) — a
+// longer staleness threshold for exactly those; everything else runs every
+// 4 days and uses a 5-day threshold (a day of slack for a slow run or a
+// source temporarily down).
+const WEEKLY_SOURCE_PREFIXES = new Set(["eia", "lbnl", "ornlHydro", "eiaPipelines", "nc-ncuc"]);
+const DAILY_STALE_AFTER_HOURS = 24 * 5; // every 4 days + 1 day's slack
+const WEEKLY_STALE_AFTER_HOURS = 24 * 19; // up to 17 days between the 15th and the 1st + 2 days' slack
 
 export async function GET() {
   const rows = await prisma.project.findMany({
@@ -49,7 +48,7 @@ export async function GET() {
         projectCount: count,
         lastSeen: lastSeen.toISOString(),
         hoursSinceLastSeen: Math.round(hoursSinceLastSeen * 10) / 10,
-        expectedCadence: WEEKLY_SOURCE_PREFIXES.has(source) ? "weekly" : "daily",
+        expectedCadence: WEEKLY_SOURCE_PREFIXES.has(source) ? "twice monthly" : "every 4 days",
         stale: hoursSinceLastSeen > staleAfterHours,
       };
     })

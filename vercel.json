@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/dedupe",
-      "schedule": "30 21 1-31/2 * *"
+      "schedule": "30 21 * * 1"
     },
     {
       "path": "/api/cron/snapshot-dataset",
@@ -35,7 +35,7 @@
     },
     {
       "path": "/api/cron/daily-digest",
-      "schedule": "45 15 1-31/2 * *"
+      "schedule": "45 15 * * 1"
     },
     {
       "path": "/api/cron/ingest-eia-pipelines",
@@ -207,11 +207,11 @@
     },
     {
       "path": "/api/cron/ingest-local-hearings",
-      "schedule": "15 18 1-31/2 * *"
+      "schedule": "15 18 * * 2"
     },
     {
       "path": "/api/cron/ingest-opposition",
-      "schedule": "45 18 1-31/2 * *"
+      "schedule": "45 18 * * 3"
     }
   ]
 }

@@ -17,7 +17,10 @@ export const dynamic = "force-dynamic";
 // 4 days and uses a 5-day threshold (a day of slack for a slow run or a
 // source temporarily down).
 const WEEKLY_SOURCE_PREFIXES = new Set(["eia", "lbnl", "ornlHydro", "eiaPipelines", "nc-ncuc"]);
+// Runs once a week (ingest-local-hearings).
+const ONCE_WEEKLY_SOURCE_PREFIXES = new Set(["local"]);
 const DAILY_STALE_AFTER_HOURS = 24 * 5; // every 4 days + 1 day's slack
+const ONCE_WEEKLY_STALE_AFTER_HOURS = 24 * 9; // every 7 days + 2 days' slack
 const WEEKLY_STALE_AFTER_HOURS = 24 * 19; // up to 17 days between the 15th and the 1st + 2 days' slack
 
 export async function GET() {
@@ -42,13 +45,18 @@ export async function GET() {
   const sources = [...bySource.entries()]
     .map(([source, { count, lastSeen }]) => {
       const hoursSinceLastSeen = (now - lastSeen.getTime()) / (1000 * 60 * 60);
-      const staleAfterHours = WEEKLY_SOURCE_PREFIXES.has(source) ? WEEKLY_STALE_AFTER_HOURS : DAILY_STALE_AFTER_HOURS;
+      const onceWeekly = ONCE_WEEKLY_SOURCE_PREFIXES.has(source);
+      const staleAfterHours = WEEKLY_SOURCE_PREFIXES.has(source)
+        ? WEEKLY_STALE_AFTER_HOURS
+        : onceWeekly
+          ? ONCE_WEEKLY_STALE_AFTER_HOURS
+          : DAILY_STALE_AFTER_HOURS;
       return {
         source,
         projectCount: count,
         lastSeen: lastSeen.toISOString(),
         hoursSinceLastSeen: Math.round(hoursSinceLastSeen * 10) / 10,
-        expectedCadence: WEEKLY_SOURCE_PREFIXES.has(source) ? "twice monthly" : "every 4 days",
+        expectedCadence: WEEKLY_SOURCE_PREFIXES.has(source) ? "twice monthly" : onceWeekly ? "weekly" : "every 4 days",
         stale: hoursSinceLastSeen > staleAfterHours,
       };
     })
